@@ -1,0 +1,1561 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DDT Fornitori — Magazzino</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --accent:#0F6E56;--accent-d:#085041;--accent-l:#E1F5EE;
+  --blue:#185FA5;--blue-l:#EBF0FD;
+  --amber:#854F0B;--amber-l:#FAEEDA;
+  --red:#A32D2D;--red-l:#FCEBEB;
+  --dark:#1A1A1A;--surface:#FFF;--bg:#EDEBE6;
+  --border:#DEDAD4;--border-dk:#C4C0B8;
+  --text:#1A1A1A;--text-m:#706C65;--text-l:#9A9690;
+  --ok:#1F7A35;--ok-bg:#E6F5EB;
+  --warn:#7A5000;--warn-bg:#FFF8E6;
+  --err:#B82020;--err-bg:#FDECEC;
+  --info:#1A4FAA;--info-bg:#EBF0FD;
+  --r:8px;--rs:5px;--sh:0 1px 3px rgba(0,0,0,0.07)
+}
+body{font-family:'Helvetica Neue',Arial,-apple-system,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;min-height:100vh}
+
+/* HEADER */
+.hdr{background:var(--dark);color:#FFF;height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;position:sticky;top:0;z-index:200}
+.hdr-brand{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.45)}
+.hdr-title{font-size:15px;font-weight:600;letter-spacing:.03em}
+.hdr-r{display:flex;align-items:center;gap:10px}
+.btn-back{background:transparent;border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.7);padding:5px 12px;border-radius:var(--rs);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s}
+.btn-back:hover{background:rgba(255,255,255,.08);color:#FFF}
+
+/* TABS */
+.tabs{display:flex;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:54px;z-index:190}
+.tab{padding:12px 20px;font-size:13px;font-weight:600;font-family:inherit;border:none;border-bottom:2px solid transparent;background:transparent;cursor:pointer;color:var(--text-m);transition:all .15s;white-space:nowrap}
+.tab:hover{color:var(--text)}
+.tab.on{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* PAGE */
+.page{max-width:1040px;margin:0 auto;padding:20px 16px 80px;display:flex;flex-direction:column;gap:14px}
+
+/* CARD */
+.card{background:var(--surface);border-radius:var(--r);border:1px solid var(--border);box-shadow:var(--sh);overflow:hidden}
+.ch{padding:11px 20px;border-bottom:1px solid var(--border);background:#F7F6F3;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.ct{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-m)}
+.cb{padding:18px 20px}
+
+/* GRID */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.g4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px}
+.sp2{grid-column:span 2}
+.sp3{grid-column:span 3}
+.gt{margin-top:14px}
+
+/* FORM */
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-m)}
+input[type=text],input[type=number],input[type=date],select,textarea{width:100%;padding:8px 11px;border:1px solid var(--border);border-radius:var(--rs);font-size:14px;font-family:inherit;color:var(--text);background:#FFF;outline:none;transition:border-color .15s,box-shadow .15s;-webkit-appearance:none}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(15,110,86,.12)}
+input[readonly]{background:var(--bg);color:var(--text-m);cursor:default}
+textarea{resize:vertical;min-height:70px;line-height:1.6}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--rs);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;border:1px solid transparent;transition:all .15s;white-space:nowrap}
+.btn-p{background:var(--accent);color:#FFF;border-color:var(--accent)}
+.btn-p:hover{background:var(--accent-d)}
+.btn-s{background:#FFF;color:var(--text);border-color:var(--border)}
+.btn-s:hover{background:var(--bg)}
+.btn-g{background:transparent;color:var(--text-m);border-color:transparent;padding:6px 8px}
+.btn-g:hover{background:var(--bg);color:var(--text)}
+.btn-g.del{color:var(--err)}
+.btn-g.del:hover{background:var(--err-bg)}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-lg{padding:11px 24px;font-size:14px;border-radius:var(--r)}
+.btn-ai{background:linear-gradient(135deg,#534AB7,#0F6E56);color:#FFF;border:none}
+.btn-ai:hover{opacity:.9}
+
+/* DIVIDER */
+.div{height:1px;background:var(--border);margin:14px 0}
+
+/* BADGE */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.badge::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0}
+.b-ok{background:var(--ok-bg);color:var(--ok)}
+.b-warn{background:var(--warn-bg);color:var(--warn)}
+.b-err{background:var(--err-bg);color:var(--err)}
+.b-info{background:var(--info-bg);color:var(--info)}
+.b-gray{background:#F0EDE8;color:var(--text-m)}
+
+/* ALERT */
+.alert{padding:11px 14px;border-radius:var(--rs);font-size:13px;display:flex;align-items:flex-start;gap:9px;line-height:1.5}
+.alert-icon{font-size:15px;flex-shrink:0;margin-top:1px}
+.a-info{background:var(--info-bg);color:var(--info)}
+.a-warn{background:var(--warn-bg);color:var(--warn)}
+.a-ok{background:var(--ok-bg);color:var(--ok)}
+.a-err{background:var(--err-bg);color:var(--err)}
+
+/* UPLOAD ZONE */
+.drop-zone{border:2px dashed var(--border-dk);border-radius:var(--r);padding:32px 20px;text-align:center;cursor:pointer;transition:all .15s;position:relative}
+.drop-zone:hover,.drop-zone.over{border-color:var(--accent);background:var(--accent-l)}
+.drop-zone input[type=file]{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer}
+.drop-icon{font-size:28px;margin-bottom:10px;pointer-events:none}
+.drop-label{font-size:14px;font-weight:600;color:var(--text-m);pointer-events:none}
+.drop-sub{font-size:12px;color:var(--text-l);margin-top:4px;pointer-events:none}
+
+/* AI LOADER */
+.ai-progress{display:none;flex-direction:column;align-items:center;gap:14px;padding:28px 20px}
+.ai-progress.show{display:flex}
+.ai-spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ai-msg{font-size:13px;color:var(--text-m);text-align:center}
+.ai-step{font-size:12px;color:var(--text-l)}
+
+/* TABLES */
+.tbl{width:100%;border-collapse:collapse;min-width:580px}
+.tbl th{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-m);padding:9px 10px;text-align:left;border-bottom:1px solid var(--border);background:#F7F6F3;white-space:nowrap}
+.tbl th.r{text-align:right}
+.tbl td{padding:9px 10px;vertical-align:middle;border-bottom:1px solid #F0EDE8;font-size:13px}
+.tbl tbody tr:last-child td{border-bottom:none}
+.tbl td.r{text-align:right;font-variant-numeric:tabular-nums}
+.tbl tbody tr:hover td{background:#FAFAF8}
+.tbl td input,.tbl td select{padding:5px 8px;font-size:12px;border-radius:4px}
+
+/* STOCK BAR */
+.stock-bar{width:100%;height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-top:3px}
+.stock-fill{height:100%;border-radius:3px;transition:width .3s}
+.sf-ok{background:var(--ok)}
+.sf-warn{background:#EF9F27}
+.sf-err{background:var(--err)}
+
+/* MOVIMENTI PILL */
+.mov-in{color:var(--ok);font-weight:700}
+.mov-out{color:var(--err);font-weight:700}
+
+/* KPIS */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px}
+.kpi-val{font-size:22px;font-weight:700;letter-spacing:-.02em;margin-bottom:2px}
+.kpi-lbl{font-size:11px;color:var(--text-m);font-weight:500;text-transform:uppercase;letter-spacing:.06em}
+
+/* TOAST */
+.toasts{position:fixed;bottom:20px;right:20px;display:flex;flex-direction:column;gap:8px;z-index:500}
+.toast{background:var(--dark);color:#FFF;padding:10px 16px;border-radius:var(--r);font-size:13px;max-width:340px;animation:fadeUp .22s ease;transition:opacity .3s}
+.toast.ok{background:var(--ok)}
+.toast.err{background:var(--err)}
+.toast.info{background:var(--blue)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* MODAL */
+.mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;align-items:center;justify-content:center}
+.mo.open{display:flex}
+.modal{background:#FFF;border-radius:var(--r);width:min(560px,calc(100vw - 32px));max-height:88vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.mh{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.mt{font-size:15px;font-weight:700}
+.mb{padding:18px 20px;display:flex;flex-direction:column;gap:14px}
+.mf{padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
+
+/* COMMESSA SELECT */
+.commessa-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.c-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:20px;border:1px solid var(--border);font-size:12px;cursor:pointer;transition:all .15s;background:#FFF}
+.c-chip:hover{border-color:var(--accent);color:var(--accent)}
+.c-chip.sel{background:var(--accent-l);border-color:var(--accent);color:var(--accent-d);font-weight:600}
+
+/* CHIP TIPO */
+.chip{display:inline-block;padding:2px 7px;border-radius:3px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.ch-r{background:var(--info-bg);color:var(--info)}
+.ch-s{background:var(--ok-bg);color:var(--ok)}
+.ch-m{background:var(--warn-bg);color:var(--warn)}
+
+/* FOOTER BAR */
+.fbar{position:fixed;bottom:0;left:0;right:0;background:#FFF;border-top:1px solid var(--border);padding:10px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;z-index:200;box-shadow:0 -4px 20px rgba(0,0,0,.07)}
+.fbar-stato{font-size:12px;color:var(--text-m)}
+
+.eq-item{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:14px;transition:background .1s}
+.eq-item:last-child{border-bottom:none}
+.eq-item:hover{background:#FAFAF8}
+.eq-meta{flex:1;min-width:0}
+.eq-from{font-size:12px;color:var(--text-m);margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.eq-sogg{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.eq-info{display:flex;gap:8px;flex-wrap:wrap;margin-top:5px}
+.eq-pill{background:#F0EDE8;border-radius:3px;padding:2px 7px;font-size:11px;font-weight:600}
+.eq-targa{background:var(--dark);color:#FFF;font-family:monospace;letter-spacing:.08em}
+.eq-err{color:var(--err);font-size:12px;margin-top:4px}
+.eq-actions{display:flex;flex-direction:column;gap:6px;flex-shrink:0}
+
+@media(max-width:640px){.g2,.g3,.g4,.kpis{grid-template-columns:1fr}.sp2,.sp3{grid-column:auto}}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div style="display:flex;align-items:center;gap:20px">
+    <span class="hdr-brand">Gestione Veicoli</span>
+    <span class="hdr-title">DDT Fornitori &amp; Magazzino</span>
+  </div>
+  <div class="hdr-r">
+    <span id="alertScorte" class="badge b-warn" style="display:none">⚠ Scorte basse</span>
+    <span id="badgeEmail"  class="badge b-info" style="display:none;cursor:pointer" onclick="goTab('ddt',document.querySelector('.tab'))">✉ <span id="badgeEmailN">0</span> DDT in arrivo</span>
+    <button class="btn-back" onclick="window.location.href='rapportino.html'">← Rapportino</button>
+  </div>
+</header>
+
+<div class="tabs">
+  <button class="tab on" onclick="goTab('ddt',this)">📦 Inserisci DDT</button>
+  <button class="tab"    onclick="goTab('mag',this)">🗄 Magazzino</button>
+  <button class="tab"    onclick="goTab('mov',this)">↕ Movimenti</button>
+  <button class="tab"    onclick="goTab('for',this)">🏭 Fornitori</button>
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     TAB 1 — INSERISCI DDT
+══════════════════════════════════════════════════════ -->
+<div id="tab-ddt" class="page">
+
+  <!-- KPI rapidi -->
+  <div class="kpis" id="kpis">
+    <div class="kpi"><div class="kpi-val" id="k1">—</div><div class="kpi-lbl">Articoli a magazzino</div></div>
+    <div class="kpi"><div class="kpi-val" id="k2" style="color:var(--warn)">—</div><div class="kpi-lbl">Sotto soglia minima</div></div>
+    <div class="kpi"><div class="kpi-val" id="k3">—</div><div class="kpi-lbl">DDT ricevute questo mese</div></div>
+    <div class="kpi"><div class="kpi-val" id="k4">—</div><div class="kpi-lbl">Commesse aperte</div></div>
+  </div>
+
+  <!-- ── CODA DDT DA EMAIL ─────────────────────────────────── -->
+  <div class="card" id="cardEmailQueue" style="display:none">
+    <div class="ch">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="ct">DDT ricevute via email</span>
+        <span class="badge b-info" id="emailQueueCount">0 in attesa</span>
+      </div>
+      <button class="btn btn-g btn-sm" onclick="pollEmailQueue()">↻ Aggiorna</button>
+    </div>
+    <div id="emailQueueList" style="display:flex;flex-direction:column;gap:0"></div>
+  </div>
+
+  <!-- ZONA UPLOAD AI -->
+  <div class="card">
+    <div class="ch">
+      <span class="ct">Carica DDT fornitore</span>
+      <span style="font-size:11px;color:var(--text-m)">PDF · Foto · XML · Manuale</span>
+    </div>
+    <div class="cb">
+      <div class="alert a-info" style="margin-bottom:16px">
+        <span class="alert-icon">✦</span>
+        <div><strong>Estrazione automatica con AI.</strong> Carica un PDF o una foto della DDT — il sistema legge automaticamente fornitore, numero documento, data e tutte le righe articolo.</div>
+      </div>
+
+      <!-- Metodo input -->
+      <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+        <button class="btn btn-s btn-sm" id="mAi"     onclick="setMode('ai')"     style="border-color:var(--accent);color:var(--accent)">✦ AI (PDF/Foto)</button>
+        <button class="btn btn-s btn-sm" id="mManual" onclick="setMode('manual')">✏ Manuale</button>
+        <button class="btn btn-s btn-sm" id="mXml"    onclick="setMode('xml')">📄 XML/EDI</button>
+      </div>
+
+      <!-- ZONA AI -->
+      <div id="zoneAi">
+      <!-- Box API key (nascosto se già salvata) -->
+      <div id="apiKeyBox" style="display:none;margin-bottom:14px">
+        <div class="alert a-info" style="flex-direction:column;gap:10px;align-items:stretch">
+          <div style="display:flex;align-items:center;gap:9px">
+            <span class="alert-icon">🔑</span>
+            <strong>Anthropic API key richiesta per l'estrazione AI</strong>
+          </div>
+          <div style="display:flex;gap:8px">
+            <input type="password" id="apiKeyInput" placeholder="sk-ant-..." style="flex:1;font-family:monospace;font-size:12px">
+            <button class="btn btn-p btn-sm" onclick="salvaApiKey()">Salva e usa</button>
+          </div>
+          <div style="font-size:11px;color:var(--info)">
+            La key viene salvata solo in localStorage del tuo browser, mai inviata ad altri server.<br>
+            Ottienila su <strong>console.anthropic.com → API Keys</strong>.
+          </div>
+        </div>
+      </div>
+
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="ddtFile" accept=".pdf,image/*" onchange="onFileSelect(this.files)">
+        <div class="drop-icon">📄</div>
+        <div class="drop-label">Trascina PDF o foto DDT qui</div>
+        <div class="drop-sub">PDF, JPG, PNG, HEIC — oppure scatta una foto con il telefono</div>
+      </div>
+
+      <!-- AI Loader -->
+      <div class="ai-progress" id="aiProgress">
+        <div class="ai-spinner"></div>
+        <div class="ai-msg">Estrazione in corso con AI...</div>
+        <div class="ai-step" id="aiStep">Lettura documento</div>
+      </div>
+
+      <!-- Debug JSON grezzo -->
+      <div id="debugBox" style="display:none;margin-top:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <span style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-m)">JSON estratto dall'AI</span>
+          <button class="btn btn-g btn-sm" onclick="document.getElementById('debugBox').style.display='none'">Chiudi</button>
+        </div>
+        <pre id="debugPre" style="background:#1A1A1A;color:#D4D4D4;padding:12px 14px;border-radius:var(--rs);font-size:11.5px;line-height:1.6;overflow-x:auto;white-space:pre-wrap;word-break:break-all;max-height:300px;overflow-y:auto;border:1px solid #333"></pre>
+      </div>
+
+    </div><!-- /zoneAi -->
+      <div id="zoneManual" style="display:none">
+        <div class="g4">
+          <div class="field sp2"><label>Fornitore *</label>
+            <input type="text" id="mFor" placeholder="Es. Bosch Auto Parts Srl" list="fornitoriList">
+            <datalist id="fornitoriList"></datalist>
+          </div>
+          <div class="field"><label>N° DDT *</label><input type="text" id="mNum" placeholder="DDT-2024-001"></div>
+          <div class="field"><label>Data DDT *</label><input type="date" id="mData"></div>
+        </div>
+      </div>
+
+      <!-- ZONA XML -->
+      <div id="zoneXml" style="display:none">
+        <div class="drop-zone">
+          <input type="file" accept=".xml,.edi,.csv" onchange="onXmlSelect(this.files)">
+          <div class="drop-icon">🗂</div>
+          <div class="drop-label">Carica file XML / EDI / CSV</div>
+          <div class="drop-sub">Formato XML ordine o DESADV EDI</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHE DDT ESTRATTE -->
+  <div class="card" id="cardRighe" style="display:none">
+    <div class="ch">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="ct">Righe DDT</span>
+        <span class="badge b-info" id="righeCount">0 articoli</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:11px;color:var(--text-m)" id="ddtMeta"></span>
+        <button class="btn btn-sm btn-s" onclick="addRiga()">+ Aggiungi riga</button>
+      </div>
+    </div>
+
+    <!-- Intestazione DDT estratta -->
+    <div style="padding:12px 20px;border-bottom:1px solid var(--border);background:#FAFAF8">
+      <div class="g4">
+        <div class="field"><label>Fornitore</label><input type="text" id="rFor" oninput="DR.fornitore=this.value"></div>
+        <div class="field"><label>N° DDT</label><input type="text" id="rNum" oninput="DR.numero=this.value"></div>
+        <div class="field"><label>Data</label><input type="date" id="rData" oninput="DR.data=this.value"></div>
+        <div class="field"><label>N° ordine rif.</label><input type="text" id="rOrd" oninput="DR.ordine=this.value" placeholder="Opzionale"></div>
+      </div>
+      <div class="g4 gt">
+        <div class="field">
+          <label>Targa veicolo</label>
+          <input type="text" id="rTarga" placeholder="Es. AB123CD" maxlength="7"
+            style="font-weight:700;letter-spacing:.12em;text-transform:uppercase;font-size:15px"
+            oninput="onVeicoloChange()">
+        </div>
+        <div class="field">
+          <label>Telaio / VIN</label>
+          <input type="text" id="rTelaio" placeholder="Es. ZFA25000002345678" maxlength="17"
+            style="font-family:monospace;font-size:13px;letter-spacing:.04em;text-transform:uppercase"
+            oninput="onVeicoloChange()">
+        </div>
+        <div class="field" id="targaCommessaField" style="display:none">
+          <label>Commessa abbinata</label>
+          <input type="text" id="targaCommessaLabel" readonly style="background:var(--ok-bg);color:var(--ok);font-weight:600">
+        </div>
+      </div>
+      <div id="veicoloHint" style="padding:4px 0 0"></div>
+    </div>
+    <!-- Banner match targa (popolato da JS) -->
+    <div id="targaMatchBanner"></div>
+
+    <div style="overflow-x:auto">
+      <table class="tbl" id="tblRighe">
+        <thead><tr>
+          <th style="width:110px">Tipo</th>
+          <th style="width:110px">Codice</th>
+          <th>Descrizione</th>
+          <th class="r" style="width:70px">Qtà</th>
+          <th class="r" style="width:90px">P. acquisto</th>
+          <th style="width:180px">Assegna a</th>
+          <th style="width:36px"></th>
+        </tr></thead>
+        <tbody id="righeBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Assegnazione globale -->
+    <div style="padding:14px 20px;border-top:1px solid var(--border);background:#F7F6F3">
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <span style="font-size:13px;font-weight:600">Assegna tutto a:</span>
+        <div class="commessa-chips" id="globalChips"></div>
+        <span style="font-size:12px;color:var(--text-m)">oppure lascia diverso per riga</span>
+      </div>
+    </div>
+
+    <div style="padding:14px 20px;display:flex;justify-content:flex-end;gap:10px">
+      <button class="btn btn-s" onclick="resetDDT()">✕ Annulla</button>
+      <button class="btn btn-p btn-lg" onclick="confermaDDT()">✓ Conferma e carica in magazzino / commesse</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     TAB 2 — MAGAZZINO
+══════════════════════════════════════════════════════ -->
+<div id="tab-mag" class="page" style="display:none">
+
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <input type="text" id="magSearch" placeholder="Cerca codice o descrizione..." style="width:240px" oninput="renderMag()">
+      <select id="magFiltro" onchange="renderMag()" style="width:160px">
+        <option value="">Tutti gli articoli</option>
+        <option value="warn">Sotto soglia</option>
+        <option value="ok">Disponibili</option>
+        <option value="zero">Esauriti</option>
+      </select>
+    </div>
+    <button class="btn btn-p btn-sm" onclick="apriModaleArticolo(null)">+ Nuovo articolo</button>
+  </div>
+
+  <div class="card">
+    <div class="ch">
+      <span class="ct">Articoli a magazzino</span>
+      <span id="magCount" style="font-size:11px;color:var(--text-m)"></span>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="tbl" id="tblMag">
+        <thead><tr>
+          <th>Codice</th>
+          <th>Descrizione</th>
+          <th>Fornitore pref.</th>
+          <th class="r">Disponibile</th>
+          <th class="r">Soglia min.</th>
+          <th class="r">Costo acquisto</th>
+          <th>Stock</th>
+          <th style="width:90px"></th>
+        </tr></thead>
+        <tbody id="magBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     TAB 3 — MOVIMENTI
+══════════════════════════════════════════════════════ -->
+<div id="tab-mov" class="page" style="display:none">
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <input type="date" id="movDa" style="width:145px" oninput="renderMov()">
+    <input type="date" id="movA"  style="width:145px" oninput="renderMov()">
+    <select id="movTipo" onchange="renderMov()" style="width:150px">
+      <option value="">Tutti i movimenti</option>
+      <option value="in">Entrata (DDT)</option>
+      <option value="out">Uscita (commessa)</option>
+      <option value="rett">Rettifica manuale</option>
+    </select>
+    <input type="text" id="movSearch" placeholder="Cerca articolo o commessa..." style="flex:1;min-width:180px" oninput="renderMov()">
+  </div>
+
+  <div class="card">
+    <div class="ch">
+      <span class="ct">Storico movimenti</span>
+      <button class="btn btn-sm btn-s" onclick="apriModaleRettifica()">+ Rettifica manuale</button>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="tbl" id="tblMov">
+        <thead><tr>
+          <th>Data</th>
+          <th>Tipo</th>
+          <th>Codice</th>
+          <th>Descrizione</th>
+          <th class="r">Qtà</th>
+          <th>Riferimento</th>
+          <th>Utente</th>
+        </tr></thead>
+        <tbody id="movBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     TAB 4 — FORNITORI
+══════════════════════════════════════════════════════ -->
+<div id="tab-for" class="page" style="display:none">
+
+  <div style="display:flex;justify-content:flex-end">
+    <button class="btn btn-p btn-sm" onclick="apriModaleFornitore(null)">+ Nuovo fornitore</button>
+  </div>
+
+  <div class="card">
+    <div class="ch"><span class="ct">Anagrafica fornitori</span></div>
+    <div style="overflow-x:auto">
+      <table class="tbl" id="tblFor">
+        <thead><tr>
+          <th>Ragione sociale</th>
+          <th>P. IVA</th>
+          <th>Contatto</th>
+          <th>Articoli forniti</th>
+          <th>Ultima DDT</th>
+          <th style="width:80px"></th>
+        </tr></thead>
+        <tbody id="forBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     MODALI
+══════════════════════════════════════════════════════ -->
+
+<!-- Modale articolo magazzino -->
+<div class="mo" id="moArt">
+  <div class="modal">
+    <div class="mh"><span class="mt" id="moArtTitle">Nuovo articolo</span><button class="btn btn-g btn-sm" onclick="chiudiMo('moArt')">✕</button></div>
+    <div class="mb">
+      <div class="g2">
+        <div class="field sp2"><label>Descrizione *</label><input type="text" id="aDesc" placeholder="Filtro olio Bosch W712/73"></div>
+      </div>
+      <div class="g3">
+        <div class="field"><label>Codice interno</label><input type="text" id="aCod" placeholder="FIL-OLI-001"></div>
+        <div class="field"><label>Codice fornitore</label><input type="text" id="aCodFor" placeholder="1457429714"></div>
+        <div class="field"><label>Unità di misura</label>
+          <select id="aUm"><option value="NR">NR — pezzi</option><option value="L">L — litri</option><option value="KG">KG</option><option value="MT">MT — metri</option><option value="H">H — ore</option></select>
+        </div>
+      </div>
+      <div class="g4">
+        <div class="field"><label>Qtà disponibile</label><input type="number" id="aQta" min="0" step="0.01" placeholder="0"></div>
+        <div class="field"><label>Soglia minima</label><input type="number" id="aSoglia" min="0" step="1" placeholder="2"></div>
+        <div class="field"><label>Costo acquisto €</label><input type="number" id="aCosto" min="0" step="0.01" placeholder="0.00"></div>
+        <div class="field"><label>Prezzo vendita €</label><input type="number" id="aPrezzo" min="0" step="0.01" placeholder="0.00"></div>
+      </div>
+      <div class="field"><label>Fornitore preferito</label>
+        <select id="aFornitore"><option value="">— Seleziona —</option></select>
+      </div>
+      <div class="field"><label>Note</label><textarea id="aNote" rows="2" placeholder="Compatibilità, avvertenze..."></textarea></div>
+    </div>
+    <div class="mf"><button class="btn btn-s" onclick="chiudiMo('moArt')">Annulla</button><button class="btn btn-p" onclick="salvaArticolo()">Salva articolo</button></div>
+  </div>
+</div>
+
+<!-- Modale rettifica manuale -->
+<div class="mo" id="moRett">
+  <div class="modal">
+    <div class="mh"><span class="mt">Rettifica manuale magazzino</span><button class="btn btn-g btn-sm" onclick="chiudiMo('moRett')">✕</button></div>
+    <div class="mb">
+      <div class="alert a-warn"><span class="alert-icon">⚠</span>La rettifica è tracciata nello storico movimenti.</div>
+      <div class="field"><label>Articolo *</label>
+        <select id="rArticolo"><option value="">— Seleziona articolo —</option></select>
+      </div>
+      <div class="g3">
+        <div class="field"><label>Tipo rettifica</label>
+          <select id="rTipo"><option value="in">+ Entrata</option><option value="out">- Uscita</option><option value="set">= Imposta valore</option></select>
+        </div>
+        <div class="field"><label>Quantità</label><input type="number" id="rQta" min="0" step="0.01" placeholder="1"></div>
+        <div class="field"><label>Data</label><input type="date" id="rDataRett"></div>
+      </div>
+      <div class="field"><label>Causale</label><input type="text" id="rCausale" placeholder="Es. Inventario, reso fornitore..."></div>
+    </div>
+    <div class="mf"><button class="btn btn-s" onclick="chiudiMo('moRett')">Annulla</button><button class="btn btn-p" onclick="salvaRettifica()">Conferma rettifica</button></div>
+  </div>
+</div>
+
+<!-- Modale fornitore -->
+<div class="mo" id="moFor">
+  <div class="modal">
+    <div class="mh"><span class="mt" id="moForTitle">Nuovo fornitore</span><button class="btn btn-g btn-sm" onclick="chiudiMo('moFor')">✕</button></div>
+    <div class="mb">
+      <div class="field"><label>Ragione sociale *</label><input type="text" id="fNome" placeholder="Bosch Auto Parts Srl"></div>
+      <div class="g2">
+        <div class="field"><label>P. IVA</label><input type="text" id="fPiva" placeholder="IT01234567890"></div>
+        <div class="field"><label>Codice fornitore</label><input type="text" id="fCod" placeholder="FOR-001"></div>
+      </div>
+      <div class="g2">
+        <div class="field"><label>Email</label><input type="text" id="fEmail" placeholder="ordini@fornitore.it"></div>
+        <div class="field"><label>Telefono</label><input type="text" id="fTel" placeholder="+39 030 ..."></div>
+      </div>
+      <div class="field"><label>Note</label><textarea id="fNote" rows="2"></textarea></div>
+    </div>
+    <div class="mf"><button class="btn btn-s" onclick="chiudiMo('moFor')">Annulla</button><button class="btn btn-p" onclick="salvaFornitore()">Salva fornitore</button></div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+// ╔══════════════════════════════════════════════════════════╗
+// ║  CONFIG                                                  ║
+// ╚══════════════════════════════════════════════════════════╝
+const SUPABASE_URL = 'https://YOUR_PROJECT.supabase.co';
+const SUPABASE_KEY = 'YOUR_ANON_KEY';
+// const _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  DATI DEMO (sostituire con Supabase in prod)             ║
+// ╚══════════════════════════════════════════════════════════╝
+let ARTICOLI = [
+  {id:1,codice:'FIL-OLI-001',descrizione:'Filtro olio Bosch W712/73',um:'NR',qta:8,soglia:3,costo:9.80,prezzo:18.50,fornitore:'Bosch Auto Parts',note:''},
+  {id:2,codice:'FIL-ARI-002',descrizione:'Filtro aria abitacolo Ducato',um:'NR',qta:2,soglia:4,costo:11.20,prezzo:24.00,fornitore:'Magneti Marelli',note:'Attenzione: 2 varianti'},
+  {id:3,codice:'OLI-5W30-5L',descrizione:'Olio motore 5W30 — 5 litri',um:'L',qta:35,soglia:10,costo:19.00,prezzo:38.00,fornitore:'Castrol Italia',note:''},
+  {id:4,codice:'PAR-FRONT-DX',descrizione:'Pastiglie freno anteriori DX',um:'NR',qta:0,soglia:2,costo:22.50,prezzo:45.00,fornitore:'Brembo',note:''},
+  {id:5,codice:'CIN-DIST-001',descrizione:'Kit distribuzione + pompa acqua',um:'NR',qta:1,soglia:1,costo:89.00,prezzo:160.00,fornitore:'Bosch Auto Parts',note:'Modello Fiat 2.3 Multijet'},
+];
+
+let MOVIMENTI = [
+  {id:1,data:'2024-10-15',tipo:'in',codice:'FIL-OLI-001',descrizione:'Filtro olio Bosch W712/73',qta:10,rif:'DDT-2024-089 / Bosch',utente:'Enrico'},
+  {id:2,data:'2024-10-18',tipo:'out',codice:'FIL-OLI-001',descrizione:'Filtro olio Bosch W712/73',qta:-1,rif:'RAP-2024-0145',utente:'Andrea'},
+  {id:3,data:'2024-10-20',tipo:'in',codice:'OLI-5W30-5L',descrizione:'Olio motore 5W30 — 5 litri',qta:40,rif:'DDT-2024-092 / Castrol',utente:'Gianluca'},
+  {id:4,data:'2024-10-22',tipo:'out',codice:'OLI-5W30-5L',descrizione:'Olio motore 5W30',qta:-5,rif:'RAP-2024-0148',utente:'Matteo'},
+  {id:5,data:'2024-10-28',tipo:'out',codice:'FIL-ARI-002',descrizione:'Filtro aria abitacolo',qta:-2,rif:'RAP-2024-0152',utente:'Andrea'},
+  {id:6,data:'2024-10-30',tipo:'rett',codice:'PAR-FRONT-DX',descrizione:'Pastiglie freno DX',qta:-2,rif:'Inventario ottobre',utente:'Gianluca'},
+];
+
+let FORNITORI = [
+  {id:1,nome:'Bosch Auto Parts Srl',piva:'IT08765432101',cod:'FOR-001',email:'ordini.it@bosch.com',tel:'+39 02 3456789',note:''},
+  {id:2,nome:'Magneti Marelli',piva:'IT02345678901',cod:'FOR-002',email:'ricambi@magneti.it',tel:'',note:''},
+  {id:3,nome:'Castrol Italia Srl',piva:'IT09876543210',cod:'FOR-003',email:'',tel:'',note:''},
+  {id:4,nome:'Brembo SpA',piva:'IT01234567890',cod:'FOR-004',email:'aftermarket@brembo.com',tel:'+39 035 605111',note:''},
+];
+
+// Commesse demo aperte
+const COMMESSE_APERTE = [
+  {id:'RAP-2024-0162', targa:'AB123CD', telaio:'',              label:'AB 123 CD — Ducato — Andrea'},
+  {id:'RAP-2024-0163', targa:'FG456EF', telaio:'',              label:'FG 456 EF — Transit — Enrico'},
+  {id:'RAP-2024-0164', targa:'',        telaio:'ZFA25000002345678', label:'(no targa) Sprinter — Matteo'},
+  {id:'magazzino',     targa:null,      telaio:null,             label:'🗄 Magazzino (stock generico)'},
+];
+
+// Normalizza targa formato AA000BB: rimuove tutto tranne alfanumerici, uppercase
+function normTarga(t){ return (t||'').replace(/[^A-Z0-9]/gi,'').toUpperCase(); }
+// Normalizza telaio VIN: uppercase, rimuove spazi
+function normTelaio(t){ return (t||'').replace(/\s/g,'').toUpperCase(); }
+
+// Cerca commessa per targa O telaio
+function matchCommessa(targa, telaio){
+  if(targa){
+    const t = normTarga(targa);
+    const m = COMMESSE_APERTE.find(c => c.targa && normTarga(c.targa) === t);
+    if(m) return {commessa:m, via:'targa', valore:targa};
+  }
+  if(telaio){
+    const v = normTelaio(telaio);
+    const m = COMMESSE_APERTE.find(c => c.telaio && normTelaio(c.telaio) === v);
+    if(m) return {commessa:m, via:'telaio', valore:telaio};
+  }
+  return null;
+}
+
+// DDT corrente in review
+let DR = {fornitore:'',numero:'',data:'',ordine:'',targa:'',telaio:'',righe:[]};
+let _rigaId = 1;
+let _editArtId = null;
+let _editForId = null;
+let _mode = 'ai';
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  INIT                                                    ║
+// ╚══════════════════════════════════════════════════════════╝
+function init() {
+  const oggi = new Date().toISOString().slice(0,10);
+  document.getElementById('mData').value = oggi;
+  document.getElementById('rData').value = oggi;
+  document.getElementById('movDa').value = new Date(Date.now()-30*864e5).toISOString().slice(0,10);
+  document.getElementById('movA').value  = oggi;
+  document.getElementById('rDataRett').value = oggi;
+
+  // API key
+  const savedKey = localStorage.getItem('anthropic_key')||'';
+  if(savedKey){
+    const inp = document.getElementById('apiKeyInput');
+    if(inp) inp.value = savedKey;
+  } else {
+    document.getElementById('apiKeyBox').style.display='';
+  }
+  // Popola select articoli (rettifica) e select fornitori (articolo)
+  aggArticoliSelect();
+  aggFornitoriSelect();
+
+  renderKpi();
+  renderMag();
+  renderMov();
+  renderFor();
+  renderChipsGlobali();
+  startEmailPolling();
+
+  // Drag & drop
+  const dz = document.getElementById('dropZone');
+  dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over')});
+  dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
+  dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');onFileSelect(e.dataTransfer.files)});
+
+  // Modal overlay click
+  document.querySelectorAll('.mo').forEach(m=>{
+    m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open')});
+  });
+}
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  KPI                                                     ║
+// ╚══════════════════════════════════════════════════════════╝
+function renderKpi(){
+  const sottoSoglia = ARTICOLI.filter(a=>a.qta<a.soglia).length;
+  document.getElementById('k1').textContent = ARTICOLI.length;
+  document.getElementById('k2').textContent = sottoSoglia;
+  document.getElementById('k3').textContent = MOVIMENTI.filter(m=>m.tipo==='in'&&m.data.startsWith(new Date().toISOString().slice(0,7))).length;
+  document.getElementById('k4').textContent = COMMESSE_APERTE.filter(c=>c.id!=='magazzino').length;
+  document.getElementById('alertScorte').style.display = sottoSoglia>0?'':'none';
+}
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  MODALITÀ INPUT                                          ║
+// ╚══════════════════════════════════════════════════════════╝
+function setMode(m){
+  _mode=m;
+  ['ai','manual','xml'].forEach(k=>{
+    const btn=document.getElementById('m'+k[0].toUpperCase()+k.slice(1));
+    if(btn){btn.style.borderColor=k===m?'var(--accent)':'';btn.style.color=k===m?'var(--accent)':'';}
+  });
+  document.getElementById('zoneAi').style.display     = m==='ai'    ?'':'none';
+  document.getElementById('zoneManual').style.display = m==='manual'?'':'none';
+  document.getElementById('zoneXml').style.display    = m==='xml'   ?'':'none';
+  if(m==='manual') mostraRighe({fornitore:'',numero:'',data:document.getElementById('mData').value,ordine:'',righe:[]});
+}
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  FILE SELECT — AI EXTRACTION                             ║
+// ╚══════════════════════════════════════════════════════════╝
+async function onFileSelect(files){
+  if(!files||!files.length) return;
+  const file = files[0];
+  const isImage = file.type.startsWith('image/');
+  const isPdf   = file.type==='application/pdf'||file.name.endsWith('.pdf');
+  if(!isImage&&!isPdf){toast('Carica un PDF o un\'immagine','err');return;}
+
+  // Controlla API key
+  const apiKey = document.getElementById('apiKeyInput')?.value.trim()
+    || localStorage.getItem('anthropic_key')||'';
+  if(!apiKey){
+    document.getElementById('apiKeyBox').style.display='';
+    document.getElementById('apiKeyInput').focus();
+    toast('Inserisci la tua Anthropic API key per usare l\'estrazione AI','err');
+    return;
+  }
+  localStorage.setItem('anthropic_key', apiKey);
+
+  document.getElementById('dropZone').style.display='none';
+  document.getElementById('aiProgress').classList.add('show');
+  document.getElementById('aiStep').textContent='Lettura documento...';
+
+  const base64 = await toBase64(file);
+  const mediaType = isImage ? (file.type||'image/jpeg') : 'application/pdf';
+  document.getElementById('aiStep').textContent='Analisi AI in corso...';
+
+  try {
+    const { estratto, rawJson } = await estraiDDT(base64, mediaType, apiKey);
+    document.getElementById('aiProgress').classList.remove('show');
+    document.getElementById('dropZone').style.display='';
+    mostraDebug(rawJson);
+    mostraRighe(estratto);
+    toast(`Estratti ${estratto.righe.length} articoli`,'ok');
+  } catch(e){
+    document.getElementById('aiProgress').classList.remove('show');
+    document.getElementById('dropZone').style.display='';
+    // Mostra risposta grezza anche in caso di errore
+    if(e.rawResponse) mostraDebug(e.rawResponse, true);
+    toast('Errore: '+e.message,'err');
+  }
+}
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  CLAUDE API — ESTRAZIONE DDT                             ║
+// ╚══════════════════════════════════════════════════════════╝
+async function estraiDDT(base64, mediaType, apiKey){
+  const isPdf = mediaType==='application/pdf';
+
+  const contentBlock = isPdf
+    ? { type:'document', source:{type:'base64',media_type:'application/pdf',data:base64} }
+    : { type:'image',    source:{type:'base64',media_type:mediaType,data:base64} };
+
+  const commesseAperte = COMMESSE_APERTE
+    .filter(c=>c.targa||c.telaio)
+    .map(c=>[c.targa?`targa ${c.targa}`:'',c.telaio?`telaio ${c.telaio}`:''].filter(Boolean).join(' / ')+` (commessa ${c.id})`)
+    .join(', ');
+
+  const prompt = `Sei un sistema di lettura DDT (Documenti di Trasporto) italiani per un'officina veicoli.
+Analizza il documento e restituisci SOLO un oggetto JSON valido, senza markdown, senza backtick, senza testo prima o dopo.
+Struttura richiesta:
+{
+  "fornitore": "nome fornitore",
+  "numero": "numero DDT",
+  "data": "YYYY-MM-DD",
+  "ordine": "numero ordine rif. o stringa vuota",
+  "targa": "targa veicolo in formato AA000BB senza spazi, o stringa vuota",
+  "telaio": "VIN/telaio 17 caratteri o stringa vuota",
+  "righe": [
+    { "codice":"", "descrizione":"", "qty":1, "prezzo":0, "tipo":"ricambio" }
+  ]
+}
+REGOLE TARGA:
+- Formato italiano: 2 lettere + 3 cifre + 2 lettere (es. AB123CD). Restituiscila SEMPRE senza spazi.
+- Cerca in tutto il documento: intestazione, corpo, riquadri, note, colonne laterali.
+- Etichette comuni: "Targa:", "Veicolo:", "Rif. veicolo:", "Per il veicolo:", "Auto:", "Moto:".
+- Se trovi "AB 123 CD" o "AB-123-CD" restituisci "AB123CD".
+REGOLE TELAIO:
+- 17 caratteri alfanumerici, etichette: "Telaio:", "VIN:", "N. telaio:", "Numero telaio:".
+Commesse aperte: ${commesseAperte||'nessuna'}.
+Non inventare dati. Se un campo non è presente usa stringa vuota o 0.`;
+
+  const res = await fetch('https://api.anthropic.com/v1/messages',{
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body:JSON.stringify({
+      model:'claude-sonnet-4-6',
+      max_tokens:1500,
+      messages:[{role:'user',content:[contentBlock,{type:'text',text:prompt}]}]
+    })
+  });
+
+  const data = await res.json();
+
+  if(!res.ok){
+    const err = new Error(data.error?.message||`HTTP ${res.status}`);
+    err.rawResponse = JSON.stringify(data, null, 2);
+    throw err;
+  }
+
+  const txt = data.content?.find(b=>b.type==='text')?.text||'{}';
+  // Pulizia robusta: estrai il primo { ... } anche se ci sono testi intorno
+  const match = txt.match(/\{[\s\S]*\}/);
+  if(!match){
+    const err = new Error('L\'AI non ha restituito un JSON valido');
+    err.rawResponse = txt;
+    throw err;
+  }
+  const clean = match[0];
+  const estratto = JSON.parse(clean);
+  return { estratto, rawJson: clean };
+}
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  MOSTRA RIGHE DDT (review)                               ║
+// ╚══════════════════════════════════════════════════════════╝
+function mostraRighe(dati){
+  DR = { fornitore:dati.fornitore||'', numero:dati.numero||'',
+         data:dati.data||new Date().toISOString().slice(0,10),
+         ordine:dati.ordine||'', targa:dati.targa||'', telaio:dati.telaio||'', righe:[] };
+
+  // ── MATCHING AUTOMATICO TARGA / TELAIO ────────────────
+  const match = matchCommessa(DR.targa, DR.telaio);
+  const assegnaDefault = match ? match.commessa.id : 'magazzino';
+
+  (dati.righe||[]).forEach(r=>DR.righe.push({
+    _id:_rigaId++, codice:r.codice||'', descrizione:r.descrizione||'',
+    qty: parseFloat(r.qty)||1, prezzo:parseFloat(r.prezzo)||0,
+    tipo:r.tipo||'ricambio', assegna: assegnaDefault
+  }));
+
+  document.getElementById('rFor').value    = DR.fornitore;
+  document.getElementById('rNum').value    = DR.numero;
+  document.getElementById('rData').value   = DR.data;
+  document.getElementById('rOrd').value    = DR.ordine;
+  document.getElementById('rTarga').value  = DR.targa;
+  document.getElementById('rTelaio').value = DR.telaio;
+
+  // Mostra hint sotto i campi veicolo con quanto estratto dall'AI
+  const hint = document.getElementById('veicoloHint');
+  if(hint){
+    if(DR.targa || DR.telaio){
+      hint.innerHTML = `<span style="font-size:11px;color:var(--ok)">
+        ✓ AI ha estratto: ${DR.targa ? `targa <strong>${DR.targa}</strong>` : ''}
+        ${DR.targa && DR.telaio ? ' · ' : ''}
+        ${DR.telaio ? `telaio <strong>${DR.telaio}</strong>` : ''}
+      </span>`;
+    } else {
+      hint.innerHTML = `<span style="font-size:11px;color:var(--text-l)">Nessun riferimento veicolo trovato nel documento</span>`;
+    }
+  }
+  document.getElementById('ddtMeta').textContent =
+    DR.fornitore ? DR.fornitore + (DR.numero?' — '+DR.numero:'') : '';
+
+  aggiornaBannerMatch(match, DR.targa, DR.telaio);
+  document.getElementById('cardRighe').style.display='';
+  renderRighe();
+}
+
+function aggiornaBannerMatch(match, targa, telaio){
+  const banner = document.getElementById('targaMatchBanner');
+  const field   = document.getElementById('targaCommessaField');
+  const label   = document.getElementById('targaCommessaLabel');
+
+  if(match){
+    const viaLabel = match.via==='targa'
+      ? `targa <strong>${normTarga(match.valore)}</strong>`
+      : `telaio <strong>${normTelaio(match.valore)}</strong>`;
+    banner.innerHTML = `
+      <div class="alert a-ok" style="margin:12px 20px 0">
+        <span class="alert-icon">✦</span>
+        <div>Veicolo riconosciuto tramite ${viaLabel} —
+          tutte le righe assegnate a <strong>${match.commessa.label}</strong>.
+          Modifica singolarmente se necessario.
+        </div>
+      </div>`;
+    field.style.display = '';
+    label.value = match.commessa.label;
+    setTimeout(()=>{
+      document.querySelectorAll('.c-chip').forEach(c=>{
+        c.classList.toggle('sel', c.dataset.id===match.commessa.id);
+      });
+    },50);
+  } else if(targa||telaio){
+    const targaLabel  = targa  ? `<span style="background:var(--dark);color:#FFF;font-family:monospace;font-weight:700;letter-spacing:.1em;padding:2px 8px;border-radius:4px;font-size:13px">${normTarga(targa)}</span>` : '';
+    const telaioLabel = telaio ? `<span style="background:#F0EDE8;font-family:monospace;font-size:12px;padding:2px 6px;border-radius:3px">${normTelaio(telaio)}</span>` : '';
+    const idVeicolo   = normTarga(targa) || normTelaio(telaio);
+    const commOpts    = COMMESSE_APERTE
+      .filter(c => c.id !== 'magazzino')
+      .map(c => `<button class="btn btn-s btn-sm" style="text-align:left"
+          onclick="scegliDestinazioneNoVeicolo('${c.id}',this)">${c.label}</button>`)
+      .join('');
+
+    banner.innerHTML = `
+      <div class="alert a-warn" style="margin:12px 20px 0;flex-direction:column;align-items:flex-start;gap:10px">
+        <div style="display:flex;align-items:flex-start;gap:9px">
+          <span class="alert-icon">⚠</span>
+          <div>
+            Identificativo veicolo rilevato: ${targaLabel}${targaLabel&&telaioLabel?' &nbsp;':''} ${telaioLabel}<br>
+            <span style="font-size:12px;margin-top:3px;display:block">
+              Nessuna commessa aperta corrisponde a questo veicolo. Scegli dove assegnare la merce:
+            </span>
+          </div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;width:100%;padding-left:24px">
+          ${commOpts}
+          <button class="btn btn-s btn-sm"
+            onclick="scegliDestinazioneNoVeicolo('magazzino',this)">🗄 Magazzino</button>
+          <button class="btn btn-s btn-sm" style="border-color:var(--accent);color:var(--accent)"
+            onclick="window.location.href='rapportino.html?targa=${idVeicolo}'">+ Nuovo rapportino per questo veicolo →</button>
+        </div>
+      </div>`;
+    field.style.display = 'none';
+  } else {
+    field.style.display = 'none';
+    // Nessun riferimento veicolo — chiedi destinazione
+    const commOpts = COMMESSE_APERTE
+      .filter(c => c.id !== 'magazzino')
+      .map(c => `<button class="btn btn-s btn-sm" style="text-align:left;flex:1;min-width:180px"
+          onclick="scegliDestinazioneNoVeicolo('${c.id}',this)">${c.label}</button>`)
+      .join('');
+    banner.innerHTML = `
+      <div class="alert a-warn" style="margin:12px 20px 0;flex-direction:column;align-items:flex-start;gap:10px">
+        <div style="display:flex;align-items:flex-start;gap:9px">
+          <span class="alert-icon">⚠</span>
+          <div><strong>Nessun veicolo rilevato nella DDT.</strong><br>
+          Dove va assegnata questa merce?</div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;width:100%;padding-left:24px">
+          ${commOpts}
+          <button class="btn btn-s btn-sm" style="min-width:180px"
+            onclick="scegliDestinazioneNoVeicolo('magazzino',this)">🗄 Magazzino (stock generico)</button>
+          <button class="btn btn-s btn-sm" style="min-width:180px;border-color:var(--accent);color:var(--accent)"
+            onclick="window.location.href='rapportino.html'">+ Apri nuovo rapportino</button>
+        </div>
+      </div>`;
+  }
+}
+
+function scegliDestinazioneNoVeicolo(id, btnEl){
+  DR.righe.forEach(r => r.assegna = id);
+  renderRighe();
+  // Aggiorna visivamente i chip globali
+  document.querySelectorAll('.c-chip').forEach(c => c.classList.toggle('sel', c.dataset.id === id));
+  // Feedback inline nel banner
+  const commessa = COMMESSE_APERTE.find(c => c.id === id);
+  const label = commessa ? commessa.label : 'Magazzino';
+  document.getElementById('targaMatchBanner').innerHTML = `
+    <div class="alert a-ok" style="margin:12px 20px 0">
+      <span class="alert-icon">✓</span>
+      <div>Tutte le righe assegnate a <strong>${label}</strong>.
+        <button onclick="document.getElementById('targaMatchBanner').innerHTML=''" 
+          style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--ok);margin-left:8px;font-weight:600">
+          Annulla scelta
+        </button>
+      </div>
+    </div>`;
+}
+
+function renderRighe(){
+  const tbody = document.getElementById('righeBody');
+  tbody.innerHTML='';
+  DR.righe.forEach(r=>{
+    const tr=document.createElement('tr');
+    const commOptions=COMMESSE_APERTE.map(c=>`<option value="${c.id}" ${r.assegna===c.id?'selected':''}>${c.label}</option>`).join('');
+    tr.innerHTML=`
+      <td><select style="font-size:12px;padding:5px" onchange="updRiga(${r._id},'tipo',this.value)">
+        <option value="ricambio"   ${r.tipo==='ricambio'  ?'selected':''}>Ricambio</option>
+        <option value="servizio"   ${r.tipo==='servizio'  ?'selected':''}>Servizio</option>
+        <option value="manodopera" ${r.tipo==='manodopera'?'selected':''}>Manodopera</option>
+      </select></td>
+      <td><input type="text" value="${r.codice}" placeholder="Codice" onchange="updRiga(${r._id},'codice',this.value)" style="width:100%"></td>
+      <td><input type="text" value="${r.descrizione}" placeholder="Descrizione *" onchange="updRiga(${r._id},'descrizione',this.value)" style="width:100%"></td>
+      <td><input type="number" value="${r.qty}" min="0.01" step="0.01" onchange="updRiga(${r._id},'qty',this.value)" style="text-align:right;width:60px"></td>
+      <td><input type="number" value="${r.prezzo}" min="0" step="0.01" onchange="updRiga(${r._id},'prezzo',this.value)" style="text-align:right;width:80px"></td>
+      <td><select style="font-size:12px;padding:5px;width:100%" onchange="updRiga(${r._id},'assegna',this.value)">
+        ${commOptions}
+      </select></td>
+      <td><button class="btn btn-g btn-sm del" onclick="rimuoviRiga(${r._id})">✕</button></td>
+    `;
+    tbody.appendChild(tr);
+  });
+  document.getElementById('righeCount').textContent=DR.righe.length+' articoli';
+}
+
+function updRiga(id,k,v){
+  const r=DR.righe.find(r=>r._id===id);
+  if(!r)return;
+  r[k]=['qty','prezzo'].includes(k)?parseFloat(v)||0:v;
+}
+function rimuoviRiga(id){DR.righe=DR.righe.filter(r=>r._id!==id);renderRighe();}
+function addRiga(){
+  DR.righe.push({_id:_rigaId++,codice:'',descrizione:'',qty:1,prezzo:0,tipo:'ricambio',assegna:'magazzino'});
+  renderRighe();
+}
+
+// Chip assegnazione globale
+function renderChipsGlobali(){
+  const wrap=document.getElementById('globalChips');
+  if(!wrap)return;
+  wrap.innerHTML=COMMESSE_APERTE.map(c=>`
+    <div class="c-chip" data-id="${c.id}" onclick="assegnaGlobal('${c.id}',this)">${c.label}</div>
+  `).join('');
+}
+function assegnaGlobal(id,el){
+  DR.righe.forEach(r=>r.assegna=id);
+  document.querySelectorAll('.c-chip').forEach(c=>c.classList.remove('sel'));
+  el.classList.add('sel');
+  renderRighe();
+}
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  CONFERMA DDT — carica magazzino e commesse              ║
+// ╚══════════════════════════════════════════════════════════╝
+function confermaDDT(){
+  if(!DR.fornitore){toast('Inserisci il nome del fornitore','err');return;}
+  if(DR.righe.length===0){toast('Nessuna riga da confermare','err');return;}
+  const incomplete=DR.righe.filter(r=>!r.descrizione.trim());
+  if(incomplete.length){toast('Completa la descrizione di tutte le righe','err');return;}
+
+  const ts=new Date().toISOString().slice(0,10);
+  const refDdt=`${DR.numero||'DDT'} / ${DR.fornitore}`;
+
+  DR.righe.forEach(r=>{
+    // 1. Aggiorna magazzino se assegnato a magazzino o se articolo esiste
+    const art=ARTICOLI.find(a=>a.codice===r.codice||(r.codice&&a.codice===r.codice));
+
+    if(r.assegna==='magazzino'||art){
+      if(art){
+        art.qta+=r.qty;
+        if(r.prezzo>0) art.costo=r.prezzo; // aggiorna costo acquisto
+      } else if(r.assegna==='magazzino'){
+        // Crea nuovo articolo
+        const newArt={id:Date.now(),codice:r.codice||'ART-'+Date.now(),descrizione:r.descrizione,
+          um:'NR',qta:r.qty,soglia:1,costo:r.prezzo,prezzo:r.prezzo*1.8,fornitore:DR.fornitore,note:''};
+        ARTICOLI.push(newArt);
+      }
+    }
+
+    // 2. Registra movimento
+    MOVIMENTI.unshift({id:Date.now()+Math.random(),data:ts,tipo:'in',
+      codice:r.codice||'—',descrizione:r.descrizione,qta:r.qty,
+      rif:r.assegna==='magazzino'?refDdt:`${refDdt} → ${r.assegna}`,
+      utente:'Tu'
+    });
+  });
+
+  // ─── TODO SUPABASE ─────────────────────────────────────
+  // await _sb.from('ddt').insert({fornitore:DR.fornitore,numero:DR.numero,data:DR.data,...})
+  // await _sb.from('movimenti').insert(righeMovimenti)
+  // await _sb.from('articoli').upsert(articoliAggiornati)
+  // ───────────────────────────────────────────────────────
+
+  renderKpi();renderMag();renderMov();aggArticoliSelect();
+  toast(`DDT confermata — ${DR.righe.length} articoli caricati`,'ok');
+  // Se DDT arrivava da email, segnala confermata
+  if(DR._emailId) segnaEmailConfermata(DR._emailId);
+  resetDDT();
+}
+
+function resetDDT(){
+  DR={fornitore:'',numero:'',data:'',ordine:'',targa:'',telaio:'',righe:[]};
+  document.getElementById('cardRighe').style.display='none';
+  document.getElementById('ddtMeta').textContent='';
+  document.getElementById('targaMatchBanner').innerHTML='';
+  document.getElementById('targaCommessaField').style.display='none';
+}
+
+// Matching in tempo reale (digitazione manuale targa o telaio)
+function onVeicoloChange(){
+  const targa  = document.getElementById('rTarga').value.replace(/[^A-Z0-9]/gi,'').toUpperCase();
+  const telaio = document.getElementById('rTelaio').value.replace(/\s/g,'').toUpperCase();
+  DR.targa  = targa;
+  DR.telaio = telaio;
+  document.getElementById('rTarga').value  = targa;
+  document.getElementById('rTelaio').value = telaio;
+
+  const match = matchCommessa(targa, telaio);
+  if(match){
+    DR.righe.forEach(r => r.assegna = match.commessa.id);
+    renderRighe();
+  }
+  aggiornaBannerMatch(match, targa, telaio);
+}
+
+// XML/EDI stub
+function onXmlSelect(files){
+  if(!files||!files.length)return;
+  toast('Parsing XML — da implementare con parser EDI/DESADV','info');
+}
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  CODA DDT DA EMAIL                                       ║
+// ╚══════════════════════════════════════════════════════════╝
+
+// DDT in coda — in produzione vengono da Supabase, qui demo
+let EMAIL_QUEUE = [
+  // Esempio: verranno popolate da pollEmailQueue() via Supabase
+];
+
+let _pollTimer = null;
+
+function startEmailPolling(){
+  pollEmailQueue();
+  // Polling ogni 45 secondi
+  _pollTimer = setInterval(pollEmailQueue, 45000);
+}
+
+async function pollEmailQueue(){
+  // ─── TODO SUPABASE ──────────────────────────────────────
+  // const { data, error } = await _sb
+  //   .from('ddt_in_coda')   // usa la VIEW creata nel SQL
+  //   .select('*')
+  //   .order('created_at', { ascending: false })
+  // if (!error && data) {
+  //   EMAIL_QUEUE = data;
+  //   renderEmailQueue();
+  // }
+  // ────────────────────────────────────────────────────────
+
+  // Demo: simula arrivo DDT dopo 3 secondi al primo caricamento
+  if(EMAIL_QUEUE.length === 0 && !window._demoShown){
+    window._demoShown = true;
+    setTimeout(()=>{
+      EMAIL_QUEUE = [
+        {
+          id:'demo-1',
+          created_at: new Date().toISOString(),
+          email_da: 'ordini@blmbovio.it',
+          email_oggetto: 'DDT 2024/0891 — FP507ED PARTNER - PAGHERA AUTO SRL',
+          fornitore: 'BLM Bovio Ricambi SPA',
+          numero_ddt: '2024/0891',
+          data_ddt: new Date().toISOString().slice(0,10),
+          targa: 'FP507ED',
+          telaio: '',
+          modello: 'PARTNER',
+          n_righe: 4,
+          stato: 'da_confermare',
+          errore: null
+        }
+      ];
+      renderEmailQueue();
+      toast('1 nuova DDT ricevuta via email','info');
+    }, 3000);
+  }
+}
+
+function renderEmailQueue(){
+  const card  = document.getElementById('cardEmailQueue');
+  const list  = document.getElementById('emailQueueList');
+  const count = document.getElementById('emailQueueCount');
+  const badge = document.getElementById('badgeEmail');
+  const badgeN= document.getElementById('badgeEmailN');
+
+  const pending = EMAIL_QUEUE.filter(d => d.stato === 'da_confermare' || d.stato === 'errore');
+
+  if(pending.length === 0){
+    card.style.display = 'none';
+    badge.style.display = 'none';
+    return;
+  }
+
+  card.style.display = '';
+  badge.style.display = '';
+  badgeN.textContent  = pending.length;
+  count.textContent   = pending.length + (pending.length===1?' DDT in attesa':' DDT in attesa');
+
+  list.innerHTML = pending.map(d => {
+    const targaPill = d.targa
+      ? `<span class="eq-pill eq-targa">${d.targa}</span>`
+      : '';
+    const modelloPill = (d.modello || d.ddt_estratto?.modello)
+      ? `<span class="eq-pill" style="background:var(--accent-l);color:var(--accent-d);font-size:11px">${d.modello || d.ddt_estratto?.modello}</span>`
+      : '';
+    const telaioPill = d.telaio
+      ? `<span class="eq-pill" style="font-family:monospace;font-size:10px">${d.telaio}</span>`
+      : '';
+    const righePill = d.n_righe
+      ? `<span class="eq-pill">${d.n_righe} righe</span>`
+      : '';
+    const errMsg = d.errore
+      ? `<div class="eq-err">⚠ ${d.errore}</div>`
+      : '';
+    const ts = d.created_at
+      ? new Date(d.created_at).toLocaleString('it-IT',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})
+      : '';
+
+    return `<div class="eq-item">
+      <div class="eq-meta">
+        <div class="eq-from">${d.email_da} · ${ts}</div>
+        <div class="eq-sogg">${d.email_oggetto}</div>
+        <div class="eq-info">
+          ${targaPill}${modelloPill}${telaioPill}
+          ${d.numero_ddt?`<span class="eq-pill">DDT ${d.numero_ddt}</span>`:''}
+          ${d.fornitore?`<span class="eq-pill">${d.fornitore}</span>`:''}
+          ${righePill}
+        </div>
+        ${errMsg}
+      </div>
+      <div class="eq-actions">
+        ${d.errore
+          ? `<button class="btn btn-s btn-sm" onclick="scartaDDTEmail('${d.id}')">Scarta</button>`
+          : `<button class="btn btn-p btn-sm" onclick="caricaDDTEmail('${d.id}')">Carica →</button>
+             <button class="btn btn-g btn-sm" onclick="scartaDDTEmail('${d.id}')">Scarta</button>`
+        }
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function caricaDDTEmail(id){
+  const ddt = EMAIL_QUEUE.find(d => d.id === id);
+  if(!ddt || !ddt.stato === 'da_confermare') return;
+
+  // Costruisci oggetto compatibile con mostraRighe
+  // In produzione ddt_estratto arriva già come oggetto JSON da Supabase
+  const estratto = {
+    fornitore: ddt.fornitore || '',
+    numero:    ddt.numero_ddt || '',
+    data:      ddt.data_ddt || new Date().toISOString().slice(0,10),
+    ordine:    '',
+    targa:     ddt.targa || '',
+    telaio:    ddt.telaio || '',
+    righe:     ddt.righe || [],
+    _emailId:  id
+  };
+
+  mostraRighe(estratto);
+  toast(`DDT email caricata — verifica e conferma le righe`, 'ok');
+
+  // Scroll alla card righe
+  setTimeout(()=>{
+    document.getElementById('cardRighe')?.scrollIntoView({behavior:'smooth', block:'start'});
+  }, 100);
+}
+
+function scartaDDTEmail(id){
+  if(!confirm('Scartare questa DDT? Non verrà caricata nel sistema.')) return;
+
+  // ─── TODO SUPABASE ──────────────────────────────────────
+  // await _sb.from('ddt_in_arrivo')
+  //   .update({ stato: 'scartato' })
+  //   .eq('id', id)
+  // ────────────────────────────────────────────────────────
+
+  EMAIL_QUEUE = EMAIL_QUEUE.filter(d => d.id !== id);
+  renderEmailQueue();
+  toast('DDT scartata', 'ok');
+}
+
+function segnaEmailConfermata(emailId){
+  // Chiamata dopo confermaDDT() se la DDT viene da email
+  if(!emailId) return;
+
+  // ─── TODO SUPABASE ──────────────────────────────────────
+  // await _sb.from('ddt_in_arrivo')
+  //   .update({ stato:'confermato', confermato_at: new Date().toISOString() })
+  //   .eq('id', emailId)
+  // ────────────────────────────────────────────────────────
+
+  EMAIL_QUEUE = EMAIL_QUEUE.filter(d => d.id !== emailId);
+  renderEmailQueue();
+}
+
+
+function renderMag(){
+  const q=(document.getElementById('magSearch').value||'').toLowerCase();
+  const f=document.getElementById('magFiltro').value;
+  let lista=ARTICOLI.filter(a=>{
+    if(q&&!a.codice.toLowerCase().includes(q)&&!a.descrizione.toLowerCase().includes(q))return false;
+    if(f==='warn')return a.qta<a.soglia;
+    if(f==='ok')return a.qta>=a.soglia&&a.qta>0;
+    if(f==='zero')return a.qta===0;
+    return true;
+  });
+  const tbody=document.getElementById('magBody');
+  tbody.innerHTML=lista.map(a=>{
+    const pct=a.soglia>0?Math.min(100,(a.qta/a.soglia)*50):100;
+    const cls=a.qta===0?'sf-err':a.qta<a.soglia?'sf-warn':'sf-ok';
+    const statoBadge=a.qta===0?'<span class="badge b-err">esaurito</span>':a.qta<a.soglia?'<span class="badge b-warn">scorta bassa</span>':'<span class="badge b-ok">ok</span>';
+    return `<tr>
+      <td><code style="font-size:11px;background:#F0EDE8;padding:2px 5px;border-radius:3px">${a.codice}</code></td>
+      <td style="font-weight:500">${a.descrizione}${a.note?`<div style="font-size:11px;color:var(--text-l);margin-top:1px">${a.note}</div>`:''}</td>
+      <td style="font-size:12px;color:var(--text-m)">${a.fornitore||'—'}</td>
+      <td class="r"><strong>${a.qta}</strong> ${a.um}</td>
+      <td class="r" style="color:var(--text-m)">${a.soglia} ${a.um}</td>
+      <td class="r">€ ${fmt2(a.costo)}</td>
+      <td style="min-width:120px">
+        ${statoBadge}
+        <div class="stock-bar"><div class="stock-fill ${cls}" style="width:${pct}%"></div></div>
+      </td>
+      <td>
+        <button class="btn btn-g btn-sm" onclick="apriModaleArticolo(${a.id})" title="Modifica">✎</button>
+        <button class="btn btn-g btn-sm del" onclick="eliminaArticolo(${a.id})" title="Elimina">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+  document.getElementById('magCount').textContent=lista.length+' di '+ARTICOLI.length+' articoli';
+}
+
+function apriModaleArticolo(id){
+  _editArtId=id;
+  document.getElementById('moArtTitle').textContent=id?'Modifica articolo':'Nuovo articolo';
+  const a=id?ARTICOLI.find(x=>x.id===id):{};
+  setV('aDesc',a.descrizione);setV('aCod',a.codice);setV('aCodFor',a.codice_for);
+  setV('aUm',a.um||'NR');setV('aQta',a.qta);setV('aSoglia',a.soglia);
+  setV('aCosto',a.costo);setV('aPrezzo',a.prezzo);setV('aNote',a.note);
+  aggFornitoriSelect();
+  document.getElementById('aFornitore').value=a.fornitore||'';
+  apriMo('moArt');
+}
+function salvaArticolo(){
+  const desc=document.getElementById('aDesc').value.trim();
+  if(!desc){toast('Inserisci la descrizione','err');return;}
+  const obj={descrizione:desc,codice:gV('aCod')||'ART-'+Date.now(),codice_for:gV('aCodFor'),
+    um:gV('aUm'),qta:parseFloat(gV('aQta'))||0,soglia:parseFloat(gV('aSoglia'))||1,
+    costo:parseFloat(gV('aCosto'))||0,prezzo:parseFloat(gV('aPrezzo'))||0,
+    fornitore:gV('aFornitore'),note:gV('aNote')};
+  if(_editArtId){Object.assign(ARTICOLI.find(a=>a.id===_editArtId),obj);}
+  else{ARTICOLI.push({id:Date.now(),...obj});}
+  renderMag();renderKpi();aggArticoliSelect();aggFornitoriDatalist();
+  chiudiMo('moArt');toast(_editArtId?'Articolo aggiornato':'Articolo creato','ok');
+}
+function eliminaArticolo(id){
+  if(!confirm('Eliminare questo articolo dal magazzino?'))return;
+  ARTICOLI=ARTICOLI.filter(a=>a.id!==id);
+  renderMag();renderKpi();
+  toast('Articolo eliminato','ok');
+}
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  MOVIMENTI                                               ║
+// ╚══════════════════════════════════════════════════════════╝
+function renderMov(){
+  const da=document.getElementById('movDa').value;
+  const a=document.getElementById('movA').value;
+  const tp=document.getElementById('movTipo').value;
+  const q=(document.getElementById('movSearch').value||'').toLowerCase();
+  const lista=MOVIMENTI.filter(m=>{
+    if(da&&m.data<da)return false;
+    if(a&&m.data>a)return false;
+    if(tp&&m.tipo!==tp)return false;
+    if(q&&!m.codice.toLowerCase().includes(q)&&!m.descrizione.toLowerCase().includes(q)&&!m.rif.toLowerCase().includes(q))return false;
+    return true;
+  });
+  const tbody=document.getElementById('movBody');
+  tbody.innerHTML=lista.map(m=>{
+    const segno=m.qta>0?'+':'';
+    const cls=m.qta>0?'mov-in':'mov-out';
+    const tipoLabel={in:'📥 Entrata',out:'📤 Uscita',rett:'⚖ Rettifica'}[m.tipo]||m.tipo;
+    return `<tr>
+      <td style="color:var(--text-m);white-space:nowrap">${fmtData(m.data)}</td>
+      <td><span style="font-size:12px">${tipoLabel}</span></td>
+      <td><code style="font-size:11px;background:#F0EDE8;padding:1px 4px;border-radius:3px">${m.codice}</code></td>
+      <td>${m.descrizione}</td>
+      <td class="r"><span class="${cls}">${segno}${m.qta}</span></td>
+      <td style="font-size:12px;color:var(--text-m);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.rif}</td>
+      <td style="font-size:12px;color:var(--text-l)">${m.utente}</td>
+    </tr>`;
+  }).join('');
+  if(!lista.length)tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-l)">Nessun movimento nel periodo selezionato</td></tr>';
+}
+
+function apriModaleRettifica(){
+  document.getElementById('rDataRett').value=new Date().toISOString().slice(0,10);
+  aggArticoliSelect();
+  apriMo('moRett');
+}
+function salvaApiKey(){
+  const v = document.getElementById('apiKeyInput').value.trim();
+  if(!v){toast('Inserisci una API key valida','err');return;}
+  localStorage.setItem('anthropic_key', v);
+  document.getElementById('apiKeyBox').style.display='none';
+  toast('API key salvata','ok');
+}
+
+function mostraDebug(json, isError=false){
+  const box = document.getElementById('debugBox');
+  const pre  = document.getElementById('debugPre');
+  // Formatta JSON con colori base
+  let formatted;
+  try { formatted = JSON.stringify(JSON.parse(json), null, 2); }
+  catch { formatted = json; }
+  // Evidenzia i campi targa e telaio
+  formatted = formatted
+    .replace(/"targa":\s*"([^"]+)"/g, (m,v) =>
+      `"targa": "<span style="color:#FCDE5A;font-weight:bold">${v}</span>"`)
+    .replace(/"telaio":\s*"([^"]+)"/g, (m,v) =>
+      `"telaio": "<span style="color:#9CDCFE;font-weight:bold">${v}</span>"`);
+  pre.innerHTML = formatted;
+  pre.style.borderColor = isError ? '#A32D2D' : '#444';
+  box.style.display = '';
+}
+
+function salvaRettifica(){
+  const artId=document.getElementById('rArticolo').value;
+  if(!artId){toast('Seleziona un articolo','err');return;}
+  const q=parseFloat(document.getElementById('rQta').value)||0;
+  const t=document.getElementById('rTipo').value;
+  const causale=document.getElementById('rCausale').value||'Rettifica manuale';
+  const art=ARTICOLI.find(a=>a.id==artId);
+  if(!art)return;
+  let delta;
+  if(t==='in')delta=q;
+  else if(t==='out')delta=-q;
+  else{delta=q-art.qta;}
+  art.qta=Math.max(0,art.qta+delta);
+  MOVIMENTI.unshift({id:Date.now(),data:document.getElementById('rDataRett').value,
+    tipo:'rett',codice:art.codice,descrizione:art.descrizione,qta:delta,rif:causale,utente:'Tu'});
+  renderMag();renderMov();renderKpi();
+  chiudiMo('moRett');toast('Rettifica registrata','ok');
+}
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  FORNITORI                                               ║
+// ╚══════════════════════════════════════════════════════════╝
+function renderFor(){
+  const tbody=document.getElementById('forBody');
+  tbody.innerHTML=FORNITORI.map(f=>{
+    const nArt=ARTICOLI.filter(a=>a.fornitore===f.nome).length;
+    const ultDDT=MOVIMENTI.filter(m=>m.tipo==='in'&&m.rif.includes(f.nome)).sort((a,b)=>b.data.localeCompare(a.data))[0];
+    return `<tr>
+      <td style="font-weight:500">${f.nome}</td>
+      <td style="font-size:12px;color:var(--text-m)">${f.piva||'—'}</td>
+      <td style="font-size:12px">${f.email||f.tel||'—'}</td>
+      <td class="r">${nArt}</td>
+      <td style="font-size:12px;color:var(--text-m)">${ultDDT?fmtData(ultDDT.data):'—'}</td>
+      <td>
+        <button class="btn btn-g btn-sm" onclick="apriModaleFornitore(${f.id})">✎</button>
+        <button class="btn btn-g btn-sm del" onclick="eliminaFornitore(${f.id})">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+  if(!FORNITORI.length)tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-l)">Nessun fornitore</td></tr>';
+}
+
+function apriModaleFornitore(id){
+  _editForId=id;
+  document.getElementById('moForTitle').textContent=id?'Modifica fornitore':'Nuovo fornitore';
+  const f=id?FORNITORI.find(x=>x.id===id):{};
+  setV('fNome',f.nome);setV('fPiva',f.piva);setV('fCod',f.cod);
+  setV('fEmail',f.email);setV('fTel',f.tel);setV('fNote',f.note);
+  apriMo('moFor');
+}
+function salvaFornitore(){
+  const nome=document.getElementById('fNome').value.trim();
+  if(!nome){toast('Inserisci la ragione sociale','err');return;}
+  const obj={nome,piva:gV('fPiva'),cod:gV('fCod'),email:gV('fEmail'),tel:gV('fTel'),note:gV('fNote')};
+  if(_editForId){Object.assign(FORNITORI.find(f=>f.id===_editForId),obj);}
+  else{FORNITORI.push({id:Date.now(),...obj});}
+  renderFor();aggFornitoriDatalist();aggFornitoriSelect();
+  chiudiMo('moFor');toast(_editForId?'Fornitore aggiornato':'Fornitore aggiunto','ok');
+}
+function eliminaFornitore(id){
+  if(!confirm('Eliminare questo fornitore?'))return;
+  FORNITORI=FORNITORI.filter(f=>f.id!==id);
+  renderFor();aggFornitoriDatalist();toast('Fornitore eliminato','ok');
+}
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  HELPERS SELECTS & DATALISTS                             ║
+// ╚══════════════════════════════════════════════════════════╝
+function aggFornitoriDatalist(){
+  const dl=document.getElementById('fornitoriList');
+  if(dl)dl.innerHTML=FORNITORI.map(f=>`<option value="${f.nome}">`).join('');
+}
+function aggFornitoriSelect(){
+  const s=document.getElementById('aFornitore');
+  if(s)s.innerHTML='<option value="">— Seleziona —</option>'+
+    FORNITORI.map(f=>`<option value="${f.nome}">${f.nome}</option>`).join('');
+}
+function aggArticoliSelect(){
+  const s=document.getElementById('rArticolo');
+  if(s)s.innerHTML='<option value="">— Seleziona articolo —</option>'+
+    ARTICOLI.map(a=>`<option value="${a.id}">${a.codice} — ${a.descrizione}</option>`).join('');
+}
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  TAB SWITCH                                              ║
+// ╚══════════════════════════════════════════════════════════╝
+function goTab(name,btn){
+  ['ddt','mag','mov','for'].forEach(t=>{
+    document.getElementById('tab-'+t).style.display=t===name?'':'none';
+  });
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  if(name==='mag')renderMag();
+  if(name==='mov')renderMov();
+  if(name==='for')renderFor();
+}
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  MODAL                                                   ║
+// ╚══════════════════════════════════════════════════════════╝
+function apriMo(id){document.getElementById(id).classList.add('open')}
+function chiudiMo(id){document.getElementById(id).classList.remove('open')}
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  TOAST                                                   ║
+// ╚══════════════════════════════════════════════════════════╝
+function toast(msg,tipo=''){
+  const w=document.getElementById('toasts');
+  const t=document.createElement('div');
+  t.className='toast'+(tipo?' '+tipo:'');t.textContent=msg;
+  w.appendChild(t);
+  setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),350)},3200);
+}
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  UTILS                                                   ║
+// ╚══════════════════════════════════════════════════════════╝
+function toBase64(file){
+  return new Promise((res,rej)=>{
+    const r=new FileReader();
+    r.onload=()=>res(r.result.split(',')[1]);
+    r.onerror=()=>rej(new Error('Lettura file fallita'));
+    r.readAsDataURL(file);
+  });
+}
+function fmt2(n){return (n||0).toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2})}
+function fmtData(d){try{return new Date(d).toLocaleDateString('it-IT',{day:'2-digit',month:'short',year:'numeric'})}catch{return d}}
+function gV(id){const e=document.getElementById(id);return e?e.value:''}
+function setV(id,v){const e=document.getElementById(id);if(e)e.value=v||''}
+
+// ─── AVVIO ───────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
