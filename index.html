@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestione Veicoli — Paghera Auto</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --dark:#111110;
+  --dark2:#1C1C1A;
+  --surface:#FFFFFF;
+  --bg:#EDEBE6;
+  --border:#DEDAD4;
+  --text:#1A1A1A;
+  --text-m:#706C65;
+  --text-l:#9A9690;
+  --green:#0F6E56;--green-l:#E1F5EE;
+  --blue:#185FA5;--blue-l:#EBF0FD;
+  --amber:#854F0B;--amber-l:#FAEEDA;
+  --red:#A32D2D;--red-l:#FCEBEB;
+  --purple:#534AB7;--purple-l:#EEEDFE;
+  --ok:#1F7A35;--ok-bg:#E6F5EB;
+  --warn:#7A5000;--warn-bg:#FFF8E6;
+  --r:10px;--sh:0 1px 4px rgba(0,0,0,0.08)
+}
+body{
+  font-family:'Helvetica Neue',Arial,-apple-system,sans-serif;
+  background:var(--bg);color:var(--text);
+  font-size:14px;line-height:1.5;min-height:100vh;
+}
+
+/* ── HEADER ─────────────────────────────────────────────── */
+.hdr{
+  background:var(--dark);
+  padding:0 28px;height:60px;
+  display:flex;align-items:center;justify-content:space-between;
+  position:sticky;top:0;z-index:100;
+}
+.brand{
+  display:flex;align-items:center;gap:14px;
+}
+.brand-logo{
+  width:34px;height:34px;border-radius:8px;
+  background:var(--green);
+  display:flex;align-items:center;justify-content:center;
+}
+.brand-logo svg{width:18px;height:18px;fill:#FFF}
+.brand-name{
+  font-size:15px;font-weight:700;color:#FFF;letter-spacing:-.01em;
+}
+.brand-sub{
+  font-size:11px;color:rgba(255,255,255,.4);
+  font-weight:500;letter-spacing:.06em;text-transform:uppercase;
+  margin-top:1px;
+}
+.hdr-right{display:flex;align-items:center;gap:10px}
+.hdr-pill{
+  background:rgba(255,255,255,.08);
+  color:rgba(255,255,255,.65);
+  font-size:11px;font-weight:600;
+  padding:4px 10px;border-radius:20px;
+  letter-spacing:.04em;
+}
+
+/* ── PAGE ────────────────────────────────────────────────── */
+.page{max-width:1060px;margin:0 auto;padding:28px 16px 60px}
+
+/* ── SEZIONE TITOLO ──────────────────────────────────────── */
+.section-head{
+  display:flex;align-items:baseline;justify-content:space-between;
+  margin-bottom:14px;
+}
+.section-title{
+  font-size:11px;font-weight:700;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--text-m);
+}
+.section-link{
+  font-size:12px;color:var(--green);font-weight:600;
+  text-decoration:none;
+}
+.section-link:hover{text-decoration:underline}
+
+/* ── KPI STRIP ───────────────────────────────────────────── */
+.kpi-strip{
+  display:grid;
+  grid-template-columns:repeat(5,1fr);
+  gap:10px;
+  margin-bottom:24px;
+}
+.kpi-card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--r);
+  padding:14px 16px;
+  box-shadow:var(--sh);
+  cursor:pointer;
+  transition:transform .12s,box-shadow .12s;
+}
+.kpi-card:hover{transform:translateY(-2px);box-shadow:0 4px 14px rgba(0,0,0,.1)}
+.kpi-val{
+  font-size:28px;font-weight:800;letter-spacing:-.03em;
+  line-height:1;margin-bottom:4px;
+}
+.kpi-lbl{font-size:11px;color:var(--text-m);font-weight:500;text-transform:uppercase;letter-spacing:.06em}
+.kpi-card.warn .kpi-val{color:var(--warn)}
+.kpi-card.ok   .kpi-val{color:var(--ok)}
+.kpi-card.info .kpi-val{color:var(--blue)}
+.kpi-card.money .kpi-val{color:var(--green);font-size:22px}
+
+/* ── MODULE CARDS ────────────────────────────────────────── */
+.modules{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  gap:14px;
+  margin-bottom:24px;
+}
+.mod{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--r);
+  box-shadow:var(--sh);
+  overflow:hidden;
+  text-decoration:none;color:inherit;
+  display:flex;flex-direction:column;
+  transition:transform .12s,box-shadow .12s;
+}
+.mod:hover{transform:translateY(-3px);box-shadow:0 6px 20px rgba(0,0,0,.11)}
+.mod-top{
+  padding:22px 22px 16px;
+  display:flex;align-items:flex-start;justify-content:space-between;
+}
+.mod-icon{
+  width:44px;height:44px;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:20px;flex-shrink:0;
+}
+.mod-badge{
+  font-size:11px;font-weight:700;padding:3px 9px;
+  border-radius:20px;letter-spacing:.04em;
+}
+.mod-body{padding:0 22px 20px;flex:1}
+.mod-title{font-size:17px;font-weight:700;margin-bottom:5px;letter-spacing:-.01em}
+.mod-desc{font-size:13px;color:var(--text-m);line-height:1.55}
+.mod-footer{
+  padding:12px 22px;
+  border-top:1px solid var(--border);
+  background:#F7F6F3;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.mod-stat{font-size:12px;color:var(--text-m)}
+.mod-stat strong{color:var(--text);font-weight:700}
+.mod-cta{
+  font-size:12px;font-weight:700;
+  color:var(--green);letter-spacing:.02em;
+}
+
+/* Colori moduli */
+.mod-rap .mod-icon{background:var(--blue-l);color:var(--blue)}
+.mod-fat .mod-icon{background:var(--purple-l);color:var(--purple)}
+.mod-ddt .mod-icon{background:var(--green-l);color:var(--green)}
+
+/* ── ATTIVITÀ RECENTE ────────────────────────────────────── */
+.activity{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--r);
+  box-shadow:var(--sh);
+  overflow:hidden;
+}
+.act-item{
+  display:flex;align-items:center;gap:14px;
+  padding:13px 20px;
+  border-bottom:1px solid #F0EDE8;
+  transition:background .1s;cursor:pointer;
+  text-decoration:none;color:inherit;
+}
+.act-item:last-child{border-bottom:none}
+.act-item:hover{background:#FAFAF8}
+.act-dot{
+  width:8px;height:8px;border-radius:50%;flex-shrink:0;
+}
+.act-dot.rap{background:var(--blue)}
+.act-dot.fat{background:var(--purple)}
+.act-dot.ddt{background:var(--green)}
+.act-main{flex:1;min-width:0}
+.act-title{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.act-sub{font-size:12px;color:var(--text-m);margin-top:1px}
+.act-right{text-align:right;flex-shrink:0}
+.act-val{font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
+.act-time{font-size:11px;color:var(--text-l);margin-top:1px}
+
+/* ── ALERT DDT ────────────────────────────────────────────── */
+.ddt-alert{
+  background:var(--green-l);
+  border:1px solid #9FE1CB;
+  border-radius:var(--r);
+  padding:14px 18px;
+  display:flex;align-items:center;justify-content:space-between;gap:14px;
+  margin-bottom:14px;
+  cursor:pointer;text-decoration:none;color:inherit;
+  transition:opacity .15s;
+}
+.ddt-alert:hover{opacity:.88}
+.ddt-alert-left{display:flex;align-items:center;gap:12px}
+.ddt-alert-icon{font-size:20px}
+.ddt-alert-text strong{font-size:14px;font-weight:700;color:var(--green)}
+.ddt-alert-text p{font-size:12px;color:var(--text-m);margin-top:2px}
+.ddt-alert-cta{
+  font-size:13px;font-weight:700;color:var(--green);
+  white-space:nowrap;
+}
+
+/* ── LOADER ───────────────────────────────────────────────── */
+.skeleton{
+  background:linear-gradient(90deg,#E8E6E0 25%,#F0EDE8 50%,#E8E6E0 75%);
+  background-size:200% 100%;
+  animation:shimmer 1.4s infinite;
+  border-radius:4px;
+}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* ── TOAST ────────────────────────────────────────────────── */
+.toasts{position:fixed;bottom:20px;right:20px;display:flex;flex-direction:column;gap:8px;z-index:500}
+.toast{background:var(--dark);color:#FFF;padding:10px 16px;border-radius:var(--r);font-size:13px;max-width:320px;animation:fadeUp .22s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+@media(max-width:720px){
+  .modules{grid-template-columns:1fr}
+  .kpi-strip{grid-template-columns:1fr 1fr}
+}
+@media(max-width:480px){
+  .kpi-strip{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="brand">
+    <div class="brand-logo">
+      <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/></svg>
+    </div>
+    <div>
+      <div class="brand-name">Paghera Auto</div>
+      <div class="brand-sub">Gestione Veicoli</div>
+    </div>
+  </div>
+  <div class="hdr-right">
+    <span class="hdr-pill" id="dataOggi"></span>
+    <span class="hdr-pill" id="connStatus">● Connesso</span>
+  </div>
+</header>
+
+<div class="page">
+
+  <!-- Alert DDT in arrivo (visibile solo se ci sono DDT da confermare) -->
+  <a href="ddt.html" class="ddt-alert" id="ddtAlert" style="display:none">
+    <div class="ddt-alert-left">
+      <span class="ddt-alert-icon">📦</span>
+      <div class="ddt-alert-text">
+        <strong id="ddtAlertNum">0 DDT</strong> ricevute via email in attesa di conferma
+        <p id="ddtAlertDetail">Clicca per rivedere e caricare in magazzino</p>
+      </div>
+    </div>
+    <span class="ddt-alert-cta">Apri DDT →</span>
+  </a>
+
+  <!-- KPI -->
+  <div class="section-head">
+    <span class="section-title">Situazione attuale</span>
+    <span class="section-link" id="lastUpdate"></span>
+  </div>
+
+  <div class="kpi-strip">
+    <div class="kpi-card info" onclick="location.href='rapportino.html'">
+      <div class="kpi-val" id="kRap">—</div>
+      <div class="kpi-lbl">Rapportini aperti</div>
+    </div>
+    <div class="kpi-card warn" onclick="location.href='fattura.html'">
+      <div class="kpi-val" id="kFat">—</div>
+      <div class="kpi-lbl">Da fatturare</div>
+    </div>
+    <div class="kpi-card money" onclick="location.href='fattura.html'">
+      <div class="kpi-val" id="kMese">—</div>
+      <div class="kpi-lbl">Fatturato mese</div>
+    </div>
+    <div class="kpi-card warn" onclick="location.href='ddt.html#mag'">
+      <div class="kpi-val" id="kScorte">—</div>
+      <div class="kpi-lbl">Scorte basse</div>
+    </div>
+    <div class="kpi-card ok" onclick="location.href='ddt.html'">
+      <div class="kpi-val" id="kDdt">—</div>
+      <div class="kpi-lbl">DDT in attesa</div>
+    </div>
+  </div>
+
+  <!-- Moduli -->
+  <div class="section-head" style="margin-top:4px">
+    <span class="section-title">Moduli</span>
+  </div>
+
+  <div class="modules">
+
+    <!-- Rapportino -->
+    <a href="rapportino.html" class="mod mod-rap">
+      <div class="mod-top">
+        <div class="mod-icon">🔧</div>
+        <span class="mod-badge" style="background:var(--blue-l);color:var(--blue)">Riparazioni</span>
+      </div>
+      <div class="mod-body">
+        <div class="mod-title">Rapportino</div>
+        <div class="mod-desc">Apri una scheda di riparazione, aggiungi ricambi e servizi, allega foto del veicolo.</div>
+      </div>
+      <div class="mod-footer">
+        <span class="mod-stat"><strong id="mRapAperti">—</strong> aperti</span>
+        <span class="mod-cta">Nuovo rapportino →</span>
+      </div>
+    </a>
+
+    <!-- Fattura -->
+    <a href="fattura.html" class="mod mod-fat">
+      <div class="mod-top">
+        <div class="mod-icon">🧾</div>
+        <span class="mod-badge" style="background:var(--purple-l);color:var(--purple)">Fatturazione</span>
+      </div>
+      <div class="mod-body">
+        <div class="mod-title">Fattura elettronica</div>
+        <div class="mod-desc">Genera PDF e XML FatturaPA 1.2.2, invia al SDI tramite Aruba con un click.</div>
+      </div>
+      <div class="mod-footer">
+        <span class="mod-stat"><strong id="mFatBozze">—</strong> bozze</span>
+        <span class="mod-cta">Nuova fattura →</span>
+      </div>
+    </a>
+
+    <!-- DDT / Magazzino -->
+    <a href="ddt.html" class="mod mod-ddt">
+      <div class="mod-top">
+        <div class="mod-icon">📦</div>
+        <span class="mod-badge" style="background:var(--green-l);color:var(--green)">Magazzino</span>
+      </div>
+      <div class="mod-body">
+        <div class="mod-title">DDT &amp; Magazzino</div>
+        <div class="mod-desc">Le DDT arrivano via email e vengono lette dall'AI. Gestione scorte, movimenti e fornitori.</div>
+      </div>
+      <div class="mod-footer">
+        <span class="mod-stat"><strong id="mDdtAttesa">—</strong> da confermare</span>
+        <span class="mod-cta">Apri magazzino →</span>
+      </div>
+    </a>
+
+  </div>
+
+  <!-- Attività recente -->
+  <div class="section-head">
+    <span class="section-title">Attività recente</span>
+    <a href="rapportino.html" class="section-link">Vedi tutto →</a>
+  </div>
+
+  <div class="activity" id="activityList">
+    <!-- Skeleton loader -->
+    <div class="act-item" style="pointer-events:none">
+      <div class="act-dot rap"></div>
+      <div class="act-main">
+        <div class="skeleton" style="height:13px;width:60%;margin-bottom:5px"></div>
+        <div class="skeleton" style="height:11px;width:40%"></div>
+      </div>
+      <div class="act-right">
+        <div class="skeleton" style="height:13px;width:60px;margin-bottom:4px"></div>
+        <div class="skeleton" style="height:11px;width:40px;margin-left:auto"></div>
+      </div>
+    </div>
+    <div class="act-item" style="pointer-events:none">
+      <div class="act-dot ddt"></div>
+      <div class="act-main">
+        <div class="skeleton" style="height:13px;width:50%;margin-bottom:5px"></div>
+        <div class="skeleton" style="height:11px;width:35%"></div>
+      </div>
+      <div class="act-right">
+        <div class="skeleton" style="height:13px;width:50px;margin-bottom:4px"></div>
+        <div class="skeleton" style="height:11px;width:35px;margin-left:auto"></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /page -->
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+// CONFIG SUPABASE
+// ══════════════════════════════════════════════════════════
+const SUPABASE_URL = 'https://iztrrgqkzsovorcmixum.supabase.co';
+const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY'; // ← inserisci la tua anon key
+// const _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ══════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════
+function init(){
+  // Data oggi in header
+  document.getElementById('dataOggi').textContent =
+    new Date().toLocaleDateString('it-IT',{weekday:'short',day:'2-digit',month:'long'});
+
+  caricaKpi();
+  caricaAttivita();
+}
+
+// ══════════════════════════════════════════════════════════
+// KPI — da Supabase view dashboard_kpi
+// ══════════════════════════════════════════════════════════
+async function caricaKpi(){
+  // ─── TODO SUPABASE ────────────────────────────────────
+  // const { data } = await _sb.from('dashboard_kpi').select('*').single();
+  // if(data) renderKpi(data);
+  // ──────────────────────────────────────────────────────
+
+  // Demo
+  renderKpi({
+    rapportini_aperti: 4,
+    da_fatturare:      2,
+    fatturato_mese:    3840.50,
+    scorte_basse:      3,
+    ddt_in_attesa:     1
+  });
+}
+
+function renderKpi(d){
+  document.getElementById('kRap').textContent    = d.rapportini_aperti ?? 0;
+  document.getElementById('kFat').textContent    = d.da_fatturare ?? 0;
+  document.getElementById('kMese').textContent   = '€ ' + fmtN(d.fatturato_mese ?? 0);
+  document.getElementById('kScorte').textContent = d.scorte_basse ?? 0;
+  document.getElementById('kDdt').textContent    = d.ddt_in_attesa ?? 0;
+
+  document.getElementById('mRapAperti').textContent = d.rapportini_aperti ?? '—';
+  document.getElementById('mFatBozze').textContent  = d.da_fatturare ?? '—';
+  document.getElementById('mDdtAttesa').textContent = d.ddt_in_attesa ?? '—';
+
+  // Alert DDT
+  const nDdt = d.ddt_in_attesa ?? 0;
+  const alert = document.getElementById('ddtAlert');
+  if(nDdt > 0){
+    alert.style.display = 'flex';
+    document.getElementById('ddtAlertNum').textContent =
+      nDdt + (nDdt===1?' DDT':' DDT');
+    document.getElementById('ddtAlertDetail').textContent =
+      nDdt===1
+        ? '1 DDT ricevuta via email — clicca per confermare'
+        : `${nDdt} DDT ricevute via email — clicca per confermarle`;
+  } else {
+    alert.style.display = 'none';
+  }
+
+  document.getElementById('lastUpdate').textContent =
+    'Aggiornato: ' + new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+}
+
+// ══════════════════════════════════════════════════════════
+// ATTIVITÀ RECENTE
+// ══════════════════════════════════════════════════════════
+async function caricaAttivita(){
+  // ─── TODO SUPABASE ────────────────────────────────────
+  // Combina rapportini recenti + DDT recenti + fatture recenti
+  // const { data: raps } = await _sb.from('rapportini')
+  //   .select('id,numero,targa,modello,stato,updated_at,totale')
+  //   .order('updated_at',{ascending:false}).limit(4);
+  // const { data: ddts } = await _sb.from('ddt_in_arrivo')
+  //   .select('id,email_oggetto,targa_estratta,created_at,stato')
+  //   .order('created_at',{ascending:false}).limit(3);
+  // renderAttivita([...raps,...ddts].sort(...));
+  // ──────────────────────────────────────────────────────
+
+  // Demo
+  renderAttivita([
+    {tipo:'rap', id:'1', titolo:'RAP-2024-0162', sub:'FD890RC — Fiat Panda 1.3', stato:'aperto',  val:'€ 349,00', ts: new Date(Date.now()-3600000)},
+    {tipo:'ddt', id:'2', titolo:'DDT BL/VEN/0075474', sub:'FD890RC — Panda · BLM SPA', stato:'da_confermare', val:'1 riga', ts: new Date(Date.now()-7200000)},
+    {tipo:'rap', id:'3', titolo:'RAP-2024-0161', sub:'CC345NG — VW Lupo', stato:'chiuso',  val:'€ 156,00', ts: new Date(Date.now()-86400000)},
+    {tipo:'fat', id:'4', titolo:'FAT-2024-0023', sub:'Trasporti Bianchi Srl', stato:'accettata', val:'€ 891,50', ts: new Date(Date.now()-172800000)},
+    {tipo:'ddt', id:'5', titolo:'DDT XC/STD/2627889', sub:'CC345NG — Lupo · BLM', stato:'confermato', val:'1 riga', ts: new Date(Date.now()-259200000)},
+  ]);
+}
+
+function renderAttivita(lista){
+  const el = document.getElementById('activityList');
+  if(!lista.length){
+    el.innerHTML='<div style="padding:28px;text-align:center;color:var(--text-l);font-size:13px">Nessuna attività recente</div>';
+    return;
+  }
+  el.innerHTML = lista.map(a=>{
+    const link = a.tipo==='rap' ? `rapportino.html?id=${a.id}`
+               : a.tipo==='fat' ? `fattura.html?id=${a.id}`
+               : `ddt.html`;
+    const statoStyle = {
+      aperto:        'color:var(--blue)',
+      bozza:         'color:var(--text-m)',
+      chiuso:        'color:var(--ok)',
+      fatturato:     'color:var(--purple)',
+      da_confermare: 'color:var(--warn)',
+      confermato:    'color:var(--ok)',
+      accettata:     'color:var(--ok)',
+      inviata:       'color:var(--blue)',
+    }[a.stato] || '';
+    return `<a href="${link}" class="act-item">
+      <div class="act-dot ${a.tipo}"></div>
+      <div class="act-main">
+        <div class="act-title">${a.titolo}</div>
+        <div class="act-sub">${a.sub}</div>
+      </div>
+      <div class="act-right">
+        <div class="act-val" style="${statoStyle}">${a.val}</div>
+        <div class="act-time">${fmtTs(a.ts)}</div>
+      </div>
+    </a>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════════════════
+function fmtN(n){
+  if(n>=1000) return (n/1000).toFixed(1).replace('.',',')+'k';
+  return n.toLocaleString('it-IT',{minimumFractionDigits:0,maximumFractionDigits:0});
+}
+function fmtTs(d){
+  const diff = Date.now()-new Date(d).getTime();
+  if(diff<3600000)  return Math.floor(diff/60000)+'min fa';
+  if(diff<86400000) return Math.floor(diff/3600000)+'h fa';
+  if(diff<604800000)return Math.floor(diff/86400000)+'gg fa';
+  return new Date(d).toLocaleDateString('it-IT',{day:'2-digit',month:'short'});
+}
+function toast(msg){
+  const w=document.getElementById('toasts');
+  const t=document.createElement('div');
+  t.className='toast';t.textContent=msg;w.appendChild(t);
+  setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),350)},3000);
+}
+
+// Aggiorna KPI ogni 60 secondi
+setInterval(caricaKpi, 60000);
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,1484 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fattura Elettronica</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+
+  <!-- ═══ PRINT STYLES ══════════════════════════════════════ -->
+  <style id="printCSS">
+    @media print {
+      body * { visibility: hidden !important; }
+      #printArea, #printArea * { visibility: visible !important; }
+      #printArea {
+        position: fixed !important;
+        top: 0 !important; left: 0 !important;
+        width: 210mm !important;
+        padding: 14mm 16mm !important;
+        font-family: 'Helvetica Neue', Arial, sans-serif !important;
+        font-size: 10pt !important;
+        background: #FFF !important;
+        color: #111 !important;
+      }
+      .no-print { display: none !important; }
+    }
+  </style>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --accent:       #1A4FAA;
+      --accent-light: #EBF0FD;
+      --accent-dark:  #0E3580;
+      --dark:         #1A1A1A;
+      --surface:      #FFFFFF;
+      --bg:           #EDEBE6;
+      --border:       #DEDAD4;
+      --border-dk:    #C4C0B8;
+      --text:         #1A1A1A;
+      --text-m:       #706C65;
+      --text-l:       #9A9690;
+      --success:      #1F7A35; --success-bg: #E6F5EB;
+      --warning:      #7A5000; --warning-bg: #FFF8E6;
+      --danger:       #B82020; --danger-bg:  #FDECEC;
+      --info:         #1A4FAA; --info-bg:    #EBF0FD;
+      --sent:         #5B3FAE; --sent-bg:    #F1EEFE;
+      --radius: 8px; --radius-sm: 5px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.07);
+    }
+
+    body {
+      font-family: 'Helvetica Neue', Arial, -apple-system, sans-serif;
+      background: var(--bg); color: var(--text);
+      font-size: 14px; line-height: 1.5; min-height: 100vh;
+    }
+
+    /* ─── HEADER ──────────────────────────────────────────── */
+    .app-header {
+      background: var(--dark); color: #FFF; height: 54px;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 24px; position: sticky; top: 0; z-index: 200;
+    }
+    .brand { font-size:11px; font-weight:700; letter-spacing:0.1em;
+             text-transform:uppercase; color:rgba(255,255,255,0.45); }
+    .doc-num { font-size:15px; font-weight:600; letter-spacing:0.04em; }
+    .badge {
+      display:inline-flex; align-items:center; gap:5px;
+      padding:3px 10px; border-radius:20px;
+      font-size:10px; font-weight:700; letter-spacing:0.07em; text-transform:uppercase;
+    }
+    .badge::before { content:''; width:5px; height:5px; border-radius:50%; background:currentColor; }
+    .badge-bozza   { background:rgba(255,255,255,0.1); color:rgba(255,255,255,0.5); }
+    .badge-inviata { background:var(--sent-bg); color:var(--sent); }
+    .badge-accettata{ background:var(--success-bg); color:var(--success); }
+    .badge-rifiutata{ background:var(--danger-bg); color:var(--danger); }
+    .badge-errore  { background:var(--danger-bg); color:var(--danger); }
+    .btn-back {
+      background:transparent; border:1px solid rgba(255,255,255,0.2);
+      color:rgba(255,255,255,0.7); padding:5px 12px;
+      border-radius:var(--radius-sm); font-size:12px; font-weight:600;
+      cursor:pointer; font-family:inherit; transition:all 0.15s;
+    }
+    .btn-back:hover { background:rgba(255,255,255,0.08); color:#FFF; }
+
+    /* ─── PAGE ────────────────────────────────────────────── */
+    .page {
+      max-width: 980px; margin: 0 auto;
+      padding: 20px 16px 100px;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+
+    /* ─── TAB BAR ─────────────────────────────────────────── */
+    .tab-bar {
+      display: flex; gap: 0;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+    .tab-btn {
+      flex: 1; padding: 11px 16px;
+      font-size: 13px; font-weight: 600; font-family: inherit;
+      border: none; background: transparent; cursor: pointer;
+      color: var(--text-m); border-right: 1px solid var(--border);
+      transition: all 0.15s;
+    }
+    .tab-btn:last-child { border-right: none; }
+    .tab-btn.active { background: var(--accent); color: #FFF; }
+    .tab-btn:not(.active):hover { background: var(--bg); color: var(--text); }
+
+    /* ─── CARD ────────────────────────────────────────────── */
+    .card {
+      background: var(--surface); border-radius: var(--radius);
+      border: 1px solid var(--border); box-shadow: var(--shadow); overflow: hidden;
+    }
+    .card-header {
+      padding: 11px 20px; border-bottom: 1px solid var(--border);
+      background: #F7F6F3;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    }
+    .card-title {
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-m);
+    }
+    .card-body { padding: 18px 20px; }
+
+    /* ─── GRIDS ───────────────────────────────────────────── */
+    .g2  { display:grid; grid-template-columns:1fr 1fr;       gap:14px; }
+    .g3  { display:grid; grid-template-columns:1fr 1fr 1fr;   gap:14px; }
+    .g4  { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:14px; }
+    .g12 { display:grid; grid-template-columns:1fr 2fr;       gap:14px; }
+    .span2 { grid-column: span 2; }
+    .span3 { grid-column: span 3; }
+    .gap-top { margin-top:14px; }
+
+    /* ─── FORM ────────────────────────────────────────────── */
+    .field { display:flex; flex-direction:column; gap:5px; }
+    .field label {
+      font-size:10px; font-weight:700; letter-spacing:0.08em;
+      text-transform:uppercase; color:var(--text-m);
+    }
+    input[type="text"], input[type="number"], input[type="date"],
+    select, textarea {
+      width:100%; padding:8px 11px; border:1px solid var(--border);
+      border-radius:var(--radius-sm); font-size:14px; font-family:inherit;
+      color:var(--text); background:#FFF; outline:none;
+      transition:border-color 0.15s, box-shadow 0.15s; -webkit-appearance:none;
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color:var(--accent); box-shadow:0 0 0 3px rgba(26,79,170,0.12);
+    }
+    input[readonly] { background:var(--bg); color:var(--text-m); cursor:default; }
+    textarea { resize:vertical; min-height:70px; line-height:1.6; }
+
+    /* ─── DIVIDER ─────────────────────────────────────────── */
+    .divider { height:1px; background:var(--border); margin:14px 0; }
+
+    /* ─── BUTTONS ─────────────────────────────────────────── */
+    .btn {
+      display:inline-flex; align-items:center; gap:6px;
+      padding:8px 16px; border-radius:var(--radius-sm);
+      font-size:13px; font-weight:600; font-family:inherit;
+      cursor:pointer; border:1px solid transparent;
+      transition:all 0.15s; white-space:nowrap;
+    }
+    .btn-primary   { background:var(--accent);    color:#FFF; border-color:var(--accent); }
+    .btn-primary:hover { background:var(--accent-dark); }
+    .btn-secondary { background:#FFF; color:var(--text); border-color:var(--border); }
+    .btn-secondary:hover { background:var(--bg); }
+    .btn-success   { background:var(--success);   color:#FFF; }
+    .btn-success:hover { opacity:0.88; }
+    .btn-ghost     { background:transparent; color:var(--text-m); border-color:transparent; padding:6px 8px; }
+    .btn-ghost:hover { background:var(--bg); color:var(--text); }
+    .btn-ghost.danger { color:var(--danger); }
+    .btn-ghost.danger:hover { background:var(--danger-bg); }
+    .btn-sm  { padding:5px 10px; font-size:12px; }
+    .btn-lg  { padding:11px 24px; font-size:14px; border-radius:var(--radius); }
+
+    /* ─── ELEMENTI TABLE ──────────────────────────────────── */
+    .table-wrap { overflow-x:auto; }
+    .el-table { width:100%; border-collapse:collapse; min-width:640px; }
+    .el-table th {
+      font-size:10px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase;
+      color:var(--text-m); padding:9px 10px; text-align:left;
+      border-bottom:1px solid var(--border); background:#F7F6F3;
+    }
+    .el-table th.r { text-align:right; }
+    .el-table td { padding:9px 10px; vertical-align:middle; border-bottom:1px solid #F0EDE8; }
+    .el-table tbody tr:last-child td { border-bottom:none; }
+    .el-table td.r { text-align:right; font-variant-numeric:tabular-nums; }
+
+    .chip-tipo {
+      display:inline-block; padding:2px 7px; border-radius:3px;
+      font-size:10px; font-weight:700; letter-spacing:0.05em; text-transform:uppercase;
+    }
+    .chip-r { background:var(--info-bg);    color:var(--info); }
+    .chip-s { background:var(--success-bg); color:var(--success); }
+    .chip-m { background:var(--warning-bg); color:var(--warning); }
+
+    /* ─── TOTALI ──────────────────────────────────────────── */
+    .totali-box {
+      max-width:300px; margin-left:auto;
+      display:flex; flex-direction:column; gap:7px;
+      padding: 16px 20px;
+    }
+    .tot-row { display:flex; justify-content:space-between; align-items:baseline; font-size:13px; }
+    .tot-row .l { color:var(--text-m); }
+    .tot-row .v { font-weight:600; font-variant-numeric:tabular-nums; }
+    .tot-row.big {
+      font-size:17px; font-weight:700;
+      padding-top:10px; border-top:2px solid var(--border-dk); margin-top:4px;
+    }
+    .tot-row.big .v { color:var(--accent); font-size:20px; }
+
+    /* ─── XML PREVIEW ─────────────────────────────────────── */
+    #xmlPre {
+      font-family: 'Courier New', monospace;
+      font-size: 11.5px; line-height: 1.65;
+      background: #1A1A1A; color: #D4D4D4;
+      padding: 18px 20px; border-radius: var(--radius);
+      overflow-x: auto; white-space: pre;
+      max-height: 540px; overflow-y: auto;
+      border: 1px solid #333;
+    }
+    .xml-tag    { color: #569CD6; }
+    .xml-attr   { color: #9CDCFE; }
+    .xml-val    { color: #CE9178; }
+    .xml-comm   { color: #6A9955; }
+
+    /* ─── SDI STATUS ──────────────────────────────────────── */
+    .sdi-timeline {
+      display: flex; flex-direction: column; gap: 0;
+    }
+    .sdi-step {
+      display: flex; gap: 14px; align-items: flex-start;
+      padding: 10px 0;
+      border-left: 2px solid var(--border);
+      padding-left: 18px;
+      position: relative;
+    }
+    .sdi-step::before {
+      content: ''; position: absolute;
+      left: -6px; top: 14px;
+      width: 10px; height: 10px; border-radius: 50%;
+      background: var(--border-dk); border: 2px solid var(--surface);
+    }
+    .sdi-step.done::before  { background: var(--success); }
+    .sdi-step.active::before{ background: var(--accent); box-shadow: 0 0 0 3px var(--accent-light); }
+    .sdi-step.error::before { background: var(--danger); }
+    .sdi-step-label { font-size:13px; font-weight:600; }
+    .sdi-step-sub   { font-size:12px; color:var(--text-m); margin-top:2px; }
+    .sdi-step-time  { font-size:11px; color:var(--text-l); margin-left:auto; white-space:nowrap; }
+
+    /* ─── PRINT AREA (preview fattura) ───────────────────── */
+    #printArea {
+      background: #FFF;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 36px 40px;
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      color: #111;
+    }
+
+    .inv-header {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      margin-bottom: 30px;
+    }
+    .inv-logo {
+      font-size: 22px; font-weight: 800;
+      letter-spacing: -0.02em; color: #111;
+    }
+    .inv-logo span { color: var(--accent); }
+    .inv-meta { text-align: right; }
+    .inv-meta .inv-num {
+      font-size: 20px; font-weight: 700; color: #111;
+      letter-spacing: 0.03em;
+    }
+    .inv-meta .inv-date { font-size: 12px; color: #666; margin-top: 4px; }
+
+    .inv-parties {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 40px;
+      margin-bottom: 28px;
+    }
+    .inv-party-label {
+      font-size: 9px; font-weight: 700;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: #888; margin-bottom: 8px;
+    }
+    .inv-party-name { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+    .inv-party-line { font-size: 12px; color: #555; line-height: 1.7; }
+
+    .inv-vehicle {
+      background: #F5F4F0; border-radius: 6px; padding: 10px 14px;
+      display: flex; gap: 28px; margin-bottom: 24px;
+    }
+    .inv-veh-item { display: flex; flex-direction: column; gap: 2px; }
+    .inv-veh-item .k { font-size: 9px; font-weight: 700; letter-spacing: 0.1em;
+                       text-transform: uppercase; color: #888; }
+    .inv-veh-item .v { font-size: 13px; font-weight: 600; }
+
+    .inv-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    .inv-table th {
+      font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+      color: #888; border-bottom: 1.5px solid #E5E3DE; padding: 6px 8px; text-align: left;
+    }
+    .inv-table th.r { text-align: right; }
+    .inv-table td { font-size: 12px; padding: 7px 8px; border-bottom: 1px solid #F0EDE8; }
+    .inv-table td.r { text-align: right; font-variant-numeric: tabular-nums; }
+    .inv-table tbody tr:last-child td { border-bottom: none; }
+
+    .inv-totals { max-width: 240px; margin-left: auto; }
+    .inv-tot-row { display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0; }
+    .inv-tot-row .k { color: #555; }
+    .inv-tot-row .v { font-weight: 600; font-variant-numeric: tabular-nums; }
+    .inv-tot-row.final {
+      font-size: 15px; font-weight: 800;
+      border-top: 1.5px solid #111; margin-top: 6px; padding-top: 8px;
+    }
+    .inv-tot-row.final .v { color: var(--accent); }
+
+    .inv-footer {
+      margin-top: 32px; padding-top: 16px; border-top: 1px solid #E5E3DE;
+      display: flex; justify-content: space-between; align-items: flex-end;
+    }
+    .inv-note { font-size: 11px; color: #666; max-width: 55%; line-height: 1.6; }
+    .inv-pay-block { text-align: right; }
+    .inv-pay-block .k { font-size: 9px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #888; margin-bottom: 4px; }
+    .inv-pay-block .v { font-size: 12px; color: #333; }
+
+    .inv-stamp {
+      display: inline-block; border: 2px solid var(--success);
+      color: var(--success); font-size: 11px; font-weight: 800;
+      letter-spacing: 0.15em; text-transform: uppercase;
+      padding: 3px 10px; border-radius: 3px; transform: rotate(-8deg);
+      opacity: 0.6; margin-top: 12px;
+    }
+
+    /* ─── ALERT ───────────────────────────────────────────── */
+    .alert {
+      padding: 12px 16px; border-radius: var(--radius-sm);
+      font-size: 13px; display: flex; align-items: flex-start; gap: 10px;
+    }
+    .alert-info    { background: var(--info-bg);    color: var(--info); }
+    .alert-warning { background: var(--warning-bg); color: var(--warning); }
+    .alert-success { background: var(--success-bg); color: var(--success); }
+    .alert-danger  { background: var(--danger-bg);  color: var(--danger); }
+    .alert-icon    { font-size: 16px; flex-shrink: 0; }
+
+    /* ─── FOOTER BAR ──────────────────────────────────────── */
+    .footer-bar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: #FFF; border-top: 1px solid var(--border);
+      padding: 10px 24px;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      z-index: 200; box-shadow: 0 -4px 20px rgba(0,0,0,0.07);
+    }
+    .footer-stato { font-size:12px; color:var(--text-m); }
+    .footer-actions { display:flex; gap:10px; }
+
+    /* ─── TOAST ───────────────────────────────────────────── */
+    .toast-wrap { position:fixed; bottom:68px; right:20px;
+                  display:flex; flex-direction:column; gap:8px; z-index:300; }
+    .toast {
+      background:var(--dark); color:#FFF;
+      padding:10px 16px; border-radius:var(--radius);
+      font-size:13px; max-width:340px; animation:fadeUp 0.22s ease;
+      transition:opacity 0.3s;
+    }
+    .toast.ok  { background:var(--success); }
+    .toast.err { background:var(--danger); }
+    @keyframes fadeUp {
+      from { opacity:0; transform:translateY(8px); }
+      to   { opacity:1; transform:translateY(0); }
+    }
+
+    /* ─── MODAL ───────────────────────────────────────────── */
+    .modal-overlay {
+      display:none; position:fixed; inset:0;
+      background:rgba(0,0,0,0.5); z-index:400;
+      align-items:center; justify-content:center;
+    }
+    .modal-overlay.open { display:flex; }
+    .modal {
+      background:#FFF; border-radius:var(--radius);
+      width:min(480px,calc(100vw - 32px));
+      max-height:85vh; overflow:auto;
+      box-shadow:0 20px 60px rgba(0,0,0,0.3);
+    }
+    .modal-header {
+      padding:16px 20px; border-bottom:1px solid var(--border);
+      display:flex; justify-content:space-between; align-items:center;
+    }
+    .modal-title { font-size:15px; font-weight:700; }
+    .modal-body  { padding:18px 20px; display:flex; flex-direction:column; gap:14px; }
+    .modal-foot  { padding:12px 20px; border-top:1px solid var(--border);
+                   display:flex; justify-content:flex-end; gap:8px; }
+
+    /* ─── RESPONSIVE ──────────────────────────────────────── */
+    @media (max-width:640px) {
+      .g2,.g3,.g4,.g12 { grid-template-columns:1fr; }
+      .span2,.span3 { grid-column:auto; }
+      .inv-parties { grid-template-columns:1fr; gap:20px; }
+      .inv-vehicle { flex-wrap:wrap; gap:12px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══ HEADER ════════════════════════════════════════════ -->
+<header class="app-header">
+  <div style="display:flex;align-items:center;gap:20px">
+    <span class="brand">Fattura Elettronica</span>
+    <span class="doc-num" id="hNum">—</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px">
+    <span class="badge badge-bozza" id="hBadge">Bozza</span>
+    <button class="btn-back" onclick="window.location.href='rapportino.html'">← Rapportino</button>
+  </div>
+</header>
+
+<!-- ═══ PAGE ══════════════════════════════════════════════ -->
+<div class="page">
+
+  <!-- TAB BAR -->
+  <div class="tab-bar no-print">
+    <button class="tab-btn active" onclick="switchTab('anteprima',this)">📄 Anteprima fattura</button>
+    <button class="tab-btn"        onclick="switchTab('dati',this)">✏️ Dati &amp; impostazioni</button>
+    <button class="tab-btn"        onclick="switchTab('xml',this)">🗂 XML FatturaPA</button>
+    <button class="tab-btn"        onclick="switchTab('sdi',this)">📡 Stato SDI</button>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════
+       TAB 1 — ANTEPRIMA FATTURA
+  ════════════════════════════════════════════════════ -->
+  <div id="tab-anteprima">
+    <div id="printArea">
+      <!-- header fattura -->
+      <div class="inv-header">
+        <div>
+          <div class="inv-logo" id="invLogo">NOME<span>AZIENDA</span></div>
+          <div style="font-size:11px;color:#666;margin-top:4px" id="invEmitAddr"></div>
+        </div>
+        <div class="inv-meta">
+          <div class="inv-num" id="invNum">FAT-2024-0001</div>
+          <div class="inv-date" id="invDate"></div>
+          <div id="invStamp" style="display:none"><div class="inv-stamp">Pagata</div></div>
+        </div>
+      </div>
+
+      <!-- parti -->
+      <div class="inv-parties">
+        <div>
+          <div class="inv-party-label">Cedente / Prestatore</div>
+          <div class="inv-party-name" id="invEmitName"></div>
+          <div class="inv-party-line" id="invEmitInfo"></div>
+        </div>
+        <div>
+          <div class="inv-party-label">Cessionario / Committente</div>
+          <div class="inv-party-name" id="invDestName"></div>
+          <div class="inv-party-line" id="invDestInfo"></div>
+        </div>
+      </div>
+
+      <!-- dati veicolo -->
+      <div class="inv-vehicle" id="invVehicle"></div>
+
+      <!-- righe fattura -->
+      <table class="inv-table">
+        <thead>
+          <tr>
+            <th>N.</th><th>Descrizione</th>
+            <th class="r">Qtà</th><th class="r">Prezzo</th>
+            <th class="r">IVA</th><th class="r">Subtotale</th>
+          </tr>
+        </thead>
+        <tbody id="invLines"></tbody>
+      </table>
+
+      <!-- totali -->
+      <div class="inv-totals" id="invTotals"></div>
+
+      <!-- footer -->
+      <div class="inv-footer">
+        <div>
+          <div class="inv-note" id="invNote"></div>
+        </div>
+        <div class="inv-pay-block">
+          <div class="k">Modalità di pagamento</div>
+          <div class="v" id="invPay"></div>
+          <div class="v" style="margin-top:2px" id="invIban"></div>
+        </div>
+      </div>
+    </div><!-- /printArea -->
+  </div>
+
+  <!-- ════════════════════════════════════════════════════
+       TAB 2 — DATI & IMPOSTAZIONI
+  ════════════════════════════════════════════════════ -->
+  <div id="tab-dati" style="display:none">
+
+    <!-- Emittente -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Dati azienda emittente</span>
+        <span style="font-size:11px;color:var(--text-m)">Salvati in locale</span>
+      </div>
+      <div class="card-body">
+        <div class="g3">
+          <div class="field span2">
+            <label>Ragione sociale *</label>
+            <input type="text" id="eNome" placeholder="Es. Autofficina Rossi Srl"
+              oninput="se('ragione_sociale',this.value)">
+          </div>
+          <div class="field">
+            <label>Forma giuridica</label>
+            <select id="eForma" onchange="se('forma',this.value)">
+              <option value="SRL">S.r.l.</option>
+              <option value="SPA">S.p.A.</option>
+              <option value="SAS">S.a.s.</option>
+              <option value="SNC">S.n.c.</option>
+              <option value="IND">Ditta individuale</option>
+              <option value="PF">Professionista</option>
+            </select>
+          </div>
+        </div>
+        <div class="g4 gap-top">
+          <div class="field">
+            <label>P. IVA *</label>
+            <input type="text" id="ePiva" placeholder="12345678901" maxlength="11"
+              oninput="se('piva',this.value)">
+          </div>
+          <div class="field">
+            <label>Codice Fiscale</label>
+            <input type="text" id="eCf" oninput="se('cf',this.value)">
+          </div>
+          <div class="field">
+            <label>Regime fiscale</label>
+            <select id="eRegime" onchange="se('regime',this.value)">
+              <option value="RF01">RF01 — Ordinario</option>
+              <option value="RF02">RF02 — Contribuenti minimi</option>
+              <option value="RF19">RF19 — Forfettario</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Codice ATECO</label>
+            <input type="text" id="eAteco" placeholder="45.20.10"
+              oninput="se('ateco',this.value)">
+          </div>
+        </div>
+        <div class="divider"></div>
+        <div class="g3">
+          <div class="field span2">
+            <label>Indirizzo sede legale</label>
+            <input type="text" id="eIndirizzo" placeholder="Via Roma 1"
+              oninput="se('indirizzo',this.value)">
+          </div>
+          <div class="field">
+            <label>CAP</label>
+            <input type="text" id="eCap" placeholder="25100" maxlength="5"
+              oninput="se('cap',this.value)">
+          </div>
+        </div>
+        <div class="g3 gap-top">
+          <div class="field">
+            <label>Comune</label>
+            <input type="text" id="eComune" placeholder="Brescia"
+              oninput="se('comune',this.value)">
+          </div>
+          <div class="field">
+            <label>Provincia</label>
+            <input type="text" id="eProv" placeholder="BS" maxlength="2"
+              oninput="se('provincia',this.value)" style="text-transform:uppercase">
+          </div>
+          <div class="field">
+            <label>Nazione</label>
+            <input type="text" id="eNazione" value="IT" maxlength="2" readonly>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fattura -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Dati fattura</span>
+      </div>
+      <div class="card-body">
+        <div class="g4">
+          <div class="field">
+            <label>Numero fattura *</label>
+            <input type="text" id="fNumero" oninput="sf('numero',this.value)">
+          </div>
+          <div class="field">
+            <label>Data *</label>
+            <input type="date" id="fData" oninput="sf('data',this.value)">
+          </div>
+          <div class="field">
+            <label>Tipo documento</label>
+            <select id="fTipo" onchange="sf('tipo_doc',this.value)">
+              <option value="TD01">TD01 — Fattura</option>
+              <option value="TD04">TD04 — Nota di credito</option>
+              <option value="TD06">TD06 — Parcella</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Divisa</label>
+            <input type="text" id="fDivisa" value="EUR" readonly>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pagamento -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Modalità di pagamento</span>
+      </div>
+      <div class="card-body">
+        <div class="g3">
+          <div class="field">
+            <label>Condizioni pagamento</label>
+            <select id="pCond" onchange="sp('condizioni',this.value)">
+              <option value="TP02">TP02 — Pagamento completo</option>
+              <option value="TP01">TP01 — Pagamento anticipato</option>
+              <option value="TP03">TP03 — Anticipo + saldo</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Modalità</label>
+            <select id="pMod" onchange="sp('modalita',this.value)">
+              <option value="MP05">MP05 — Bonifico bancario</option>
+              <option value="MP08">MP08 — Carta di credito</option>
+              <option value="MP02">MP02 — Assegno</option>
+              <option value="MP01">MP01 — Contanti</option>
+              <option value="MP22">MP22 — Rid</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Scadenza pagamento</label>
+            <input type="date" id="pScad" oninput="sp('scadenza',this.value)">
+          </div>
+        </div>
+        <div class="g2 gap-top">
+          <div class="field">
+            <label>IBAN</label>
+            <input type="text" id="pIban" placeholder="IT60X0542811101000000123456"
+              oninput="sp('iban',this.value)" style="font-family:monospace;letter-spacing:0.04em">
+          </div>
+          <div class="field">
+            <label>Istituto bancario</label>
+            <input type="text" id="pBanca" placeholder="Banca Intesa Sanpaolo"
+              oninput="sp('banca',this.value)">
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /tab-dati -->
+
+  <!-- ════════════════════════════════════════════════════
+       TAB 3 — XML FATTURAPA
+  ════════════════════════════════════════════════════ -->
+  <div id="tab-xml" style="display:none">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">XML FatturaPA 1.2.2</span>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" onclick="aggiornaXml()">↻ Rigenera</button>
+          <button class="btn btn-primary btn-sm"   onclick="downloadXml()">⬇ Scarica XML</button>
+        </div>
+      </div>
+      <div class="card-body" style="padding:14px">
+        <div class="alert alert-info" style="margin-bottom:14px">
+          <span class="alert-icon">ℹ</span>
+          <span>Il file XML deve essere firmato digitalmente (P7M) prima dell'invio al SDI. Tramite Aruba questo avviene automaticamente lato server.</span>
+        </div>
+        <pre id="xmlPre">— clicca su "Rigenera" per generare l'XML —</pre>
+      </div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <div class="card-header"><span class="card-title">Riepilogo dati trasmissione</span></div>
+      <div class="card-body">
+        <div class="g4">
+          <div class="field"><label>Formato</label><input type="text" value="FPR12" readonly></div>
+          <div class="field"><label>Progressivo invio</label><input type="text" id="xProg" readonly></div>
+          <div class="field"><label>Codice destinatario</label><input type="text" id="xSdi" readonly></div>
+          <div class="field"><label>Nome file XML</label><input type="text" id="xFile" readonly style="font-family:monospace;font-size:12px"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════
+       TAB 4 — STATO SDI
+  ════════════════════════════════════════════════════ -->
+  <div id="tab-sdi" style="display:none">
+
+    <div class="card" style="margin-bottom:14px">
+      <div class="card-header"><span class="card-title">Invio tramite Aruba</span></div>
+      <div class="card-body" style="display:flex;flex-direction:column;gap:14px">
+        <div class="alert alert-warning">
+          <span class="alert-icon">⚠</span>
+          <div>
+            <strong>Configurazione richiesta.</strong> L'invio al SDI avviene tramite una
+            <strong>Supabase Edge Function</strong> che fa da proxy sicuro verso le API Aruba.
+            Le credenziali Aruba non vengono mai esposte nel frontend.<br>
+            <a href="#" onclick="apriModalAruba()" style="color:var(--warning);font-weight:600">→ Configura parametri Aruba</a>
+          </div>
+        </div>
+        <div class="g2">
+          <div class="field">
+            <label>Endpoint Edge Function</label>
+            <input type="text" id="aEndpoint" placeholder="https://xxx.supabase.co/functions/v1/invia-fattura"
+              oninput="SA.endpoint=this.value">
+          </div>
+          <div class="field">
+            <label>Supabase Anon Key</label>
+            <input type="text" id="aAnonKey" placeholder="eyJ..."
+              oninput="SA.anonKey=this.value" style="font-family:monospace;font-size:12px">
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-secondary" onclick="testConnessione()">🔌 Test connessione</button>
+          <button class="btn btn-primary btn-lg" onclick="inviaAlSdi()">📡 Invia al SDI</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Timeline stato -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Timeline invio</span>
+        <button class="btn btn-ghost btn-sm" onclick="aggiornaSdIStatus()">↻ Aggiorna stato</button>
+      </div>
+      <div class="card-body">
+        <div class="sdi-timeline" id="sdiTimeline">
+          <!-- generata da JS -->
+        </div>
+        <div class="divider"></div>
+        <div class="g2">
+          <div class="field"><label>ID trasmissione Aruba</label><input type="text" id="sArubaId" readonly></div>
+          <div class="field"><label>Esito SDI</label><input type="text" id="sSdiEsito" readonly></div>
+        </div>
+        <div class="field gap-top">
+          <label>Messaggio SDI</label>
+          <textarea id="sSdiMsg" rows="3" readonly style="font-family:monospace;font-size:12px;background:var(--bg)"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- Nota tecnica Edge Function -->
+    <div class="card">
+      <div class="card-header"><span class="card-title">Implementazione Supabase Edge Function</span></div>
+      <div class="card-body">
+        <p style="font-size:13px;color:var(--text-m);margin-bottom:12px">
+          Crea questo file in <code style="background:var(--bg);padding:2px 5px;border-radius:3px">supabase/functions/invia-fattura/index.ts</code>:
+        </p>
+        <pre style="background:#1A1A1A;color:#D4D4D4;padding:16px 18px;border-radius:var(--radius);font-size:12px;overflow-x:auto;line-height:1.6;border:1px solid #333"><span style="color:#569CD6">import</span> { serve } <span style="color:#569CD6">from</span> <span style="color:#CE9178">"https://deno.land/std/http/server.ts"</span>
+
+serve(<span style="color:#569CD6">async</span> (req) => {
+  <span style="color:#6A9955">// Leggi il payload dal frontend</span>
+  <span style="color:#569CD6">const</span> { xml_base64, nome_file, progressivo } = <span style="color:#569CD6">await</span> req.json()
+
+  <span style="color:#6A9955">// Credenziali Aruba — da variabili d'ambiente Supabase</span>
+  <span style="color:#569CD6">const</span> ARUBA_USER = Deno.env.get(<span style="color:#CE9178">"ARUBA_USER"</span>)
+  <span style="color:#569CD6">const</span> ARUBA_PASS = Deno.env.get(<span style="color:#CE9178">"ARUBA_PASS"</span>)
+  <span style="color:#569CD6">const</span> basicAuth = btoa(<span style="color:#CE9178">`${ARUBA_USER}:${ARUBA_PASS}`</span>)
+
+  <span style="color:#6A9955">// Invio a Aruba FatturaPA</span>
+  <span style="color:#569CD6">const</span> res = <span style="color:#569CD6">await</span> fetch(
+    <span style="color:#CE9178">"https://fatturazioneelettronica.aruba.it/v1/fatture"</span>,
+    {
+      method: <span style="color:#CE9178">"POST"</span>,
+      headers: {
+        <span style="color:#CE9178">"Authorization"</span>: <span style="color:#CE9178">`Basic ${basicAuth}`</span>,
+        <span style="color:#CE9178">"Content-Type"</span>: <span style="color:#CE9178">"application/json"</span>
+      },
+      body: JSON.stringify({ file: xml_base64, nome: nome_file })
+    }
+  )
+
+  <span style="color:#569CD6">const</span> data = <span style="color:#569CD6">await</span> res.json()
+  <span style="color:#569CD6">return</span> <span style="color:#569CD6">new</span> Response(JSON.stringify(data), {
+    headers: { <span style="color:#CE9178">"Content-Type"</span>: <span style="color:#CE9178">"application/json"</span> }
+  })
+})</pre>
+        <p style="font-size:12px;color:var(--text-m);margin-top:10px">
+          Deploy: <code style="background:var(--bg);padding:2px 5px;border-radius:3px">supabase functions deploy invia-fattura --no-verify-jwt</code><br>
+          Imposta segreti: <code style="background:var(--bg);padding:2px 5px;border-radius:3px">supabase secrets set ARUBA_USER=xxx ARUBA_PASS=yyy</code>
+        </p>
+      </div>
+    </div>
+
+  </div><!-- /tab-sdi -->
+
+</div><!-- /page -->
+
+<!-- ═══ MODAL ARUBA ════════════════════════════════════ -->
+<div class="modal-overlay" id="modalAruba">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Parametri Aruba FatturaPA</span>
+      <button class="btn btn-ghost btn-sm" onclick="chiudiModal('modalAruba')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-info">
+        <span class="alert-icon">ℹ</span>
+        Le credenziali Aruba vengono salvate come <strong>segreti Supabase</strong> — mai nel frontend.
+      </div>
+      <div class="field">
+        <label>Username Aruba</label>
+        <input type="text" id="mArubaUser" placeholder="utente@azienda.it">
+      </div>
+      <div class="field">
+        <label>Password Aruba</label>
+        <input type="password" id="mArubaPass" placeholder="•••••••">
+      </div>
+      <div class="alert alert-warning">
+        <span class="alert-icon">⚠</span>
+        Questi dati vanno inseriti nella Edge Function come variabili d'ambiente, non qui.
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="chiudiModal('modalAruba')">Chiudi</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TOAST & FOOTER ════════════════════════════════════ -->
+<div class="toast-wrap" id="toastWrap"></div>
+
+<div class="footer-bar no-print">
+  <div class="footer-stato" id="footerStato">Bozza</div>
+  <div class="footer-actions">
+    <button class="btn btn-secondary" onclick="salvaBozza()">Salva bozza</button>
+    <button class="btn btn-secondary" onclick="stampaPdf()">🖨 Stampa / PDF</button>
+    <button class="btn btn-secondary" onclick="downloadXml()">⬇ XML</button>
+    <button class="btn btn-primary btn-lg" onclick="inviaAlSdi()">📡 Invia al SDI</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     JAVASCRIPT
+═══════════════════════════════════════════════════════ -->
+<script>
+// ╔═══════════════════════════════════════════════════════╗
+// ║  CONFIGURAZIONE SUPABASE                              ║
+// ╚═══════════════════════════════════════════════════════╝
+const SUPABASE_URL      = 'https://YOUR_PROJECT_ID.supabase.co';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+// const _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ╔═══════════════════════════════════════════════════════╗
+// ║  STATO APPLICAZIONE                                   ║
+// ╚═══════════════════════════════════════════════════════╝
+
+// Emittente (persistito in localStorage)
+const E = JSON.parse(localStorage.getItem('emittente') || '{}');
+const _de = (k,v) => E[k] !== undefined ? E[k] : v;
+Object.assign(E, {
+  ragione_sociale: _de('ragione_sociale',''),
+  forma:  _de('forma','SRL'), piva: _de('piva',''), cf: _de('cf',''),
+  regime: _de('regime','RF01'), ateco: _de('ateco',''),
+  indirizzo: _de('indirizzo',''), cap: _de('cap',''),
+  comune: _de('comune',''), provincia: _de('provincia',''), nazione: _de('nazione','IT')
+});
+
+// Fattura
+const F = {
+  id: null, numero:'', data: new Date().toISOString().slice(0,10),
+  tipo_doc:'TD01', divisa:'EUR', stato:'bozza',
+  rapportino_id: null, aruba_id: null, sdi_esito: null
+};
+
+// Pagamento (persistito)
+const P = JSON.parse(localStorage.getItem('pagamento') || '{}');
+Object.assign(P, {
+  condizioni: P.condizioni||'TP02', modalita: P.modalita||'MP05',
+  scadenza: P.scadenza||'', iban: P.iban||'', banca: P.banca||''
+});
+
+// Aruba
+const SA = { endpoint:'', anonKey:'' };
+
+// Dati dal rapportino (passati via URL o localStorage)
+let RAP = {
+  numero:'RAP-2024-DEMO', data: new Date().toISOString().slice(0,10),
+  tecnico:'Andrea', km:45800,
+  targa:'AB 123 CD', modello:'Fiat Ducato', anno:'2022',
+  note:'Tagliando programmato + sostituzione filtro abitacolo',
+  imponibile:450, iva:99, totale:549
+};
+
+let CLIENTE = {
+  ragione_sociale:'Trasporti Bianchi Srl', tipo:'b2b',
+  piva:'IT01234567890', cf:'', codice_sdi:'ABCDE12', pec:''
+};
+
+let ELEMENTI = [
+  { tipo:'ricambio',  codice:'FIL-OLI-001', descrizione:'Filtro olio Bosch',          qty:1,  prezzo:18.50,  iva_pct:22 },
+  { tipo:'ricambio',  codice:'FIL-ARI-002', descrizione:'Filtro aria abitacolo',       qty:1,  prezzo:24.00,  iva_pct:22 },
+  { tipo:'ricambio',  codice:'OLI-MOT-5W30',descrizione:'Olio motore 5W30 — 5L',      qty:2,  prezzo:38.00,  iva_pct:22 },
+  { tipo:'manodopera',codice:'MAN-TAG',      descrizione:'Manodopera tagliando',        qty:2.5,prezzo:55.00,  iva_pct:22 },
+  { tipo:'servizio',  codice:'SRV-DIAG',    descrizione:'Diagnosi elettronica veicolo',qty:1,  prezzo:40.00,  iva_pct:22 },
+];
+
+let SDI_STEPS = [];
+let _xmlCache = '';
+
+// ╔═══════════════════════════════════════════════════════╗
+// ║  INIT                                                 ║
+// ╚═══════════════════════════════════════════════════════╝
+function init() {
+  // Leggi parametri URL
+  const p = new URLSearchParams(window.location.search);
+  if (p.get('rapportino_id')) F.rapportino_id = p.get('rapportino_id');
+
+  // Numero fattura
+  const anno = new Date().getFullYear();
+  const prog  = String(Date.now()).slice(-4);
+  F.numero    = `FAT-${anno}-${prog}`;
+
+  // Progressivo invio
+  const xProg = localStorage.getItem('progressivo_invio') || '00001';
+
+  // Popola form Emittente
+  populate('eNome',      E.ragione_sociale);
+  populate('eForma',     E.forma);
+  populate('ePiva',      E.piva);
+  populate('eCf',        E.cf);
+  populate('eRegime',    E.regime);
+  populate('eAteco',     E.ateco);
+  populate('eIndirizzo', E.indirizzo);
+  populate('eCap',       E.cap);
+  populate('eComune',    E.comune);
+  populate('eProv',      E.provincia);
+
+  // Popola form Fattura
+  populate('fNumero', F.numero);
+  populate('fData',   F.data);
+  populate('fTipo',   F.tipo_doc);
+
+  // Popola form Pagamento
+  populate('pCond', P.condizioni);
+  populate('pMod',  P.modalita);
+  populate('pScad', P.scadenza);
+  populate('pIban', P.iban);
+  populate('pBanca',P.banca);
+
+  // Info XML
+  populate('xProg', xProg.padStart(5,'0'));
+  const sdiCode = CLIENTE.tipo==='b2c' ? '0000000' : (CLIENTE.codice_sdi||'0000000');
+  populate('xSdi', sdiCode);
+  populate('xFile', `IT${E.piva||'00000000000'}_${xProg.padStart(5,'0')}.xml`);
+
+  // Testata
+  document.getElementById('hNum').textContent = F.numero;
+
+  // Renderizza anteprima
+  renderAnteprima();
+
+  // Timeline SDI iniziale
+  initTimeline();
+}
+
+function populate(id, val) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.value = val || '';
+}
+
+// ╔═══════════════════════════════════════════════════════╗
+// ║  HELPERS STATE                                        ║
+// ╚═══════════════════════════════════════════════════════╝
+function se(k,v) {
+  E[k]=v;
+  localStorage.setItem('emittente', JSON.stringify(E));
+  renderAnteprima();
+}
+function sf(k,v) {
+  F[k]=v;
+  if(k==='numero') { document.getElementById('hNum').textContent=v; }
+  renderAnteprima();
+}
+function sp(k,v) {
+  P[k]=v;
+  localStorage.setItem('pagamento', JSON.stringify(P));
+  renderAnteprima();
+}
+
+// ╔═══════════════════════════════════════════════════════╗
+// ║  CALCOLI                                              ║
+// ╚═══════════════════════════════════════════════════════╝
+function calcTotali() {
+  const r = { imponibile:0 };
+  const ive = {};
+  ELEMENTI.forEach(el => {
+    const sub = el.qty * el.prezzo;
+    r.imponibile += sub;
+    ive[el.iva_pct] = (ive[el.iva_pct]||0) + sub * (el.iva_pct/100);
+  });
+  r.ive = ive;
+  r.iva = Object.values(ive).reduce((a,b)=>a+b,0);
+  r.totale = r.imponibile + r.iva;
+  return r;
+}
+
+function fmt(n) {
+  return '€\u00a0' + (n||0).toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function fmtN(n,d=2) {
+  return (n||0).toFixed(d);
+}
+
+// ╔═══════════════════════════════════════════════════════╗
+// ║  ANTEPRIMA FATTURA                                    ║
+// ╚═══════════════════════════════════════════════════════╝
+function renderAnteprima() {
+  const T = calcTotali();
+
+  // Logo/nome
+  const parole = (E.ragione_sociale||'NOME AZIENDA').split(' ');
+  const metà   = Math.ceil(parole.length/2);
+  document.getElementById('invLogo').innerHTML =
+    parole.slice(0,metà).join(' ') + '<span> ' + parole.slice(metà).join(' ') + '</span>';
+
+  // Indirizzo emittente sotto logo
+  document.getElementById('invEmitAddr').textContent =
+    [E.indirizzo, E.cap, E.comune, E.provincia].filter(Boolean).join(', ') || '';
+
+  // Numero e data
+  document.getElementById('invNum').textContent  = F.numero || '—';
+  const dFmt = F.data ? new Date(F.data).toLocaleDateString('it-IT',{day:'2-digit',month:'long',year:'numeric'}) : '—';
+  document.getElementById('invDate').textContent = `Data: ${dFmt}`;
+
+  // Emittente
+  document.getElementById('invEmitName').textContent = E.ragione_sociale || '—';
+  document.getElementById('invEmitInfo').innerHTML = [
+    E.piva ? `P.IVA ${E.piva}` : '',
+    E.cf   ? `C.F. ${E.cf}`   : '',
+    E.regime,
+    [E.indirizzo, E.cap, E.comune, E.provincia].filter(Boolean).join(', ')
+  ].filter(Boolean).join('<br>');
+
+  // Destinatario
+  document.getElementById('invDestName').textContent = CLIENTE.ragione_sociale || '—';
+  document.getElementById('invDestInfo').innerHTML = [
+    CLIENTE.piva ? `P.IVA ${CLIENTE.piva}` : '',
+    CLIENTE.cf   ? `C.F. ${CLIENTE.cf}`   : '',
+    CLIENTE.tipo==='b2b'
+      ? `Codice SDI: ${CLIENTE.codice_sdi||'0000000'}`
+      : (CLIENTE.pec ? `PEC: ${CLIENTE.pec}` : 'Codice SDI: 0000000')
+  ].filter(Boolean).join('<br>');
+
+  // Veicolo
+  document.getElementById('invVehicle').innerHTML = [
+    ['Targa',    RAP.targa],
+    ['Veicolo',  RAP.modello],
+    ['Anno',     RAP.anno],
+    ['Km',       RAP.km ? RAP.km.toLocaleString('it-IT') : '—'],
+    ['Tecnico',  RAP.tecnico],
+    ['Rap. n.',  RAP.numero],
+  ].map(([k,v]) => `<div class="inv-veh-item"><div class="k">${k}</div><div class="v">${v||'—'}</div></div>`).join('');
+
+  // Righe
+  const tbody = document.getElementById('invLines');
+  tbody.innerHTML = ELEMENTI.map((el,i) => `
+    <tr>
+      <td style="color:#999;font-size:11px">${i+1}</td>
+      <td>
+        <div style="font-weight:600;font-size:13px">${el.descrizione||'—'}</div>
+        ${el.codice ? `<div style="font-size:11px;color:#888;margin-top:2px">${el.codice}</div>` : ''}
+      </td>
+      <td class="r">${fmtN(el.qty,2)}</td>
+      <td class="r">${fmt(el.prezzo)}</td>
+      <td class="r">${el.iva_pct}%</td>
+      <td class="r" style="font-weight:600">${fmt(el.qty*el.prezzo)}</td>
+    </tr>
+  `).join('');
+
+  // Totali
+  let totHtml = `
+    <div class="inv-tot-row"><div class="k">Imponibile</div><div class="v">${fmt(T.imponibile)}</div></div>
+  `;
+  Object.entries(T.ive).forEach(([aliq,imp]) => {
+    totHtml += `<div class="inv-tot-row"><div class="k">IVA ${aliq}%</div><div class="v">${fmt(imp)}</div></div>`;
+  });
+  totHtml += `
+    <div class="inv-tot-row final">
+      <div class="k">TOTALE</div><div class="v">${fmt(T.totale)}</div>
+    </div>
+  `;
+  document.getElementById('invTotals').innerHTML = totHtml;
+
+  // Note e pagamento
+  document.getElementById('invNote').textContent = RAP.note || '';
+  const modMap = { MP05:'Bonifico bancario', MP08:'Carta di credito', MP02:'Assegno', MP01:'Contanti', MP22:'RID' };
+  document.getElementById('invPay').textContent = modMap[P.modalita] || P.modalita;
+  document.getElementById('invIban').textContent = P.iban || '';
+}
+
+// ╔═══════════════════════════════════════════════════════╗
+// ║  XML FATTURAPA 1.2.2                                  ║
+// ╚═══════════════════════════════════════════════════════╝
+function generaXml() {
+  const T = calcTotali();
+  const sdiCode = CLIENTE.tipo==='b2c' ? '0000000' : (CLIENTE.codice_sdi||'0000000');
+  const prog = (localStorage.getItem('progressivo_invio')||'1').padStart(5,'0');
+  const nomeFile = `IT${E.piva||'00000000000'}_${prog}.xml`;
+
+  // Raggruppa IVA per aliquota
+  const riepilogoIva = {};
+  ELEMENTI.forEach(el => {
+    const sub = el.qty * el.prezzo;
+    if (!riepilogoIva[el.iva_pct])
+      riepilogoIva[el.iva_pct] = { imponibile:0, imposta:0 };
+    riepilogoIva[el.iva_pct].imponibile += sub;
+    riepilogoIva[el.iva_pct].imposta    += sub * (el.iva_pct/100);
+  });
+
+  const tipoSoggetto = CLIENTE.tipo==='b2b' ? 'PF' : 'PG'; // in realtà dipende dal cliente
+  const pIvaOCF = CLIENTE.piva
+    ? `<IdFiscaleIVA><IdPaese>IT</IdPaese><IdCodice>${CLIENTE.piva.replace(/^IT/,'')}</IdCodice></IdFiscaleIVA>`
+    : '';
+  const cfDest = CLIENTE.cf
+    ? `<CodiceFiscale>${CLIENTE.cf}</CodiceFiscale>`
+    : '';
+
+  const pecLine = (CLIENTE.tipo==='b2c' && CLIENTE.pec)
+    ? `\n    <PECDestinatario>${CLIENTE.pec}</PECDestinatario>` : '';
+
+  const linee = ELEMENTI.map((el,i) => `
+      <DettaglioLinee>
+        <NumeroLinea>${i+1}</NumeroLinea>
+        <TipoCessionePrestazione>${el.tipo==='ricambio'?'SC':'PR'}</TipoCessionePrestazione>
+        ${el.codice ? `<CodiceArticolo><CodiceTipo>Interno</CodiceTipo><CodiceValore>${el.codice}</CodiceValore></CodiceArticolo>` : ''}
+        <Descrizione>${escXml(el.descrizione)}</Descrizione>
+        <Quantita>${fmtN(el.qty,2)}</Quantita>
+        <UnitaMisura>${el.tipo==='manodopera'?'H':'NR'}</UnitaMisura>
+        <PrezzoUnitario>${fmtN(el.prezzo,2)}</PrezzoUnitario>
+        <PrezzoTotale>${fmtN(el.qty*el.prezzo,2)}</PrezzoTotale>
+        <AliquotaIVA>${fmtN(el.iva_pct,2)}</AliquotaIVA>
+      </DettaglioLinee>`).join('');
+
+  const riepilogo = Object.entries(riepilogoIva).map(([aliq,d]) => `
+      <DatiRiepilogo>
+        <AliquotaIVA>${fmtN(parseFloat(aliq),2)}</AliquotaIVA>
+        <ImponibileImporto>${fmtN(d.imponibile,2)}</ImponibileImporto>
+        <Imposta>${fmtN(d.imposta,2)}</Imposta>
+        <EsigibilitaIVA>I</EsigibilitaIVA>
+      </DatiRiepilogo>`).join('');
+
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<p:FatturaElettronica
+  versione="FPR12"
+  xmlns:ds="http://www.w3.org/2000/09/xmldsig#"
+  xmlns:p="http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://ivaservizi.agenziaentrate.gov.it/docs/xsd/fatture/v1.2 http://www.fatturapa.gov.it/export/fatturazione/sdi/fatturapa/v1.2/Schema_del_file_xml_FatturaPA_versione_1.2.2.xsd">
+
+  <!-- ═══════════════════════════════════════════════
+       HEADER
+  ═══════════════════════════════════════════════ -->
+  <FatturaElettronicaHeader>
+
+    <DatiTrasmissione>
+      <IdTrasmittente>
+        <IdPaese>IT</IdPaese>
+        <IdCodice>${(E.piva||'00000000000').replace(/^IT/,'')}</IdCodice>
+      </IdTrasmittente>
+      <ProgressivoInvio>${prog}</ProgressivoInvio>
+      <FormatoTrasmissione>FPR12</FormatoTrasmissione>
+      <CodiceDestinatario>${sdiCode}</CodiceDestinatario>${pecLine}
+    </DatiTrasmissione>
+
+    <CedentePrestatore>
+      <DatiAnagrafici>
+        <IdFiscaleIVA>
+          <IdPaese>IT</IdPaese>
+          <IdCodice>${(E.piva||'00000000000').replace(/^IT/,'')}</IdCodice>
+        </IdFiscaleIVA>
+        ${E.cf ? `<CodiceFiscale>${E.cf}</CodiceFiscale>` : ''}
+        <Anagrafica>
+          <Denominazione>${escXml(E.ragione_sociale||'')}</Denominazione>
+        </Anagrafica>
+        <RegimeFiscale>${E.regime||'RF01'}</RegimeFiscale>
+      </DatiAnagrafici>
+      <Sede>
+        <Indirizzo>${escXml(E.indirizzo||'')}</Indirizzo>
+        <CAP>${E.cap||''}</CAP>
+        <Comune>${escXml(E.comune||'')}</Comune>
+        <Provincia>${(E.provincia||'').toUpperCase()}</Provincia>
+        <Nazione>IT</Nazione>
+      </Sede>
+    </CedentePrestatore>
+
+    <CessionarioCommittente>
+      <DatiAnagrafici>
+        ${pIvaOCF}
+        ${cfDest}
+        <Anagrafica>
+          <Denominazione>${escXml(CLIENTE.ragione_sociale||'')}</Denominazione>
+        </Anagrafica>
+      </DatiAnagrafici>
+      <Sede>
+        <Indirizzo>-</Indirizzo>
+        <CAP>00000</CAP>
+        <Comune>-</Comune>
+        <Nazione>IT</Nazione>
+      </Sede>
+    </CessionarioCommittente>
+
+  </FatturaElettronicaHeader>
+
+  <!-- ═══════════════════════════════════════════════
+       BODY
+  ═══════════════════════════════════════════════ -->
+  <FatturaElettronicaBody>
+
+    <DatiGenerali>
+      <DatiGeneraliDocumento>
+        <TipoDocumento>${F.tipo_doc||'TD01'}</TipoDocumento>
+        <Divisa>EUR</Divisa>
+        <Data>${F.data||new Date().toISOString().slice(0,10)}</Data>
+        <Numero>${escXml(F.numero||'')}</Numero>
+        <ImportoTotaleDocumento>${fmtN(T.totale,2)}</ImportoTotaleDocumento>
+        ${RAP.note ? `<Causale>${escXml(RAP.note)}</Causale>` : ''}
+      </DatiGeneraliDocumento>
+      <DatiOrdineAcquisto>
+        <RiferimentoNumeroLinea>0</RiferimentoNumeroLinea>
+        <IdDocumento>${escXml(RAP.numero||'')}</IdDocumento>
+        <Data>${RAP.data||F.data}</Data>
+      </DatiOrdineAcquisto>
+    </DatiGenerali>
+
+    <DatiBeniServizi>
+      ${linee}
+      ${riepilogo}
+    </DatiBeniServizi>
+
+    <DatiPagamento>
+      <CondizioniPagamento>${P.condizioni||'TP02'}</CondizioniPagamento>
+      <DettaglioPagamento>
+        <ModalitaPagamento>${P.modalita||'MP05'}</ModalitaPagamento>
+        ${P.scadenza ? `<DataScadenzaPagamento>${P.scadenza}</DataScadenzaPagamento>` : ''}
+        <ImportoPagamento>${fmtN(T.totale,2)}</ImportoPagamento>
+        ${P.iban ? `<IBAN>${P.iban.replace(/\s/g,'')}</IBAN>` : ''}
+        ${P.banca ? `<IstitutoFinanziario>${escXml(P.banca)}</IstitutoFinanziario>` : ''}
+      </DettaglioPagamento>
+    </DatiPagamento>
+
+  </FatturaElettronicaBody>
+
+</p:FatturaElettronica>`;
+
+  _xmlCache = xml;
+  return { xml, nomeFile };
+}
+
+function escXml(s) {
+  return String(s||'')
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&apos;');
+}
+
+function colorXml(xml) {
+  return xml
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/(&lt;\/?)([\w:]+)/g,'<span class="xml-tag">$1$2</span>')
+    .replace(/(&gt;)([^&\n<]+)(&lt;)/g,'$1<span class="xml-val">$2</span>$3')
+    .replace(/(xmlns?:[a-z]+|versione|xsi:[a-zA-Z]+)=/g,'<span class="xml-attr">$1</span>=')
+    .replace(/(&lt;!--[\s\S]*?--&gt;)/g,'<span class="xml-comm">$1</span>');
+}
+
+function aggiornaXml() {
+  const { xml, nomeFile } = generaXml();
+  document.getElementById('xmlPre').innerHTML = colorXml(xml);
+  populate('xFile', nomeFile);
+  toast('XML rigenerato', 'ok');
+}
+
+function downloadXml() {
+  const { xml, nomeFile } = generaXml();
+  const blob = new Blob([xml], { type:'application/xml;charset=UTF-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = nomeFile;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast(`Scaricato: ${nomeFile}`, 'ok');
+}
+
+// ╔═══════════════════════════════════════════════════════╗
+// ║  SDI TIMELINE                                         ║
+// ╚═══════════════════════════════════════════════════════╝
+function initTimeline() {
+  SDI_STEPS = [
+    { id:'bozza',    label:'Fattura in bozza',           sub:'Compilazione dati',                  stato:'done',   ts: new Date().toISOString() },
+    { id:'xml',      label:'XML FatturaPA generato',      sub:'Formato FPR12 — pronto per la firma',stato:'active', ts:'' },
+    { id:'inviata',  label:'Inviata al SDI',               sub:'In attesa di ricevuta',               stato:'',       ts:'' },
+    { id:'accettata',label:'Accettata dal SDI',            sub:'Notifica di consegna',                stato:'',       ts:'' },
+  ];
+  renderTimeline();
+}
+
+function renderTimeline() {
+  const wrap = document.getElementById('sdiTimeline');
+  wrap.innerHTML = SDI_STEPS.map(s => `
+    <div class="sdi-step ${s.stato}">
+      <div style="flex:1">
+        <div class="sdi-step-label">${s.label}</div>
+        <div class="sdi-step-sub">${s.sub}</div>
+      </div>
+      <div class="sdi-step-time">${s.ts ? fmtTs(s.ts) : ''}</div>
+    </div>
+  `).join('');
+}
+
+function fmtTs(ts) {
+  try { return new Date(ts).toLocaleString('it-IT',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}); }
+  catch { return ''; }
+}
+
+// ╔═══════════════════════════════════════════════════════╗
+// ║  INVIO AL SDI                                         ║
+// ╚═══════════════════════════════════════════════════════╝
+async function inviaAlSdi() {
+  if (!valida()) return;
+  if (!confirm('Inviare la fattura al Sistema di Interscambio tramite Aruba?\n\nQuesta operazione è irreversibile.')) return;
+
+  const { xml, nomeFile } = generaXml();
+  const xmlB64 = btoa(unescape(encodeURIComponent(xml)));
+
+  // ─── STUB — decommentare con Edge Function reale ─────
+  // try {
+  //   if (!SA.endpoint) { toast('Configura l\'endpoint Edge Function', 'err'); return; }
+  //   const res = await fetch(SA.endpoint, {
+  //     method: 'POST',
+  //     headers: {
+  //       'Content-Type': 'application/json',
+  //       'Authorization': `Bearer ${SA.anonKey || SUPABASE_ANON_KEY}`
+  //     },
+  //     body: JSON.stringify({ xml_base64: xmlB64, nome_file: nomeFile, progressivo: prog })
+  //   });
+  //   const data = await res.json();
+  //   if (!res.ok) throw new Error(data.message || 'Errore Aruba');
+  //   F.aruba_id = data.id || data.idFile;
+  //   aggiornaStepSdi('inviata', data);
+  //   // salva su Supabase
+  //   // await _sb.from('fatture').update({ aruba_id: F.aruba_id, stato:'inviata' }).eq('id', F.id);
+  // } catch(err) {
+  //   toast('Errore invio: ' + err.message, 'err');
+  //   return;
+  // }
+  // ─────────────────────────────────────────────────────
+
+  // ── SIMULAZIONE (rimuovere in produzione) ─────────────
+  toast('Invio simulato — integrare Edge Function Aruba', 'info');
+  setTimeout(() => {
+    const fakeId = 'ARB-' + Date.now();
+    document.getElementById('sArubaId').value = fakeId;
+    document.getElementById('sSdiEsito').value = 'NS — Notifica di scarto (simulazione)';
+    document.getElementById('sSdiMsg').value = 'ATTENZIONE: questo è un invio simulato.\nIn produzione qui appare la risposta reale del SDI.';
+    SDI_STEPS[2].stato = 'active'; SDI_STEPS[2].ts = new Date().toISOString();
+    renderTimeline();
+    document.getElementById('hBadge').className = 'badge badge-inviata';
+    document.getElementById('hBadge').textContent = 'Inviata';
+    // Incrementa progressivo
+    const curr = parseInt(localStorage.getItem('progressivo_invio')||'1');
+    localStorage.setItem('progressivo_invio', String(curr+1));
+  }, 1400);
+  // ─────────────────────────────────────────────────────
+}
+
+async function aggiornaStepSdi(step, data) {
+  const idx = SDI_STEPS.findIndex(s=>s.id===step);
+  if (idx<0) return;
+  SDI_STEPS.slice(0,idx).forEach(s=>{ s.stato='done'; });
+  SDI_STEPS[idx].stato='active'; SDI_STEPS[idx].ts=new Date().toISOString();
+  renderTimeline();
+  if (data.esito) {
+    document.getElementById('sSdiEsito').value = data.esito;
+    document.getElementById('sSdiMsg').value = data.messaggio||'';
+  }
+}
+
+async function aggiornaSdIStatus() {
+  // TODO: chiedi ad Aruba lo stato corrente della fattura
+  // const { data } = await fetch(SA.endpoint + '/status?id=' + F.aruba_id, ...)
+  toast('Aggiornamento stato — collegare all\'API Aruba', 'info');
+}
+
+async function testConnessione() {
+  if (!SA.endpoint) { toast('Inserisci prima l\'endpoint', 'err'); return; }
+  toast('Test connessione in corso...', 'info');
+  // TODO: fetch(SA.endpoint + '/ping', ...)
+  setTimeout(() => toast('Connessione OK (simulata)', 'ok'), 800);
+}
+
+// ╔═══════════════════════════════════════════════════════╗
+// ║  PDF (stampa browser)                                 ║
+// ╚═══════════════════════════════════════════════════════╝
+function stampaPdf() {
+  switchTab('anteprima', document.querySelector('.tab-btn'));
+  setTimeout(() => window.print(), 150);
+}
+
+// ╔═══════════════════════════════════════════════════════╗
+// ║  SALVA BOZZA                                          ║
+// ╚═══════════════════════════════════════════════════════╝
+async function salvaBozza() {
+  const T = calcTotali();
+  const payload = {
+    rapportino_id: F.rapportino_id,
+    numero: F.numero, data: F.data,
+    tipo_doc: F.tipo_doc, stato: 'bozza',
+    imponibile: T.imponibile, iva: T.iva, totale: T.totale,
+  };
+  console.log('💾 PAYLOAD FATTURA:', payload);
+  // ─── TODO SUPABASE ──────────────────────────────────
+  // const { data, error } = await _sb.from('fatture').upsert(payload).select().single();
+  // if (error) { toast('Errore salvataggio: '+error.message,'err'); return; }
+  // F.id = data.id;
+  // ────────────────────────────────────────────────────
+  toast('Bozza salvata', 'ok');
+  document.getElementById('footerStato').textContent = '✓ Salvata';
+}
+
+// ╔═══════════════════════════════════════════════════════╗
+// ║  VALIDAZIONE                                          ║
+// ╚═══════════════════════════════════════════════════════╝
+function valida() {
+  if (!E.ragione_sociale) { switchTab('dati', document.querySelectorAll('.tab-btn')[1]); toast('Inserisci la ragione sociale dell\'emittente', 'err'); return false; }
+  if (!E.piva) { switchTab('dati', document.querySelectorAll('.tab-btn')[1]); toast('Inserisci la P. IVA dell\'emittente', 'err'); return false; }
+  if (!E.indirizzo || !E.comune) { switchTab('dati', document.querySelectorAll('.tab-btn')[1]); toast('Completa l\'indirizzo dell\'emittente', 'err'); return false; }
+  if (!F.numero) { toast('Numero fattura mancante', 'err'); return false; }
+  if (ELEMENTI.length === 0) { toast('Nessun elemento nella fattura', 'err'); return false; }
+  return true;
+}
+
+// ╔═══════════════════════════════════════════════════════╗
+// ║  TAB SWITCH                                           ║
+// ╚═══════════════════════════════════════════════════════╝
+function switchTab(name, btn) {
+  ['anteprima','dati','xml','sdi'].forEach(t => {
+    document.getElementById('tab-'+t).style.display = t===name ? '' : 'none';
+  });
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  if (name==='xml' && !_xmlCache) aggiornaXml();
+  if (name==='anteprima') renderAnteprima();
+}
+
+// ╔═══════════════════════════════════════════════════════╗
+// ║  MODAL                                                ║
+// ╚═══════════════════════════════════════════════════════╝
+function apriModal(id)  { document.getElementById(id).classList.add('open'); }
+function chiudiModal(id){ document.getElementById(id).classList.remove('open'); }
+function apriModalAruba(){ apriModal('modalAruba'); }
+
+document.querySelectorAll('.modal-overlay').forEach(o => {
+  o.addEventListener('click', e => { if(e.target===o) o.classList.remove('open'); });
+});
+
+// ╔═══════════════════════════════════════════════════════╗
+// ║  TOAST                                                ║
+// ╚═══════════════════════════════════════════════════════╝
+function toast(msg, tipo='info') {
+  const wrap = document.getElementById('toastWrap');
+  const t = document.createElement('div');
+  t.className = 'toast' + (tipo==='ok'?' ok':tipo==='err'?' err':'');
+  t.textContent = msg;
+  wrap.appendChild(t);
+  setTimeout(() => { t.style.opacity='0'; setTimeout(()=>t.remove(),350); }, 3200);
+}
+
+// ─── AVVIO ───────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>

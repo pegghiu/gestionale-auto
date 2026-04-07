@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rapportino Riparazione</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --accent:        #E85A00;
+      --accent-dark:   #C04800;
+      --accent-light:  #FFF3EC;
+      --dark:          #1A1A1A;
+      --surface:       #FFFFFF;
+      --bg:            #EDEBE6;
+      --border:        #DEDAD4;
+      --border-dark:   #C8C4BC;
+      --text:          #1A1A1A;
+      --text-muted:    #706C65;
+      --text-light:    #9A9690;
+      --success:       #1F7A35;
+      --success-bg:    #E6F5EB;
+      --warning:       #7A5000;
+      --warning-bg:    #FFF8E6;
+      --danger:        #B82020;
+      --danger-bg:     #FDECEC;
+      --info:          #1A4FAA;
+      --info-bg:       #EBF0FD;
+      --radius:        8px;
+      --radius-sm:     5px;
+      --shadow:        0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);
+    }
+
+    body {
+      font-family: 'Helvetica Neue', 'Arial', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    /* ─── HEADER ─────────────────────────────────────────── */
+    .app-header {
+      background: var(--dark);
+      color: #FFF;
+      height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      position: sticky;
+      top: 0;
+      z-index: 200;
+    }
+    .header-left { display: flex; align-items: center; gap: 20px; }
+    .brand {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.5);
+    }
+    .doc-num {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: #FFF;
+    }
+    .header-right { display: flex; align-items: center; gap: 10px; }
+
+    /* ─── BADGE STATO ─────────────────────────────────────── */
+    .badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 10px; border-radius: 20px;
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 0.07em; text-transform: uppercase;
+    }
+    .badge::before {
+      content: ''; width: 5px; height: 5px;
+      border-radius: 50%; background: currentColor; flex-shrink: 0;
+    }
+    .badge-bozza   { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.6); }
+    .badge-aperto  { background: var(--warning-bg); color: var(--warning); }
+    .badge-chiuso  { background: var(--success-bg); color: var(--success); }
+
+    .btn-back {
+      background: transparent; border: 1px solid rgba(255,255,255,0.2);
+      color: rgba(255,255,255,0.7); padding: 5px 12px;
+      border-radius: var(--radius-sm); font-size: 12px; font-weight: 600;
+      cursor: pointer; font-family: inherit;
+      transition: all 0.15s;
+    }
+    .btn-back:hover { background: rgba(255,255,255,0.08); color: #FFF; }
+
+    /* ─── PAGE LAYOUT ─────────────────────────────────────── */
+    .page {
+      max-width: 940px;
+      margin: 0 auto;
+      padding: 22px 16px 90px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    /* ─── CARD ────────────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .card-header {
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      background: #F7F6F3;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .card-title {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .card-body { padding: 18px 20px; }
+
+    /* ─── TARGA BADGE ─────────────────────────────────────── */
+    .targa-badge {
+      display: none;
+      background: var(--dark);
+      color: #FFF;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      padding: 5px 14px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+
+    /* ─── GRID ────────────────────────────────────────────── */
+    .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .g3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+    .g4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 14px; }
+    .g3-1 { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 14px; }
+    .span2 { grid-column: span 2; }
+
+    .gap-top { margin-top: 14px; }
+
+    /* ─── FORM ────────────────────────────────────────────── */
+    .field { display: flex; flex-direction: column; gap: 5px; }
+    .field label {
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    input[type="text"],
+    input[type="number"],
+    input[type="date"],
+    select,
+    textarea {
+      width: 100%;
+      padding: 8px 11px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-family: inherit;
+      color: var(--text);
+      background: #FFF;
+      transition: border-color 0.15s, box-shadow 0.15s;
+      outline: none;
+      -webkit-appearance: none;
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(232,90,0,0.12);
+    }
+    input[readonly] {
+      background: var(--bg);
+      color: var(--text-muted);
+      cursor: default;
+    }
+    input.targa-input {
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      font-size: 15px;
+    }
+    textarea { resize: vertical; min-height: 80px; line-height: 1.6; }
+    select { cursor: pointer; }
+
+    /* ─── DIVIDER ─────────────────────────────────────────── */
+    .divider { height: 1px; background: var(--border); margin: 14px 0; }
+
+    /* ─── BUTTONS ─────────────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px; border-radius: var(--radius-sm);
+      font-size: 13px; font-weight: 600; font-family: inherit;
+      cursor: pointer; border: 1px solid transparent;
+      transition: all 0.15s; white-space: nowrap;
+      text-decoration: none;
+    }
+    .btn-primary { background: var(--accent); color: #FFF; border-color: var(--accent); }
+    .btn-primary:hover { background: var(--accent-dark); border-color: var(--accent-dark); }
+    .btn-secondary { background: #FFF; color: var(--text); border-color: var(--border); }
+    .btn-secondary:hover { background: var(--bg); }
+    .btn-ghost { background: transparent; color: var(--text-muted); border-color: transparent; padding: 6px 8px; }
+    .btn-ghost:hover { background: var(--bg); color: var(--text); }
+    .btn-ghost.danger { color: var(--danger); }
+    .btn-ghost.danger:hover { background: var(--danger-bg); }
+    .btn-sm { padding: 5px 10px; font-size: 12px; }
+    .btn-lg { padding: 11px 24px; font-size: 14px; border-radius: var(--radius); }
+
+    /* ─── ELEMENTI TABLE ──────────────────────────────────── */
+    .table-wrap { overflow-x: auto; }
+    .el-table { width: 100%; border-collapse: collapse; min-width: 680px; }
+    .el-table th {
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--text-muted);
+      padding: 9px 8px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      background: #F7F6F3;
+    }
+    .el-table th.r { text-align: right; }
+    .el-table td { padding: 5px 4px; vertical-align: middle; }
+    .el-table tbody tr:not(:last-child) td { border-bottom: 1px solid #F0EDE8; }
+    .el-table td input, .el-table td select {
+      padding: 6px 8px;
+      font-size: 13px;
+      border-radius: 4px;
+    }
+
+    .col-tipo  { width: 115px; }
+    .col-cod   { width: 90px; }
+    .col-desc  { min-width: 180px; }
+    .col-qty   { width: 68px; }
+    .col-pz    { width: 90px; }
+    .col-iva   { width: 74px; }
+    .col-sub   { width: 88px; text-align: right; }
+    .col-del   { width: 36px; text-align: center; }
+
+    .sub-cell {
+      font-weight: 600; font-size: 13px;
+      text-align: right; padding-right: 6px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .table-footer { padding: 12px 20px 16px; border-top: 1px solid var(--border); background: #F7F6F3; }
+    .table-add    { padding: 10px 20px; border-top: 1px solid var(--border); display: flex; gap: 8px; }
+
+    /* ─── TOTALI ──────────────────────────────────────────── */
+    .totali {
+      max-width: 280px; margin-left: auto;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .tot-row {
+      display: flex; justify-content: space-between; align-items: baseline;
+      font-size: 13px; color: var(--text-muted);
+    }
+    .tot-row .v { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+    .tot-row.big {
+      font-size: 16px; font-weight: 700; color: var(--text);
+      padding-top: 10px; border-top: 2px solid var(--border-dark); margin-top: 4px;
+    }
+    .tot-row.big .v { color: var(--accent); font-size: 19px; }
+
+    /* ─── FOTO ────────────────────────────────────────────── */
+    .foto-drop {
+      border: 2px dashed var(--border-dark);
+      border-radius: var(--radius);
+      padding: 26px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.15s;
+      position: relative;
+    }
+    .foto-drop:hover { border-color: var(--accent); background: var(--accent-light); }
+    .foto-drop.dragover { border-color: var(--accent); background: var(--accent-light); }
+    .foto-drop input[type="file"] {
+      position: absolute; inset: 0; width: 100%; height: 100%;
+      opacity: 0; cursor: pointer;
+    }
+    .foto-icon { font-size: 26px; margin-bottom: 8px; pointer-events: none; }
+    .foto-hint { color: var(--text-muted); font-size: 13px; pointer-events: none; }
+    .foto-hint strong { color: var(--accent); }
+    .foto-hint small { display: block; margin-top: 3px; font-size: 11px; color: var(--text-light); }
+
+    .foto-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .foto-thumb {
+      position: relative; aspect-ratio: 1;
+      border-radius: var(--radius-sm); overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .foto-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .foto-rm {
+      position: absolute; top: 4px; right: 4px;
+      background: rgba(0,0,0,0.65); color: #FFF;
+      border: none; border-radius: 50%;
+      width: 22px; height: 22px; font-size: 11px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; opacity: 0; transition: opacity 0.15s;
+    }
+    .foto-thumb:hover .foto-rm { opacity: 1; }
+    .foto-name {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: rgba(0,0,0,0.5); color: #FFF;
+      font-size: 9px; padding: 3px 5px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    /* ─── FOOTER BAR ─────────────────────────────────────── */
+    .footer-bar {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: #FFF; border-top: 1px solid var(--border);
+      padding: 11px 24px;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      z-index: 200;
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.07);
+    }
+    .footer-stato { font-size: 12px; color: var(--text-muted); }
+    .footer-stato.saved { color: var(--success); }
+    .footer-actions { display: flex; gap: 10px; }
+
+    /* ─── TOAST ───────────────────────────────────────────── */
+    .toast-wrap {
+      position: fixed; bottom: 68px; right: 20px;
+      display: flex; flex-direction: column; gap: 8px; z-index: 300;
+    }
+    .toast {
+      background: var(--dark); color: #FFF;
+      padding: 10px 16px; border-radius: var(--radius);
+      font-size: 13px; max-width: 320px;
+      animation: fadeUp 0.25s ease forwards;
+      transition: opacity 0.3s;
+    }
+    .toast.ok  { background: var(--success); }
+    .toast.err { background: var(--danger); }
+    .toast.info { background: var(--info); }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ─── MODAL ───────────────────────────────────────────── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.5); z-index: 400;
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: #FFF; border-radius: var(--radius);
+      width: min(500px, calc(100vw - 32px));
+      max-height: 80vh; overflow: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    .modal-header {
+      padding: 16px 20px; border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .modal-title { font-size: 15px; font-weight: 700; }
+    .modal-body { padding: 18px 20px; }
+    .modal-foot { padding: 12px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+
+    /* ─── CHIPS ───────────────────────────────────────────── */
+    .chip {
+      display: inline-block; padding: 1px 6px; border-radius: 3px;
+      font-size: 10px; font-weight: 700; letter-spacing: 0.05em;
+    }
+    .chip-r { background: var(--info-bg);    color: var(--info); }
+    .chip-s { background: var(--success-bg); color: var(--success); }
+    .chip-m { background: var(--warning-bg); color: var(--warning); }
+
+    /* ─── RESPONSIVE ──────────────────────────────────────── */
+    @media (max-width: 600px) {
+      .g2, .g3, .g4, .g3-1 { grid-template-columns: 1fr; }
+      .span2 { grid-column: auto; }
+      .footer-bar { flex-direction: column; gap: 8px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══ APP HEADER ════════════════════════════════════════════ -->
+<header class="app-header">
+  <div class="header-left">
+    <span class="brand">Gestione Veicoli</span>
+    <span class="doc-num" id="headerNum">Nuovo rapportino</span>
+  </div>
+  <div class="header-right">
+    <span class="badge badge-bozza" id="headerBadge">Bozza</span>
+    <button class="btn-back" onclick="window.history.back()">← Indietro</button>
+  </div>
+</header>
+
+<!-- ═══ PAGE ══════════════════════════════════════════════════ -->
+<div class="page">
+
+  <!-- ── SEZIONE VEICOLO ─────────────────────────────────── -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Veicolo & tecnico</span>
+      <span class="targa-badge" id="targaBadge"></span>
+    </div>
+    <div class="card-body">
+      <div class="g4">
+        <div class="field">
+          <label>Targa *</label>
+          <input class="targa-input" type="text" id="targa" placeholder="AA 000 BB"
+            maxlength="10" autocomplete="off"
+            oninput="onTargaInput(this.value)">
+        </div>
+        <div class="field">
+          <label>Marca / Modello *</label>
+          <input type="text" id="modello" placeholder="es. Fiat Ducato"
+            oninput="sv('modello', this.value)">
+        </div>
+        <div class="field">
+          <label>Anno</label>
+          <input type="text" id="anno" placeholder="2021" maxlength="4"
+            oninput="sv('anno', this.value)">
+        </div>
+        <div class="field">
+          <label>Km attuali</label>
+          <input type="number" id="km" placeholder="0" min="0"
+            oninput="sr('km', this.value)">
+        </div>
+      </div>
+
+      <div class="g3 gap-top">
+        <div class="field">
+          <label>Tecnico *</label>
+          <select id="tecnico" onchange="sr('tecnico', this.value)">
+            <option value="">— Seleziona —</option>
+            <option value="Enrico">Enrico</option>
+            <option value="Andrea">Andrea</option>
+            <option value="Matteo">Matteo</option>
+            <option value="Gianluca">Gianluca</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Data apertura</label>
+          <input type="date" id="dataApertura" oninput="sr('data', this.value)">
+        </div>
+        <div class="field">
+          <label>N° rapportino</label>
+          <input type="text" id="numero" readonly>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SEZIONE CLIENTE ─────────────────────────────────── -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Cliente</span>
+      <button class="btn btn-secondary btn-sm" onclick="apriModal('modalCliente')">
+        Cerca / Nuovo cliente
+      </button>
+    </div>
+    <div class="card-body">
+      <div class="g3">
+        <div class="field span2">
+          <label>Ragione sociale / Nome *</label>
+          <input type="text" id="cNome" placeholder="Cerca o inserisci..."
+            oninput="sc('ragione_sociale', this.value)">
+        </div>
+        <div class="field">
+          <label>Tipo</label>
+          <select id="cTipo" onchange="onTipoClienteChange(this.value)">
+            <option value="b2b">Azienda (B2B)</option>
+            <option value="b2c">Privato (B2C)</option>
+          </select>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="g4">
+        <div class="field">
+          <label>P. IVA</label>
+          <input type="text" id="cPiva" placeholder="IT12345678901" maxlength="13"
+            oninput="sc('piva', this.value)">
+        </div>
+        <div class="field">
+          <label>Codice Fiscale</label>
+          <input type="text" id="cCf" placeholder="RSSMRA80A01H501U"
+            oninput="sc('cf', this.value)">
+        </div>
+        <div class="field" id="fieldSdi">
+          <label>Codice SDI</label>
+          <input type="text" id="cSdi" placeholder="0000000" maxlength="7"
+            oninput="sc('codice_sdi', this.value)">
+        </div>
+        <div class="field">
+          <label>PEC</label>
+          <input type="text" id="cPec" placeholder="pec@dominio.it"
+            oninput="sc('pec', this.value)">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SEZIONE ELEMENTI ────────────────────────────────── -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Ricambi & servizi</span>
+      <span id="elCount" style="font-size:11px;color:var(--text-muted)">0 elementi</span>
+    </div>
+
+    <div class="table-wrap">
+      <table class="el-table">
+        <thead>
+          <tr>
+            <th class="col-tipo">Tipo</th>
+            <th class="col-cod">Codice</th>
+            <th class="col-desc">Descrizione</th>
+            <th class="col-qty" style="text-align:right">Qtà</th>
+            <th class="col-pz"  style="text-align:right">Prezzo €</th>
+            <th class="col-iva" style="text-align:right">IVA %</th>
+            <th class="col-sub r">Subtot.</th>
+            <th class="col-del"></th>
+          </tr>
+        </thead>
+        <tbody id="elBody"></tbody>
+      </table>
+    </div>
+
+    <div class="table-add">
+      <button class="btn btn-secondary btn-sm" onclick="addEl('ricambio')">+ Ricambio</button>
+      <button class="btn btn-secondary btn-sm" onclick="addEl('servizio')">+ Servizio</button>
+      <button class="btn btn-secondary btn-sm" onclick="addEl('manodopera')">+ Manodopera</button>
+    </div>
+
+    <!-- Totali -->
+    <div class="table-footer">
+      <div class="totali">
+        <div class="tot-row">
+          <span>Imponibile</span>
+          <span class="v" id="tImponibile">€ 0,00</span>
+        </div>
+        <div class="tot-row" id="r22">
+          <span>IVA 22%</span>
+          <span class="v" id="tIva22">€ 0,00</span>
+        </div>
+        <div class="tot-row" id="r10" style="display:none">
+          <span>IVA 10%</span>
+          <span class="v" id="tIva10">€ 0,00</span>
+        </div>
+        <div class="tot-row" id="r4" style="display:none">
+          <span>IVA 4%</span>
+          <span class="v" id="tIva4">€ 0,00</span>
+        </div>
+        <div class="tot-row big">
+          <span>Totale</span>
+          <span class="v" id="tTotale">€ 0,00</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SEZIONE FOTO ────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Foto veicolo / danni</span>
+      <span id="fotoCount" style="font-size:11px;color:var(--text-muted)">Nessuna foto</span>
+    </div>
+    <div class="card-body">
+      <div class="foto-drop" id="fotoDrop">
+        <input type="file" id="fotoInput" accept="image/*" multiple
+          onchange="onFotoSel(this.files)">
+        <div class="foto-icon">📷</div>
+        <div class="foto-hint">
+          <strong>Clicca per aggiungere foto</strong> oppure trascina qui
+          <small>JPG, PNG, HEIC — max 10 MB per foto</small>
+        </div>
+      </div>
+      <div class="foto-grid" id="fotoGrid"></div>
+    </div>
+  </div>
+
+  <!-- ── NOTE ───────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">Note interne</span>
+    </div>
+    <div class="card-body">
+      <textarea id="note" rows="3"
+        placeholder="Annotazioni, lavorazioni eseguite, indicazioni per il cliente..."
+        oninput="sr('note', this.value)"></textarea>
+    </div>
+  </div>
+
+</div><!-- /page -->
+
+<!-- ═══ MODAL CLIENTE ════════════════════════════════════════ -->
+<div class="modal-overlay" id="modalCliente">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">Cerca / Nuovo cliente</span>
+      <button class="btn btn-ghost btn-sm" onclick="chiudiModal('modalCliente')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field" style="margin-bottom:12px">
+        <label>Cerca per nome o P. IVA</label>
+        <input type="text" id="clienteSearch" placeholder="Digita per cercare..."
+          oninput="cercaCliente(this.value)">
+      </div>
+      <div id="clienteResults" style="display:flex;flex-direction:column;gap:6px;max-height:260px;overflow:auto"></div>
+      <div class="divider"></div>
+      <p style="font-size:12px;color:var(--text-muted)">
+        Non trovato? Compila direttamente i campi nella scheda.
+      </p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="chiudiModal('modalCliente')">Chiudi</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TOAST ════════════════════════════════════════════════ -->
+<div class="toast-wrap" id="toastWrap"></div>
+
+<!-- ═══ FOOTER BAR ════════════════════════════════════════════ -->
+<div class="footer-bar">
+  <div class="footer-stato" id="footerStato">Bozza non salvata</div>
+  <div class="footer-actions">
+    <button class="btn btn-secondary" onclick="salvaBozza()">Salva bozza</button>
+    <button class="btn btn-primary btn-lg" onclick="chiudiRapportino()">
+      Chiudi &amp; Genera fattura →
+    </button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     JAVASCRIPT
+═══════════════════════════════════════════════════════════════ -->
+<script>
+
+// ╔═══════════════════════════════════════════════════════════╗
+// ║  CONFIGURAZIONE SUPABASE                                  ║
+// ║  TODO: sostituire con le credenziali reali del progetto   ║
+// ╚═══════════════════════════════════════════════════════════╝
+const SUPABASE_URL      = 'https://YOUR_PROJECT_ID.supabase.co';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+
+// const _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// (decommentare quando le credenziali sono pronte)
+
+// ╔═══════════════════════════════════════════════════════════╗
+// ║  STATO APPLICAZIONE                                       ║
+// ╚═══════════════════════════════════════════════════════════╝
+const S = {
+  rap: {
+    id: null, numero: null,
+    data: new Date().toISOString().slice(0,10),
+    stato: 'bozza',
+    tecnico: '', km: 0, note: '',
+    modello: '', anno: ''
+  },
+  veicolo: { targa: '', modello: '', anno: '' },
+  cliente: {
+    id: null, ragione_sociale: '', tipo: 'b2b',
+    piva: '', cf: '', codice_sdi: '0000000', pec: ''
+  },
+  elementi: [],   // { _id, tipo, codice, descrizione, qty, prezzo, iva_pct }
+  foto: [],       // { _id, url, name, file }
+  salvato: false
+};
+
+let _elId = 1;
+let _fotoId = 1;
+
+// ╔═══════════════════════════════════════════════════════════╗
+// ║  SYNC STATE HELPERS                                       ║
+// ╚═══════════════════════════════════════════════════════════╝
+function sr(k, v) { S.rap[k] = v; markDirty(); }         // rapportino
+function sv(k, v) { S.veicolo[k] = v; markDirty(); }     // veicolo
+function sc(k, v) { S.cliente[k] = v; markDirty(); }     // cliente
+function markDirty() { S.salvato = false; aggiornFooter(); }
+
+// ╔═══════════════════════════════════════════════════════════╗
+// ║  INIT                                                     ║
+// ╚═══════════════════════════════════════════════════════════╝
+function init() {
+  // Data di oggi
+  const today = new Date().toISOString().slice(0,10);
+  document.getElementById('dataApertura').value = today;
+  S.rap.data = today;
+
+  // Numero rapportino (in produzione verrà generato dal DB con sequence)
+  const anno = new Date().getFullYear();
+  const prog  = String(Date.now()).slice(-4);
+  const num   = `RAP-${anno}-${prog}`;
+  document.getElementById('numero').value = num;
+  document.getElementById('headerNum').textContent = num;
+  S.rap.numero = num;
+
+  // Parametri URL
+  const p = new URLSearchParams(window.location.search);
+  if (p.get('rapportino_id')) caricaRapportino(p.get('rapportino_id'));
+  if (p.get('veicolo_id'))    caricaVeicolo(p.get('veicolo_id'));
+
+  // Drag & drop foto
+  const drop = document.getElementById('fotoDrop');
+  drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('dragover'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+  drop.addEventListener('drop', e => {
+    e.preventDefault(); drop.classList.remove('dragover');
+    onFotoSel(e.dataTransfer.files);
+  });
+}
+
+// ╔═══════════════════════════════════════════════════════════╗
+// ║  TARGA INPUT                                              ║
+// ╚═══════════════════════════════════════════════════════════╝
+function onTargaInput(raw) {
+  const t = raw.toUpperCase().replace(/\s/g,'');
+  S.veicolo.targa = t;
+  const badge = document.getElementById('targaBadge');
+  if (t.length >= 4) { badge.textContent = t; badge.style.display = 'inline-block'; }
+  else               { badge.style.display = 'none'; }
+  markDirty();
+  // TODO: lookup automatico su Supabase se targa = 7 chars
+  // if (t.length === 7) cercaVeicoloPerTarga(t);
+}
+
+// ╔═══════════════════════════════════════════════════════════╗
+// ║  TIPO CLIENTE                                             ║
+// ╚═══════════════════════════════════════════════════════════╝
+function onTipoClienteChange(tipo) {
+  S.cliente.tipo = tipo;
+  const sdi = document.getElementById('fieldSdi');
+  if (tipo === 'b2c') {
+    document.getElementById('cSdi').value = '0000000';
+    S.cliente.codice_sdi = '0000000';
+    sdi.style.opacity = '0.5';
+    sdi.title = 'B2C: codice SDI fisso 0000000';
+  } else {
+    sdi.style.opacity = '1';
+    sdi.title = '';
+  }
+}
+
+// ╔═══════════════════════════════════════════════════════════╗
+// ║  ELEMENTI — ADD / REMOVE / UPDATE                         ║
+// ╚═══════════════════════════════════════════════════════════╝
+function addEl(tipo) {
+  const el = { _id: _elId++, tipo, codice: '', descrizione: '', qty: 1, prezzo: 0, iva_pct: 22 };
+  S.elementi.push(el);
+  renderElementi();
+  setTimeout(() => { const d = document.getElementById('el-desc-' + el._id); if(d) d.focus(); }, 40);
+}
+
+function removeEl(id) {
+  S.elementi = S.elementi.filter(e => e._id !== id);
+  renderElementi();
+  aggiornaTotali();
+}
+
+function updEl(id, k, v) {
+  const el = S.elementi.find(e => e._id === id);
+  if (!el) return;
+  el[k] = ['qty','prezzo','iva_pct'].includes(k) ? parseFloat(v) || 0 : v;
+  const cell = document.getElementById('sub-' + id);
+  if (cell) cell.textContent = fmt(subEl(el));
+  aggiornaTotali();
+  markDirty();
+}
+
+function subEl(el) { return el.qty * el.prezzo; }
+
+function chipTipo(t) {
+  const map = { ricambio: ['chip-r','RIC'], servizio: ['chip-s','SRV'], manodopera: ['chip-m','MDO'] };
+  return map[t] || ['',''];
+}
+
+function renderElementi() {
+  const tbody = document.getElementById('elBody');
+  tbody.innerHTML = '';
+
+  S.elementi.forEach(el => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="col-tipo">
+        <select style="font-size:12px;padding:5px 6px" onchange="updEl(${el._id},'tipo',this.value)">
+          <option value="ricambio"   ${el.tipo==='ricambio'  ?'selected':''}>Ricambio</option>
+          <option value="servizio"   ${el.tipo==='servizio'  ?'selected':''}>Servizio</option>
+          <option value="manodopera" ${el.tipo==='manodopera'?'selected':''}>Manodopera</option>
+        </select>
+      </td>
+      <td class="col-cod">
+        <input type="text" placeholder="COD" value="${el.codice}"
+          oninput="updEl(${el._id},'codice',this.value)">
+      </td>
+      <td class="col-desc">
+        <input type="text" id="el-desc-${el._id}" placeholder="Descrizione ricambio o servizio..."
+          value="${el.descrizione}" oninput="updEl(${el._id},'descrizione',this.value)">
+      </td>
+      <td class="col-qty">
+        <input type="number" min="0.01" step="0.01" value="${el.qty}"
+          style="text-align:right" oninput="updEl(${el._id},'qty',this.value)">
+      </td>
+      <td class="col-pz">
+        <input type="number" min="0" step="0.01" value="${el.prezzo}"
+          style="text-align:right" oninput="updEl(${el._id},'prezzo',this.value)">
+      </td>
+      <td class="col-iva">
+        <select style="font-size:12px;padding:5px 6px;text-align:right"
+          onchange="updEl(${el._id},'iva_pct',this.value)">
+          <option value="22" ${el.iva_pct===22?'selected':''}>22%</option>
+          <option value="10" ${el.iva_pct===10?'selected':''}>10%</option>
+          <option value="4"  ${el.iva_pct===4 ?'selected':''}>4%</option>
+          <option value="0"  ${el.iva_pct===0 ?'selected':''}>Esente</option>
+        </select>
+      </td>
+      <td class="col-sub">
+        <span class="sub-cell" id="sub-${el._id}">${fmt(subEl(el))}</span>
+      </td>
+      <td class="col-del">
+        <button class="btn btn-ghost btn-sm danger"
+          onclick="removeEl(${el._id})" title="Rimuovi riga">✕</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('elCount').textContent =
+    S.elementi.length + (S.elementi.length === 1 ? ' elemento' : ' elementi');
+  aggiornaTotali();
+}
+
+// ╔═══════════════════════════════════════════════════════════╗
+// ║  TOTALI                                                   ║
+// ╚═══════════════════════════════════════════════════════════╝
+function aggiornaTotali() {
+  let imp=0, i22=0, i10=0, i4=0;
+  S.elementi.forEach(el => {
+    const s = subEl(el);
+    imp += s;
+    if (el.iva_pct===22) i22 += s * 0.22;
+    else if (el.iva_pct===10) i10 += s * 0.10;
+    else if (el.iva_pct===4)  i4  += s * 0.04;
+  });
+  const tot = imp + i22 + i10 + i4;
+  document.getElementById('tImponibile').textContent = fmt(imp);
+  document.getElementById('tIva22').textContent = fmt(i22);
+  document.getElementById('tIva10').textContent = fmt(i10);
+  document.getElementById('tIva4').textContent  = fmt(i4);
+  document.getElementById('tTotale').textContent = fmt(tot);
+  document.getElementById('r10').style.display = i10 > 0 ? 'flex' : 'none';
+  document.getElementById('r4').style.display  = i4  > 0 ? 'flex' : 'none';
+  S.rap._imp = imp; S.rap._iva = i22+i10+i4; S.rap._tot = tot;
+}
+
+// ╔═══════════════════════════════════════════════════════════╗
+// ║  FOTO                                                     ║
+// ╚═══════════════════════════════════════════════════════════╝
+function onFotoSel(files) {
+  Array.from(files).forEach(file => {
+    if (file.size > 10 * 1024 * 1024) { toast(`File troppo grande: ${file.name}`, 'err'); return; }
+    const reader = new FileReader();
+    reader.onload = e => {
+      S.foto.push({ _id: _fotoId++, url: e.target.result, name: file.name, file });
+      renderFoto();
+    };
+    reader.readAsDataURL(file);
+  });
+  document.getElementById('fotoInput').value = '';
+}
+
+function removeFoto(id) {
+  S.foto = S.foto.filter(f => f._id !== id);
+  renderFoto();
+}
+
+function renderFoto() {
+  const grid = document.getElementById('fotoGrid');
+  grid.innerHTML = '';
+  S.foto.forEach(f => {
+    const d = document.createElement('div');
+    d.className = 'foto-thumb';
+    d.innerHTML = `
+      <img src="${f.url}" alt="${f.name}">
+      <button class="foto-rm" onclick="removeFoto(${f._id})" title="Rimuovi">✕</button>
+      <div class="foto-name">${f.name}</div>
+    `;
+    grid.appendChild(d);
+  });
+  const n = S.foto.length;
+  document.getElementById('fotoCount').textContent = n === 0 ? 'Nessuna foto' : n + ' foto';
+  markDirty();
+}
+
+// ╔═══════════════════════════════════════════════════════════╗
+// ║  MODAL CLIENTE                                            ║
+// ╚═══════════════════════════════════════════════════════════╝
+function apriModal(id) { document.getElementById(id).classList.add('open'); }
+function chiudiModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// Chiudi cliccando overlay
+document.querySelectorAll('.modal-overlay').forEach(o => {
+  o.addEventListener('click', e => { if (e.target === o) o.classList.remove('open'); });
+});
+
+async function cercaCliente(query) {
+  const res = document.getElementById('clienteResults');
+  if (query.length < 2) { res.innerHTML = ''; return; }
+
+  // TODO: ricerca su Supabase
+  // const { data } = await _sb.from('clienti')
+  //   .select()
+  //   .or(`ragione_sociale.ilike.%${query}%,piva.ilike.%${query}%`)
+  //   .limit(10);
+  // renderRisultatiCliente(data);
+
+  // — DEMO: dati fittizi —
+  const demo = [
+    { id:'1', ragione_sociale:'Trasporti Bianchi Srl', piva:'IT01234567890', tipo:'b2b', codice_sdi:'ABCDE12' },
+    { id:'2', ragione_sociale:'Mario Rossi',           cf:'RSSMRA80A01H501U',tipo:'b2c', codice_sdi:'0000000' },
+  ].filter(c => c.ragione_sociale.toLowerCase().includes(query.toLowerCase()) || (c.piva||'').includes(query));
+  renderRisultatiCliente(demo);
+}
+
+function renderRisultatiCliente(lista) {
+  const res = document.getElementById('clienteResults');
+  if (!lista || !lista.length) {
+    res.innerHTML = '<p style="font-size:13px;color:var(--text-muted)">Nessun risultato</p>';
+    return;
+  }
+  res.innerHTML = lista.map(c => `
+    <div onclick="selezionaCliente(${JSON.stringify(c).replace(/"/g,'&quot;')})"
+      style="padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);
+             cursor:pointer;transition:background 0.1s"
+      onmouseover="this.style.background='var(--bg)'"
+      onmouseout="this.style.background=''"
+    >
+      <div style="font-weight:600;font-size:13px">${c.ragione_sociale}</div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:2px">
+        ${c.piva || c.cf || ''} &nbsp;|&nbsp; ${c.tipo === 'b2b' ? 'Azienda' : 'Privato'}
+      </div>
+    </div>
+  `).join('');
+}
+
+function selezionaCliente(c) {
+  Object.assign(S.cliente, c);
+  document.getElementById('cNome').value = c.ragione_sociale;
+  document.getElementById('cPiva').value = c.piva || '';
+  document.getElementById('cCf').value   = c.cf || '';
+  document.getElementById('cSdi').value  = c.codice_sdi || '';
+  document.getElementById('cPec').value  = c.pec || '';
+  document.getElementById('cTipo').value = c.tipo;
+  onTipoClienteChange(c.tipo);
+  chiudiModal('modalCliente');
+  toast(`Cliente selezionato: ${c.ragione_sociale}`, 'ok');
+}
+
+// ╔═══════════════════════════════════════════════════════════╗
+// ║  VALIDAZIONE                                              ║
+// ╚═══════════════════════════════════════════════════════════╝
+function valida() {
+  if (!S.veicolo.targa) {
+    toast('Inserisci la targa del veicolo', 'err'); return false;
+  }
+  if (!S.rap.tecnico) {
+    toast('Seleziona il tecnico', 'err'); return false;
+  }
+  if (!S.cliente.ragione_sociale) {
+    toast('Inserisci i dati del cliente', 'err'); return false;
+  }
+  if (S.elementi.length === 0) {
+    toast('Aggiungi almeno un ricambio o servizio', 'err'); return false;
+  }
+  const incompleti = S.elementi.filter(e => !e.descrizione.trim() || e.prezzo <= 0);
+  if (incompleti.length > 0) {
+    toast(`Completa tutti gli elementi (descrizione e prezzo obbligatori)`, 'err'); return false;
+  }
+  return true;
+}
+
+// ╔═══════════════════════════════════════════════════════════╗
+// ║  SALVA BOZZA                                              ║
+// ╚═══════════════════════════════════════════════════════════╝
+async function salvaBozza() {
+  const payload = buildPayload('bozza');
+
+  console.log('💾 PAYLOAD BOZZA:', payload);
+
+  // ═══ TODO: SUPABASE UPSERT ══════════════════════════════
+  // try {
+  //   // 1. Salva/aggiorna rapportino
+  //   const { data: rap, error: e1 } = await _sb
+  //     .from('rapportini')
+  //     .upsert({ ...payload.rapportino })
+  //     .select().single();
+  //   if (e1) throw e1;
+  //   S.rap.id = rap.id;
+  //
+  //   // 2. Sostituisci elementi
+  //   await _sb.from('elementi').delete().eq('rapportino_id', rap.id);
+  //   if (payload.elementi.length > 0) {
+  //     await _sb.from('elementi').insert(
+  //       payload.elementi.map(e => ({ ...e, rapportino_id: rap.id }))
+  //     );
+  //   }
+  //
+  //   // 3. Upload foto (solo quelle nuove con file != null)
+  //   for (const f of S.foto.filter(f => f.file)) {
+  //     const path = `rapportini/${rap.id}/${Date.now()}_${f.name}`;
+  //     const { error: eF } = await _sb.storage
+  //       .from('foto-riparazioni')
+  //       .upload(path, f.file, { upsert: true });
+  //     if (!eF) {
+  //       await _sb.from('foto').insert({ rapportino_id: rap.id, storage_path: path });
+  //       f.file = null; // già caricata
+  //     }
+  //   }
+  // } catch(err) {
+  //   toast('Errore salvataggio: ' + err.message, 'err');
+  //   return;
+  // }
+  // ════════════════════════════════════════════════════════
+
+  S.salvato = true;
+  aggiornFooter();
+  toast('Bozza salvata', 'ok');
+}
+
+// ╔═══════════════════════════════════════════════════════════╗
+// ║  CHIUDI RAPPORTINO → GENERA FATTURA                       ║
+// ╚═══════════════════════════════════════════════════════════╝
+async function chiudiRapportino() {
+  if (!valida()) return;
+  if (!confirm('Chiudere il rapportino e generare la fattura?')) return;
+
+  const payload = buildPayload('chiuso');
+  console.log('✅ PAYLOAD CHIUSURA:', payload);
+
+  // ═══ TODO: SUPABASE + REDIRECT ══════════════════════════
+  // try {
+  //   const { data: rap, error } = await _sb
+  //     .from('rapportini')
+  //     .upsert({ ...payload.rapportino, stato: 'chiuso' })
+  //     .select().single();
+  //   if (error) throw error;
+  //   // salva elementi e foto come in salvaBozza...
+  //   window.location.href = `fattura.html?rapportino_id=${rap.id}`;
+  // } catch(err) {
+  //   toast('Errore: ' + err.message, 'err');
+  //   return;
+  // }
+  // ════════════════════════════════════════════════════════
+
+  document.getElementById('headerBadge').className = 'badge badge-chiuso';
+  document.getElementById('headerBadge').textContent = 'Chiuso';
+  toast('Rapportino chiuso — apertura modulo fattura...', 'ok');
+
+  setTimeout(() => {
+    alert(
+      '✅ SISTEMA PRONTO\n\n' +
+      'Il prossimo step aprirà fattura.html con il payload:\n\n' +
+      JSON.stringify(payload, null, 2)
+    );
+  }, 800);
+}
+
+// ╔═══════════════════════════════════════════════════════════╗
+// ║  BUILD PAYLOAD                                            ║
+// ╚═══════════════════════════════════════════════════════════╝
+function buildPayload(stato) {
+  return {
+    rapportino: {
+      id:        S.rap.id,
+      numero:    S.rap.numero,
+      data:      S.rap.data,
+      stato,
+      tecnico:   S.rap.tecnico,
+      km:        parseInt(S.rap.km) || 0,
+      note:      S.rap.note,
+      targa:     S.veicolo.targa,
+      modello:   S.veicolo.modello,
+      anno:      S.veicolo.anno,
+      imponibile: S.rap._imp || 0,
+      iva:        S.rap._iva || 0,
+      totale:     S.rap._tot || 0
+    },
+    cliente: { ...S.cliente },
+    elementi: S.elementi.map(({ _id, ...rest }) => rest),
+    n_foto: S.foto.length
+  };
+}
+
+// ╔═══════════════════════════════════════════════════════════╗
+// ║  CARICA DA SUPABASE (stub)                                ║
+// ╚═══════════════════════════════════════════════════════════╝
+async function caricaRapportino(id) {
+  // TODO:
+  // const { data } = await _sb
+  //   .from('rapportini')
+  //   .select('*, elementi(*), foto(*), veicoli(*, clienti(*))')
+  //   .eq('id', id).single();
+  // populaForm(data);
+  console.log('TODO: carica rapportino', id);
+}
+
+async function caricaVeicolo(id) {
+  // TODO:
+  // const { data } = await _sb
+  //   .from('veicoli')
+  //   .select('*, clienti(*)')
+  //   .eq('id', id).single();
+  // populaVeicolo(data);
+  console.log('TODO: carica veicolo', id);
+}
+
+// ╔═══════════════════════════════════════════════════════════╗
+// ║  UI HELPERS                                               ║
+// ╚═══════════════════════════════════════════════════════════╝
+function aggiornFooter() {
+  const el = document.getElementById('footerStato');
+  if (S.salvato) {
+    el.textContent = '✓ Salvato';
+    el.className = 'footer-stato saved';
+  } else {
+    el.textContent = 'Modifiche non salvate';
+    el.className = 'footer-stato';
+  }
+}
+
+function toast(msg, tipo = 'info') {
+  const wrap = document.getElementById('toastWrap');
+  const t = document.createElement('div');
+  t.className = 'toast' + (tipo === 'ok' ? ' ok' : tipo === 'err' ? ' err' : tipo === 'info' ? ' info' : '');
+  t.textContent = msg;
+  wrap.appendChild(t);
+  setTimeout(() => {
+    t.style.opacity = '0';
+    setTimeout(() => t.remove(), 350);
+  }, 3200);
+}
+
+function fmt(n) {
+  return '€\u00a0' + (n||0).toLocaleString('it-IT', {
+    minimumFractionDigits: 2, maximumFractionDigits: 2
+  });
+}
+
+// ─── AVVIO ───────────────────────────────────────────────────
+init();
+
+</script>
+</body>
+</html>
