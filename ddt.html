@@ -114,7 +114,7 @@ textarea{resize:vertical;min-height:70px;line-height:1.6}
 .ai-step{font-size:12px;color:var(--text-l)}
 
 /* TABLES */
-.tbl{width:100%;border-collapse:collapse;min-width:580px}
+.tbl{width:100%;border-collapse:collapse;min-width:680px}
 .tbl th{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-m);padding:9px 10px;text-align:left;border-bottom:1px solid var(--border);background:#F7F6F3;white-space:nowrap}
 .tbl th.r{text-align:right}
 .tbl td{padding:9px 10px;vertical-align:middle;border-bottom:1px solid #F0EDE8;font-size:13px}
@@ -395,14 +395,14 @@ textarea{resize:vertical;min-height:70px;line-height:1.6}
     <div style="overflow-x:auto">
       <table class="tbl" id="tblRighe">
         <thead><tr>
-          <th style="width:100px">Tipo</th>
-          <th style="width:100px">Codice</th>
+          <th style="width:90px">Tipo</th>
+          <th style="width:140px">Codice</th>
           <th>Descrizione</th>
-          <th class="r" style="width:58px">Qtà</th>
+          <th class="r" style="width:55px">Qtà</th>
           <th class="r" style="width:92px">P. listino<br><span style="font-size:9px;font-weight:400;opacity:.7">(al cliente)</span></th>
           <th class="r" style="width:92px">P. unitario<br><span style="font-size:9px;font-weight:400;opacity:.7">(netto acquisto)</span></th>
           <th class="r" style="width:72px">Margine</th>
-          <th style="width:170px">Assegna a</th>
+          <th style="width:160px">Assegna a</th>
           <th style="width:36px"></th>
         </tr></thead>
         <tbody id="righeBody"></tbody>
@@ -657,10 +657,25 @@ const COMMESSE_APERTE = [
   {id:'magazzino',     targa:null,      telaio:null,             label:'🗄 Magazzino (stock generico)'},
 ];
 
-// Normalizza targa formato AA000BB: rimuove tutto tranne alfanumerici, uppercase
+// Normalizza targa: rimuove tutto tranne alfanumerici, uppercase
 function normTarga(t){ return (t||'').replace(/[^A-Z0-9]/gi,'').toUpperCase(); }
 // Normalizza telaio VIN: uppercase, rimuove spazi
 function normTelaio(t){ return (t||'').replace(/\s/g,'').toUpperCase(); }
+
+// Regex robusta per targhe italiane — gestisce tutti i formati reali:
+// AB123CD · AB 123 CD · AB-123-CD · AB  123  CD · [AB123CD] · Targa:AB123CD
+const _REGEX_TARGA = /(?<![A-Z0-9])([A-Z]{2})\s{0,3}([0-9]{3})\s{0,3}([A-Z]{2})(?![A-Z0-9])/gi;
+
+function trovaTargaInTesto(testo){
+  if(!testo) return null;
+  const upper = testo.toUpperCase();
+  const matches = [...upper.matchAll(new RegExp(_REGEX_TARGA.source, 'gi'))];
+  for(const m of matches){
+    const t = (m[1]+m[2]+m[3]).replace(/\s/g,'').toUpperCase();
+    if(/^[A-Z]{2}\d{3}[A-Z]{2}$/.test(t)) return t;
+  }
+  return null;
+}
 
 // Cerca commessa per targa O telaio
 function matchCommessa(targa, telaio){
@@ -813,29 +828,28 @@ async function estraiDDT(base64, mediaType, apiKey){
     .map(c=>[c.targa?`targa ${c.targa}`:'',c.telaio?`telaio ${c.telaio}`:''].filter(Boolean).join(' / ')+` (commessa ${c.id})`)
     .join(', ');
 
-  const prompt = `Sei un sistema di lettura DDT (Documenti di Trasporto) italiani per un'officina veicoli.
-Analizza il documento e restituisci SOLO un oggetto JSON valido, senza markdown, senza backtick, senza testo prima o dopo.
-Struttura richiesta:
+  const prompt = `Sei un sistema di lettura DDT (Documento di Trasporto) italiani per un'officina veicoli.
+Analizza attentamente tutto il documento e restituisci SOLO un oggetto JSON valido, senza markdown, senza backtick, senza testo prima o dopo il JSON.
+Struttura:
 {
-  "fornitore": "nome fornitore",
-  "numero": "numero DDT",
+  "fornitore": "nome del fornitore come appare nel documento",
+  "numero": "numero DDT/documento",
   "data": "YYYY-MM-DD",
-  "ordine": "numero ordine rif. o stringa vuota",
-  "targa": "targa veicolo in formato AA000BB senza spazi, o stringa vuota",
-  "telaio": "VIN/telaio 17 caratteri o stringa vuota",
+  "ordine": "numero ordine di riferimento se presente, altrimenti stringa vuota",
+  "targa": "targa veicolo 7 caratteri SENZA spazi (es. AB123CD), stringa vuota se non trovata",
+  "telaio": "VIN/numero telaio 17 caratteri se presente, altrimenti stringa vuota",
   "righe": [
-    { "codice":"", "descrizione":"", "qty":1, "prezzo":0, "tipo":"ricambio" }
+    { "codice": "codice articolo", "descrizione": "descrizione completa", "qty": 1, "prezzo": 0.00, "tipo": "ricambio" }
   ]
 }
-REGOLE TARGA:
-- Formato italiano: 2 lettere + 3 cifre + 2 lettere (es. AB123CD). Restituiscila SEMPRE senza spazi.
-- Cerca in tutto il documento: intestazione, corpo, riquadri, note, colonne laterali.
-- Etichette comuni: "Targa:", "Veicolo:", "Rif. veicolo:", "Per il veicolo:", "Auto:", "Moto:".
-- Se trovi "AB 123 CD" o "AB-123-CD" restituisci "AB123CD".
-REGOLE TELAIO:
-- 17 caratteri alfanumerici, etichette: "Telaio:", "VIN:", "N. telaio:", "Numero telaio:".
+REGOLE TARGA (IMPORTANTISSIMO):
+La targa è il dato più critico. Cerca in TUTTO il documento: intestazione, tabelle, note, riquadri, corpo testo, piè di pagina.
+Formato targa italiana: 2 lettere + 3 cifre + 2 lettere. Può apparire in questi modi:
+  AB123CD · AB 123 CD · AB-123-CD · Targa: AB123CD · Veicolo: AB 123 CD · [AB123CD] · Per il veicolo AB 123 CD
+Restituisci SEMPRE la targa SENZA spazi né trattini: "AB123CD" non "AB 123 CD".
+Se non trovi la targa dopo una ricerca attenta, restituisci stringa vuota — NON inventare.
 Commesse aperte: ${commesseAperte||'nessuna'}.
-Non inventare dati. Se un campo non è presente usa stringa vuota o 0.`;
+ALTRE REGOLE: tipo = "ricambio", "servizio" o "manodopera". qty sempre positivo. Se un campo manca usa stringa vuota o 0.`;
 
   const res = await fetch('https://api.anthropic.com/v1/messages',{
     method:'POST',
@@ -870,6 +884,22 @@ Non inventare dati. Se un campo non è presente usa stringa vuota o 0.`;
   }
   const clean = match[0];
   const estratto = JSON.parse(clean);
+
+  // ── Post-processing: valida e normalizza la targa ─────────
+  if(estratto.targa){
+    const norm = normTarga(estratto.targa);
+    // Valida formato AA000BB
+    estratto.targa = /^[A-Z]{2}\d{3}[A-Z]{2}$/.test(norm) ? norm : '';
+  }
+  // Fallback: se targa vuota, cercala nel testo grezzo dell'AI
+  if(!estratto.targa){
+    const targaDaTxt = trovaTargaInTesto(txt);
+    if(targaDaTxt){
+      console.log('Targa recuperata dal testo grezzo AI:', targaDaTxt);
+      estratto.targa = targaDaTxt;
+    }
+  }
+
   return { estratto, rawJson: clean };
 }
 
@@ -1072,8 +1102,8 @@ function renderRighe(){
         <option value="servizio"   ${r.tipo==='servizio'  ?'selected':''}>Servizio</option>
         <option value="manodopera" ${r.tipo==='manodopera'?'selected':''}>Manodopera</option>
       </select></td>
-      <td style="${rowBg}"><input type="text" value="${r.codice}" placeholder="Codice" onchange="updRiga(${r._id},'codice',this.value)" style="width:100%"></td>
-      <td style="${rowBg}"><input type="text" value="${r.descrizione}" placeholder="Descrizione *" onchange="updRiga(${r._id},'descrizione',this.value)" style="width:100%"></td>
+      <td style="${rowBg}"><input type="text" value="${r.codice}" placeholder="Codice" onchange="updRiga(${r._id},'codice',this.value)" style="width:100%;font-family:monospace;font-size:12px"></td>
+      <td style="${rowBg}"><input type="text" value="${r.descrizione}" placeholder="Descrizione *" onchange="updRiga(${r._id},'descrizione',this.value)" style="width:100%;min-width:180px"></td>
       <td style="${rowBg}"><input type="number" value="${r.qty}" min="0.01" step="0.01" onchange="updRiga(${r._id},'qty',this.value)" style="text-align:right;width:52px"></td>
       <td style="${rowBg}">
         <input type="number" value="${r.prezzo_listino>0?r.prezzo_listino:''}" min="0" step="0.01" placeholder="0,00"

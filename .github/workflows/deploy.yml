@@ -1,0 +1,69 @@
+# .github/workflows/deploy.yml
+#
+# Viene eseguito automaticamente ad ogni push su main.
+# Se process-ddt-email.ts è cambiato, fa il deploy su Supabase.
+#
+# SETUP (una volta sola):
+# 1. Vai su supabase.com → Account → Access Tokens → Generate new token
+# 2. Vai su github.com → gestionale-auto → Settings → Secrets → Actions
+# 3. Aggiungi secret: SUPABASE_ACCESS_TOKEN = il token copiato al punto 1
+
+name: Deploy Gestionale Auto
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+
+  # ── Deploy Edge Function se è cambiata ─────────────────────
+  deploy-edge-function:
+    name: Deploy Edge Function Supabase
+    runs-on: ubuntu-latest
+
+    # Esegui solo se process-ddt-email.ts è cambiato
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Controlla se Edge Function è cambiata
+        id: check
+        run: |
+          if git diff --name-only HEAD~1 HEAD | grep -q "process-ddt-email.ts"; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Edge Function modificata — deploy in corso..."
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "Edge Function non modificata — skip."
+          fi
+
+      - name: Setup Supabase CLI
+        if: steps.check.outputs.changed == 'true'
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Deploy Edge Function
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          supabase functions deploy process-ddt-email \
+            --no-verify-jwt \
+            --project-ref iztrrgqkzsovorcmixum
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+  # ── Notifica risultato ──────────────────────────────────────
+  notify:
+    name: Riepilogo deploy
+    runs-on: ubuntu-latest
+    needs: deploy-edge-function
+    if: always()
+    steps:
+      - name: Stato
+        run: |
+          echo "======================================"
+          echo "  Deploy completato"
+          echo "  Sito: https://pegghiu.github.io/gestionale-auto/"
+          echo "======================================"

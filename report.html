@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Report Efficienza Officina</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --accent:#534AB7;--accent-l:#EEEDFE;
+  --dark:#1A1A1A;--surface:#FFF;--bg:#EDEBE6;
+  --border:#DEDAD4;--border-dk:#C4C0B8;
+  --text:#1A1A1A;--text-m:#706C65;--text-l:#9A9690;
+  --ok:#1F7A35;--ok-bg:#E6F5EB;
+  --warn:#7A5000;--warn-bg:#FFF8E6;
+  --err:#B82020;--err-bg:#FDECEC;
+  --info:#1A4FAA;--info-bg:#EBF0FD;
+  --r:8px;--rs:5px;--sh:0 1px 3px rgba(0,0,0,.07)
+}
+body{font-family:'Helvetica Neue',Arial,-apple-system,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;min-height:100vh}
+.hdr{background:var(--dark);color:#FFF;height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;position:sticky;top:0;z-index:100}
+.hdr-l{display:flex;align-items:center;gap:20px}
+.brand{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.4)}
+.hdr-title{font-size:15px;font-weight:600}
+.btn-back{background:transparent;border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.7);padding:5px 12px;border-radius:var(--rs);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s}
+.btn-back:hover{background:rgba(255,255,255,.08);color:#FFF}
+.page{max-width:1060px;margin:0 auto;padding:24px 16px 60px;display:flex;flex-direction:column;gap:16px}
+.card{background:var(--surface);border-radius:var(--r);border:1px solid var(--border);box-shadow:var(--sh);overflow:hidden}
+.ch{padding:11px 20px;border-bottom:1px solid var(--border);background:#F7F6F3;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.ct{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-m)}
+.cb{padding:18px 20px}
+
+/* FILTRI */
+.filtri{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.filtri select,.filtri input{padding:7px 11px;border:1px solid var(--border);border-radius:var(--rs);font-size:13px;font-family:inherit;background:#FFF;color:var(--text);outline:none}
+.filtri select:focus,.filtri input:focus{border-color:var(--accent)}
+
+/* KPI STRIP */
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;box-shadow:var(--sh)}
+.kpi-val{font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1;margin-bottom:3px}
+.kpi-lbl{font-size:10px;color:var(--text-m);font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.kpi-sub{font-size:11px;color:var(--text-l);margin-top:2px}
+.kpi.ok .kpi-val{color:var(--ok)}
+.kpi.warn .kpi-val{color:var(--warn)}
+.kpi.err .kpi-val{color:var(--err)}
+.kpi.info .kpi-val{color:var(--info)}
+.kpi.purple .kpi-val{color:var(--accent)}
+
+/* GAUGE EFFICIENZA */
+.gauge-wrap{display:flex;align-items:center;justify-content:center;padding:24px}
+.gauge{position:relative;width:160px;height:80px;overflow:hidden}
+.gauge canvas{position:absolute;top:0;left:0}
+.gauge-val{position:absolute;bottom:0;left:50%;transform:translateX(-50%);font-size:28px;font-weight:800;text-align:center;width:100%}
+.gauge-lbl{text-align:center;font-size:11px;color:var(--text-m);font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin-top:6px}
+
+/* TABELLA DETTAGLIO */
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-m);padding:9px 12px;text-align:left;border-bottom:1px solid var(--border);background:#F7F6F3;white-space:nowrap}
+.tbl th.r{text-align:right}
+.tbl td{padding:9px 12px;border-bottom:1px solid #F0EDE8;font-size:13px;vertical-align:middle}
+.tbl tbody tr:last-child td{border-bottom:none}
+.tbl tbody tr:hover td{background:#FAFAF8}
+.tbl td.r{text-align:right;font-variant-numeric:tabular-nums}
+.eff-pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700}
+.eff-ok{background:var(--ok-bg);color:var(--ok)}
+.eff-warn{background:var(--warn-bg);color:var(--warn)}
+.eff-err{background:var(--err-bg);color:var(--err)}
+.delta-pos{color:var(--ok);font-weight:700}
+.delta-neg{color:var(--err);font-weight:700}
+
+/* CHART */
+.chart-wrap{padding:16px 20px;height:280px;position:relative}
+
+/* TAB */
+.tabs{display:flex;border-bottom:1px solid var(--border);background:#F7F6F3}
+.tab{padding:10px 20px;font-size:13px;font-weight:600;font-family:inherit;border:none;border-bottom:2px solid transparent;background:transparent;cursor:pointer;color:var(--text-m);transition:all .15s}
+.tab.on{color:var(--accent);border-bottom-color:var(--accent);background:var(--surface)}
+.tab:hover:not(.on){color:var(--text)}
+
+/* LEGENDA */
+.legenda{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--text-m);padding:8px 20px;border-top:1px solid var(--border);background:#F7F6F3}
+.leg-item{display:flex;align-items:center;gap:6px}
+.leg-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+
+@media(max-width:760px){.kpis{grid-template-columns:1fr 1fr}}
+@media(max-width:480px){.kpis{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="hdr-l">
+    <span class="brand">Officina</span>
+    <span class="hdr-title">Report Efficienza</span>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center">
+    <div class="filtri">
+      <select id="fAnno" onchange="caricaDati()">
+        <option value="2026">2026</option>
+        <option value="2025">2025</option>
+        <option value="2024">2024</option>
+      </select>
+      <select id="fMese" onchange="caricaDati()">
+        <option value="">Tutto l'anno</option>
+        <option value="1">Gennaio</option>
+        <option value="2">Febbraio</option>
+        <option value="3">Marzo</option>
+        <option value="4">Aprile</option>
+        <option value="5">Maggio</option>
+        <option value="6">Giugno</option>
+        <option value="7">Luglio</option>
+        <option value="8">Agosto</option>
+        <option value="9">Settembre</option>
+        <option value="10">Ottobre</option>
+        <option value="11">Novembre</option>
+        <option value="12">Dicembre</option>
+      </select>
+      <select id="fTipo" onchange="caricaDati()">
+        <option value="">Tutti i tipi</option>
+        <option value="CA">-CA · Da pagare</option>
+        <option value="CP">-CP · Pagata non fatturata</option>
+        <option value="V">-V · Vendita</option>
+        <option value="R">-R · Scontrino</option>
+        <option value="F">-F · Fatturata</option>
+        <option value="FF">-FF · Fatturata altro veicolo</option>
+      </select>
+      <select id="fTecnico" onchange="caricaDati()">
+        <option value="">Tutti gli operatori</option>
+        <option>Davide</option>
+        <option>Cristian</option>
+        <option>Ivan</option>
+        <option>Marco</option>
+        <option>Luca</option>
+        <option>Stagista</option>
+      </select>
+    </div>
+    <button class="btn-back" onclick="location.href='index.html'">← Menu</button>
+  </div>
+</header>
+
+<div class="page">
+
+  <!-- KPI ─────────────────────────────────────────────────── -->
+  <div class="kpis">
+    <div class="kpi purple">
+      <div class="kpi-val" id="kEff">—</div>
+      <div class="kpi-lbl">Efficienza media</div>
+      <div class="kpi-sub" id="kEffSub"></div>
+    </div>
+    <div class="kpi ok">
+      <div class="kpi-val" id="kHDich">—</div>
+      <div class="kpi-lbl">Ore dichiarate</div>
+    </div>
+    <div class="kpi info">
+      <div class="kpi-val" id="kHRic">—</div>
+      <div class="kpi-lbl">Ore riconosciute</div>
+    </div>
+    <div class="kpi" id="kDeltaCard">
+      <div class="kpi-val" id="kDelta">—</div>
+      <div class="kpi-lbl">Delta ore</div>
+      <div class="kpi-sub" id="kDeltaSub"></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val" id="kSchede">—</div>
+      <div class="kpi-lbl">Schede con rettifica</div>
+    </div>
+  </div>
+
+  <!-- GRAFICO ─────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="tabs">
+      <button class="tab on" onclick="switchTab('mensile',this)">Andamento mensile</button>
+      <button class="tab"    onclick="switchTab('operatori',this)">Per operatore</button>
+      <button class="tab"    onclick="switchTab('delta',this)">Delta ore</button>
+    </div>
+    <div id="tab-mensile">
+      <div class="chart-wrap"><canvas id="chartMensile"></canvas></div>
+      <div class="legenda">
+        <div class="leg-item"><div class="leg-dot" style="background:#534AB7"></div>Ore riconosciute</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#9FE1CB"></div>Ore dichiarate</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#EF9F27"></div>Efficienza %</div>
+      </div>
+    </div>
+    <div id="tab-operatori" style="display:none">
+      <div class="chart-wrap"><canvas id="chartOperatori"></canvas></div>
+      <div class="legenda">
+        <div class="leg-item"><div class="leg-dot" style="background:#534AB7"></div>Ore riconosciute per operatore</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#9FE1CB"></div>Ore dichiarate per operatore</div>
+      </div>
+    </div>
+    <div id="tab-delta" style="display:none">
+      <div class="chart-wrap"><canvas id="chartDelta"></canvas></div>
+      <div class="legenda">
+        <div class="leg-item"><div class="leg-dot" style="background:#1F7A35"></div>Delta positivo (riconosciute > dichiarate)</div>
+        <div class="leg-item"><div class="leg-dot" style="background:#B82020"></div>Delta negativo (riconosciute < dichiarate)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DETTAGLIO SCHEDE ────────────────────────────────────── -->
+  <div class="card">
+    <div class="ch">
+      <span class="ct">Dettaglio schede con rettifica</span>
+      <span id="detCount" style="font-size:11px;color:var(--text-m)"></span>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="tbl" id="tblDet">
+        <thead><tr>
+          <th>Data chiusura</th>
+          <th>Scheda</th>
+          <th>Veicolo</th>
+          <th>Tecnico resp.</th>
+          <th class="r">Ore dichiarate</th>
+          <th class="r">Ore riconosciute</th>
+          <th class="r">Delta</th>
+          <th class="r">Efficienza</th>
+          <th>Motivazione</th>
+        </tr></thead>
+        <tbody id="detBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- RIEPILOGO ANNUALE PER OPERATORE ────────────────────── -->
+  <div class="card">
+    <div class="ch"><span class="ct">Riepilogo annuale per operatore</span></div>
+    <div style="overflow-x:auto">
+      <table class="tbl" id="tblOp">
+        <thead><tr>
+          <th>Operatore</th>
+          <th class="r">Ore dichiarate</th>
+          <th class="r">Ore riconosciute</th>
+          <th class="r">Delta totale</th>
+          <th class="r">Efficienza media</th>
+          <th class="r">N° schede</th>
+        </tr></thead>
+        <tbody id="opBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const SUPABASE_URL = 'https://iztrrgqkzsovorcmixum.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml6dHJyZ3FrenNvdm9yY21peHVtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMDI3NzMsImV4cCI6MjA4OTc3ODc3M30.3IyUCDpFs9x_iSi5C4asodt5_O3F_cwgdb3eBkoQh3U';
+const _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ── Dati demo (in prod: Supabase) ─────────────────────────
+const DEMO = [
+  {data:'2026-01-15',scheda:'SCH-2026-0001',targa:'AB123CD',modello:'Fiat Ducato',tecnico:'Davide',   h_dich:6,  h_ric:5.5, motivazione:'Lavori più rapidi del previsto'},
+  {data:'2026-01-22',scheda:'SCH-2026-0002',targa:'FG456EF',modello:'VW Transit',  tecnico:'Cristian', h_dich:8,  h_ric:10,  motivazione:'Problema aggiuntivo su freni posteriori'},
+  {data:'2026-02-03',scheda:'SCH-2026-0003',targa:'FD890RC',modello:'Fiat Panda',  tecnico:'Ivan',     h_dich:4,  h_ric:3.5, motivazione:'Diagnosi rapida'},
+  {data:'2026-02-18',scheda:'SCH-2026-0004',targa:'CC345NG',modello:'VW Lupo',     tecnico:'Davide',   h_dich:12, h_ric:14,  motivazione:'Ricambi arrivati in ritardo, ore di attesa'},
+  {data:'2026-03-05',scheda:'SCH-2026-0005',targa:'AB123CD',modello:'Fiat Ducato', tecnico:'Marco',    h_dich:5,  h_ric:5,   motivazione:''},
+  {data:'2026-03-19',scheda:'SCH-2026-0006',targa:'FG456EF',modello:'VW Transit',  tecnico:'Luca',     h_dich:7,  h_ric:6,   motivazione:'Operatore esperto, lavoro veloce'},
+  {data:'2026-04-02',scheda:'SCH-2026-0007',targa:'FD890RC',modello:'Fiat Panda',  tecnico:'Cristian', h_dich:9,  h_ric:11,  motivazione:'Centralina da riprogrammare, non previsto'},
+  {data:'2026-04-07',scheda:'SCH-2026-0008',targa:'FV535JH',modello:'Iveco Daily', tecnico:'Ivan',     h_dich:6,  h_ric:5,   motivazione:'Tutto regolare'},
+];
+
+let _charts = {};
+let _dati = [];
+
+// ── Init ──────────────────────────────────────────────────
+function init(){
+  document.getElementById('fAnno').value = new Date().getFullYear();
+  const m = new Date().getMonth()+1;
+  // Di default mostra tutto l'anno
+  caricaDati();
+}
+
+async function caricaDati(){
+  const anno   = document.getElementById('fAnno').value;
+  const mese   = document.getElementById('fMese').value;
+  const tipo   = document.getElementById('fTipo')?.value || '';
+  const tecnico= document.getElementById('fTecnico').value;
+
+  // ─── TODO Supabase ──────────────────────────────────────
+  // const query = _sb.from('rapportini')
+  //   .select('numero,data,targa,modello,tecnico,ore_dichiarate,ore_riconosciute,ore_delta,efficienza_pct,motivazione_rettifica')
+  //   .not('ore_riconosciute','is',null)
+  //   .gte('data', `${anno}-01-01`)
+  //   .lte('data', `${anno}-12-31`);
+  // if(mese) query.gte('data',`${anno}-${mese.padStart(2,'0')}-01`).lte('data',`${anno}-${mese.padStart(2,'0')}-31`);
+  // if(tecnico) query.eq('tecnico', tecnico);
+  // const { data } = await query;
+  // _dati = data||[];
+  // ────────────────────────────────────────────────────────
+
+  // Filtra demo
+  _dati = DEMO.filter(d=>{
+    if(!d.data.startsWith(anno)) return false;
+    if(mese && !d.data.startsWith(`${anno}-${mese.padStart(2,'0')}`)) return false;
+    if(tipo && d.tipo!==tipo) return false;
+    if(tecnico && d.tecnico!==tecnico) return false;
+    return true;
+  });
+
+  renderKpi();
+  renderGrafici();
+  renderDettaglio();
+  renderOperatori();
+}
+
+// ── KPI ───────────────────────────────────────────────────
+function renderKpi(){
+  const hDich = _dati.reduce((s,d)=>s+d.h_dich,0);
+  const hRic  = _dati.reduce((s,d)=>s+d.h_ric,0);
+  const delta = hRic-hDich;
+  const eff   = hDich>0 ? Math.round((hRic/hDich)*100) : 0;
+
+  document.getElementById('kHDich').textContent = fmtH(hDich);
+  document.getElementById('kHRic').textContent  = fmtH(hRic);
+  document.getElementById('kSchede').textContent= _dati.length;
+
+  const kEff = document.getElementById('kEff');
+  kEff.textContent = eff+'%';
+  kEff.parentElement.className = 'kpi ' + (eff>=90?'ok':eff>=70?'warn':'err');
+  document.getElementById('kEffSub').textContent =
+    eff>=90?'Ottima efficienza':eff>=70?'Efficienza nella norma':'Attenzione: bassa efficienza';
+
+  const kDelta = document.getElementById('kDelta');
+  const segno  = delta>=0?'+':'';
+  kDelta.textContent = segno+fmtH(delta);
+  kDelta.parentElement.className = 'kpi '+(delta>=0?'ok':'err');
+  document.getElementById('kDeltaSub').textContent =
+    delta>0?'Ore extra riconosciute':delta<0?'Ore in meno riconosciute':'Nessuna differenza';
+}
+
+// ── GRAFICI ───────────────────────────────────────────────
+function renderGrafici(){
+  renderGraficoMensile();
+  renderGraficoOperatori();
+  renderGraficoDelta();
+}
+
+function renderGraficoMensile(){
+  const MESI = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+  const byM  = Array.from({length:12},(_,i)=>_dati.filter(d=>parseInt(d.data.slice(5,7))===i+1));
+
+  const hDich = byM.map(m=>round1(m.reduce((s,d)=>s+d.h_dich,0)));
+  const hRic  = byM.map(m=>round1(m.reduce((s,d)=>s+d.h_ric,0)));
+  const eff   = byM.map((m,i)=>hDich[i]>0?Math.round((hRic[i]/hDich[i])*100):null);
+
+  destroyChart('chartMensile');
+  const ctx = document.getElementById('chartMensile').getContext('2d');
+  _charts.mensile = new Chart(ctx,{
+    type:'bar',
+    data:{
+      labels: MESI,
+      datasets:[
+        {label:'Ore riconosciute',data:hRic, backgroundColor:'#534AB7',borderRadius:4,yAxisID:'y'},
+        {label:'Ore dichiarate',  data:hDich,backgroundColor:'#9FE1CB',borderRadius:4,yAxisID:'y'},
+        {label:'Efficienza %',    data:eff,  type:'line',borderColor:'#EF9F27',backgroundColor:'transparent',
+         pointBackgroundColor:'#EF9F27',tension:.3,yAxisID:'y2',spanGaps:true},
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        y:{title:{display:true,text:'Ore',font:{size:11}},beginAtZero:true,grid:{color:'#F0EDE8'}},
+        y2:{position:'right',min:0,max:150,title:{display:true,text:'%',font:{size:11}},grid:{display:false},
+            ticks:{callback:v=>v+'%'}}
+      }
+    }
+  });
+}
+
+function renderGraficoOperatori(){
+  const ops = [...new Set(_dati.map(d=>d.tecnico))].sort();
+  const hDich= ops.map(op=>round1(_dati.filter(d=>d.tecnico===op).reduce((s,d)=>s+d.h_dich,0)));
+  const hRic = ops.map(op=>round1(_dati.filter(d=>d.tecnico===op).reduce((s,d)=>s+d.h_ric,0)));
+
+  destroyChart('chartOperatori');
+  const ctx = document.getElementById('chartOperatori').getContext('2d');
+  _charts.operatori = new Chart(ctx,{
+    type:'bar',
+    data:{
+      labels:ops,
+      datasets:[
+        {label:'Ore riconosciute',data:hRic, backgroundColor:'#534AB7',borderRadius:4},
+        {label:'Ore dichiarate',  data:hDich,backgroundColor:'#9FE1CB',borderRadius:4},
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{y:{beginAtZero:true,grid:{color:'#F0EDE8'}}}
+    }
+  });
+}
+
+function renderGraficoDelta(){
+  const MESI=['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+  const byM = Array.from({length:12},(_,i)=>_dati.filter(d=>parseInt(d.data.slice(5,7))===i+1));
+  const delta= byM.map(m=>round1(m.reduce((s,d)=>s+(d.h_ric-d.h_dich),0)));
+  const colors= delta.map(v=>v>=0?'rgba(31,122,53,.7)':'rgba(184,32,32,.7)');
+
+  destroyChart('chartDelta');
+  const ctx = document.getElementById('chartDelta').getContext('2d');
+  _charts.delta = new Chart(ctx,{
+    type:'bar',
+    data:{labels:MESI, datasets:[{label:'Delta ore',data:delta,backgroundColor:colors,borderRadius:4}]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        y:{grid:{color:'#F0EDE8'},ticks:{callback:v=>(v>0?'+':'')+v+'h'}},
+        x:{grid:{display:false}}
+      }
+    }
+  });
+}
+
+function destroyChart(id){
+  if(_charts[id.replace('chart','').toLowerCase()]){
+    _charts[id.replace('chart','').toLowerCase()].destroy();
+  }
+}
+
+// ── DETTAGLIO ─────────────────────────────────────────────
+function renderDettaglio(){
+  const lista = _dati.filter(d=>d.h_dich!==d.h_ric);
+  document.getElementById('detCount').textContent =
+    lista.length+' schede con rettifica';
+
+  const tbody = document.getElementById('detBody');
+  tbody.innerHTML = lista.length ? lista.sort((a,b)=>b.data.localeCompare(a.data)).map(d=>{
+    const delta = d.h_ric-d.h_dich;
+    const eff   = Math.round((d.h_ric/d.h_dich)*100);
+    const effCls= eff>=90?'eff-ok':eff>=70?'eff-warn':'eff-err';
+    const deltaCls= delta>=0?'delta-pos':'delta-neg';
+    return `<tr>
+      <td style="color:var(--text-m);white-space:nowrap">${fmtData(d.data)}</td>
+      <td style="font-family:monospace;font-size:11px">${d.scheda}</td>
+      <td><div style="font-weight:600">${d.targa}</div><div style="font-size:11px;color:var(--text-m)">${d.modello}</div></td>
+      <td>${d.tecnico}</td>
+      <td class="r">${fmtH(d.h_dich)}</td>
+      <td class="r">${fmtH(d.h_ric)}</td>
+      <td class="r"><span class="${deltaCls}">${delta>=0?'+':''}${fmtH(delta)}</span></td>
+      <td class="r"><span class="eff-pill ${effCls}">${eff}%</span></td>
+      <td style="font-size:12px;color:var(--text-m);max-width:220px">${d.motivazione||'—'}</td>
+    </tr>`;
+  }).join('') :
+  '<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-l)">Nessuna scheda con rettifica nel periodo selezionato</td></tr>';
+}
+
+// ── RIEPILOGO OPERATORI ───────────────────────────────────
+function renderOperatori(){
+  const ops = ['Davide','Cristian','Ivan','Marco','Luca','Stagista'];
+  const tbody = document.getElementById('opBody');
+  tbody.innerHTML = ops.map(op=>{
+    const righe = _dati.filter(d=>d.tecnico===op);
+    if(!righe.length) return '';
+    const hDich= round1(righe.reduce((s,d)=>s+d.h_dich,0));
+    const hRic = round1(righe.reduce((s,d)=>s+d.h_ric,0));
+    const delta= round1(hRic-hDich);
+    const eff  = hDich>0?Math.round((hRic/hDich)*100):null;
+    const effCls= eff>=90?'eff-ok':eff>=70?'eff-warn':'eff-err';
+    const deltaCls= delta>=0?'delta-pos':'delta-neg';
+    return `<tr>
+      <td style="font-weight:600">${op}</td>
+      <td class="r">${fmtH(hDich)}</td>
+      <td class="r">${fmtH(hRic)}</td>
+      <td class="r"><span class="${deltaCls}">${delta>=0?'+':''}${fmtH(delta)}</span></td>
+      <td class="r">${eff!==null?`<span class="eff-pill ${effCls}">${eff}%</span>`:'—'}</td>
+      <td class="r">${righe.length}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-l)">Nessun dato</td></tr>';
+}
+
+// ── TAB SWITCH ────────────────────────────────────────────
+function switchTab(name, btn){
+  ['mensile','operatori','delta'].forEach(t=>{
+    document.getElementById('tab-'+t).style.display = t===name?'':'none';
+  });
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+}
+
+// ── UTILS ─────────────────────────────────────────────────
+function fmtH(h){
+  if(!h&&h!==0)return'—';
+  const pos=Math.abs(h);
+  const s=Number.isInteger(pos)?pos+'h':pos.toFixed(1).replace('.',',')+'h';
+  return (h<0?'-':'')+s;
+}
+function fmtData(d){
+  try{return new Date(d).toLocaleDateString('it-IT',{day:'2-digit',month:'short',year:'2-digit'});}
+  catch{return d;}
+}
+function round1(n){return Math.round(n*10)/10;}
+
+init();
+</script>
+</body>
+</html>
