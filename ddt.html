@@ -923,7 +923,8 @@ function mostraRighe(dati){
   (dati.righe||[]).forEach(r=>DR.righe.push({
     _id:_rigaId++, codice:r.codice||'', descrizione:r.descrizione||'',
     qty: parseFloat(r.qty)||1, prezzo:parseFloat(r.prezzo)||0,
-    prezzo_listino: parseFloat(r.prezzo_listino)||0,
+    // Se listino mancante usa prezzo fornitore come partenza (modificabile)
+    prezzo_listino: parseFloat(r.prezzo_listino)||parseFloat(r.prezzo)||0,
     tipo:r.tipo||'ricambio', assegna: assegnaDefault
   }));
 
@@ -1069,7 +1070,10 @@ function renderRighe(){
   if(avviso){
     if(senzaListino>0){
       avviso.style.display='';
-      avviso.innerHTML = `⛔ <strong>${senzaListino} ricambio${senzaListino>1?'i':''}</strong> senza prezzo listino — <strong>la conferma è bloccata</strong> finché non li compili tutti.`;
+      avviso.innerHTML = `⚠ <strong>${senzaListino} ricambio${senzaListino>1?'i':''}</strong> con prezzo listino uguale al prezzo fornitore — aggiorna il prezzo cliente prima di confermare.`;
+      avviso.style.background = 'var(--warn-bg)';
+      avviso.style.color = 'var(--warn)';
+      avviso.style.border = '1px solid #E8C97A';
     } else {
       avviso.style.display='none';
     }
@@ -1167,13 +1171,13 @@ function confermaDDT(){
 
   const isReso = DR.tipo_movimento === 'reso';
 
-  // Blocca se mancano prezzi listino su ricambi
+  // Prezzo listino mancante: avvisa ma non blocca — pre-popola con prezzo fornitore
   const senzaListino = DR.righe.filter(r => r.tipo==='ricambio' && r.prezzo_listino<=0);
   if(senzaListino.length > 0){
-    toast(`Inserisci il prezzo listino per ${senzaListino.length} ricambio${senzaListino.length>1?'i':''}`, 'err');
-    // Scroll alla prima riga mancante
+    // Pre-popola il listino con il prezzo fornitore come base
+    senzaListino.forEach(r => { if(r.prezzo>0) r.prezzo_listino = r.prezzo; });
     renderRighe();
-    return;
+    if(!confirm(`⚠ ${senzaListino.length} ricambio${senzaListino.length>1?'i':''} senza prezzo listino.\n\nHo impostato il prezzo fornitore come base — aggiornalo prima di confermare.\n\nConfermi comunque?`)) return;
   }
 
   // Conferma esplicita per i resi
@@ -1315,23 +1319,36 @@ async function pollEmailQueue(){
 
     if(error) throw error;
 
-    EMAIL_QUEUE = (data||[]).map(d=>({
-      id:           d.id,
-      created_at:   d.created_at,
-      email_da:     d.email_da,
-      email_oggetto:d.email_oggetto,
-      stato:        d.stato,
-      errore:       d.errore,
-      targa:        d.targa_estratta || d.ddt_estratto?.targa || '',
-      telaio:       d.ddt_estratto?.telaio || '',
-      modello:      d.ddt_estratto?.modello || '',
-      fornitore:    d.ddt_estratto?.fornitore || '',
-      numero_ddt:   d.ddt_estratto?.numero || '',
-      data_ddt:     d.ddt_estratto?.data || '',
-      n_righe:      (d.ddt_estratto?.righe||[]).length,
-      righe:        d.ddt_estratto?.righe || [],
-      ddt_estratto: d.ddt_estratto
-    }));
+    EMAIL_QUEUE = (data||[]).map(d=>{
+      // Estrai targa da più posti possibili per compatibilità con vecchie DDT
+      const ddt = d.ddt_estratto || {};
+      const targa = normTarga(
+        d.targa_estratta ||
+        ddt.targa ||
+        ddt.targa_estratta ||
+        trovaTargaInTesto(d.email_oggetto||'') ||
+        ''
+      );
+      const targaValida = /^[A-Z]{2}\d{3}[A-Z]{2}$/.test(targa) ? targa : (targa||'');
+
+      return {
+        id:           d.id,
+        created_at:   d.created_at,
+        email_da:     d.email_da,
+        email_oggetto:d.email_oggetto,
+        stato:        d.stato,
+        errore:       d.errore,
+        targa:        targaValida,
+        telaio:       ddt.telaio || '',
+        modello:      ddt.modello || '',
+        fornitore:    ddt.fornitore || d.email_da || '',
+        numero_ddt:   ddt.numero || '',
+        data_ddt:     ddt.data || '',
+        n_righe:      (ddt.righe||[]).length,
+        righe:        ddt.righe || [],
+        ddt_estratto: ddt
+      };
+    });
 
     renderEmailQueue();
   } catch(e){
