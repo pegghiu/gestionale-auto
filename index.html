@@ -303,8 +303,23 @@ body{
 
   <div class="modules">
 
-    <!-- Rapportino -->
-    <a href="rapportino.html" class="mod mod-rap">
+    <!-- Scheda di lavoro -->
+    <a href="scheda.html" class="mod" style="border-top:3px solid var(--accent)">
+      <div class="mod-top">
+        <div class="mod-icon" style="background:var(--accent-l,#FFF3EC);color:var(--accent)">🔧</div>
+        <span class="mod-badge" style="background:var(--accent-l,#FFF3EC);color:var(--accent)">Lavori</span>
+      </div>
+      <div class="mod-body">
+        <div class="mod-title">Scheda di lavoro</div>
+        <div class="mod-desc">Apri una scheda riparazione, aggiungi sintomi, ricambi e servizi. Stampa il PDF per il cliente.</div>
+      </div>
+      <div class="mod-footer">
+        <span class="mod-stat"><strong id="mRapAperti">—</strong> aperte</span>
+        <span class="mod-cta">Nuova scheda →</span>
+      </div>
+    </a>
+
+    <!-- Fattura -->
       <div class="mod-top">
         <div class="mod-icon">🔧</div>
         <span class="mod-badge" style="background:var(--blue-l);color:var(--blue)">Riparazioni</span>
@@ -351,9 +366,23 @@ body{
       </div>
     </a>
 
-  </div>
+    <!-- Report efficienza -->
+    <a href="report.html" class="mod" style="border-top:3px solid #534AB7">
+      <div class="mod-top">
+        <div class="mod-icon" style="background:#EEEDFE;color:#534AB7;font-size:20px">📊</div>
+        <span class="mod-badge" style="background:#EEEDFE;color:#534AB7">Analisi</span>
+      </div>
+      <div class="mod-body">
+        <div class="mod-title">Report efficienza</div>
+        <div class="mod-desc">Ore dichiarate vs riconosciute, delta mensile e annuale, KPI per operatore.</div>
+      </div>
+      <div class="mod-footer">
+        <span class="mod-stat">Mensile &amp; annuale</span>
+        <span class="mod-cta">Apri report →</span>
+      </div>
+    </a>
 
-  <!-- Attività recente -->
+  </div>
   <div class="section-head">
     <span class="section-title">Attività recente</span>
     <a href="rapportino.html" class="section-link">Vedi tutto →</a>

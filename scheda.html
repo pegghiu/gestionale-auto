@@ -1,0 +1,1209 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scheda di Lavoro</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+
+<!-- ═══ PRINT STYLES ════════════════════════════════════════ -->
+<style id="printCSS">
+@media print {
+  body * { visibility: hidden !important; }
+  #printDoc, #printDoc * { visibility: visible !important; }
+  #printDoc {
+    position: fixed !important;
+    top: 0 !important; left: 0 !important;
+    width: 210mm !important;
+    margin: 0 !important; padding: 12mm 14mm !important;
+    font-family: 'Helvetica Neue', Arial, sans-serif !important;
+    font-size: 9.5pt !important;
+    background: #FFF !important; color: #111 !important;
+  }
+  .no-print { display: none !important; }
+  .print-break { page-break-before: always; }
+}
+</style>
+
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --accent:#E85A00;--accent-d:#C04800;--accent-l:#FFF3EC;
+  --dark:#1A1A1A;--surface:#FFF;--bg:#EDEBE6;
+  --border:#DEDAD4;--border-dk:#C4C0B8;
+  --text:#1A1A1A;--text-m:#706C65;--text-l:#9A9690;
+  --ok:#1F7A35;--ok-bg:#E6F5EB;
+  --warn:#7A5000;--warn-bg:#FFF8E6;
+  --err:#B82020;--err-bg:#FDECEC;
+  --info:#1A4FAA;--info-bg:#EBF0FD;
+  --r:8px;--rs:5px;--sh:0 1px 3px rgba(0,0,0,0.07)
+}
+body{font-family:'Helvetica Neue',Arial,-apple-system,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;min-height:100vh}
+
+/* ── HEADER ─────────────────────────────────────────────── */
+.hdr{background:var(--dark);color:#FFF;height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;position:sticky;top:0;z-index:200}
+.hdr-left{display:flex;align-items:center;gap:20px}
+.brand{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.45)}
+.doc-num{font-size:15px;font-weight:600}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase}
+.badge::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor}
+.b-bozza {background:rgba(255,255,255,.1);color:rgba(255,255,255,.5)}
+.b-aperta{background:var(--warn-bg);color:var(--warn)}
+.b-chiusa{background:var(--ok-bg);color:var(--ok)}
+.btn-back{background:transparent;border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.7);padding:5px 12px;border-radius:var(--rs);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s}
+.btn-back:hover{background:rgba(255,255,255,.08);color:#FFF}
+
+/* ── PAGE ────────────────────────────────────────────────── */
+.page{max-width:960px;margin:0 auto;padding:22px 16px 100px;display:flex;flex-direction:column;gap:14px}
+
+/* ── CARD ────────────────────────────────────────────────── */
+.card{background:var(--surface);border-radius:var(--r);border:1px solid var(--border);box-shadow:var(--sh);overflow:hidden}
+.ch{padding:11px 20px;border-bottom:1px solid var(--border);background:#F7F6F3;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.ct{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-m)}
+.cb{padding:18px 20px}
+
+/* ── GRID ────────────────────────────────────────────────── */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.g4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:14px}
+.sp2{grid-column:span 2}
+.sp3{grid-column:span 3}
+.gt{margin-top:14px}
+
+/* ── FORM ────────────────────────────────────────────────── */
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-m)}
+input[type=text],input[type=number],input[type=date],select,textarea{width:100%;padding:8px 11px;border:1px solid var(--border);border-radius:var(--rs);font-size:14px;font-family:inherit;color:var(--text);background:#FFF;outline:none;transition:border-color .15s,box-shadow .15s;-webkit-appearance:none}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(232,90,0,.12)}
+input[readonly]{background:var(--bg);color:var(--text-m);cursor:default}
+.targa-input{font-weight:700;letter-spacing:.14em;text-transform:uppercase;font-size:15px}
+textarea{resize:vertical;min-height:80px;line-height:1.6}
+
+/* ── DIVIDER ─────────────────────────────────────────────── */
+.div{height:1px;background:var(--border);margin:14px 0}
+
+/* ── BUTTONS ─────────────────────────────────────────────── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--rs);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;border:1px solid transparent;transition:all .15s;white-space:nowrap}
+.btn-p{background:var(--accent);color:#FFF;border-color:var(--accent)}
+.btn-p:hover{background:var(--accent-d)}
+.btn-s{background:#FFF;color:var(--text);border-color:var(--border)}
+.btn-s:hover{background:var(--bg)}
+.btn-g{background:transparent;color:var(--text-m);border-color:transparent;padding:6px 8px}
+.btn-g:hover{background:var(--bg);color:var(--text)}
+.btn-g.del{color:var(--err)}
+.btn-g.del:hover{background:var(--err-bg)}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-lg{padding:11px 24px;font-size:14px;border-radius:var(--r)}
+.btn-ok{background:var(--ok);color:#FFF;border-color:var(--ok)}
+.btn-ok:hover{opacity:.88}
+
+/* ── TARGA BADGE ─────────────────────────────────────────── */
+.targa-badge{display:none;background:var(--dark);color:#FFF;font-size:14px;font-weight:700;letter-spacing:.18em;padding:5px 14px;border-radius:4px;text-transform:uppercase}
+
+/* ── SINTOMI ─────────────────────────────────────────────── */
+.sintomo-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border:1px solid var(--border);border-radius:20px;font-size:12px;cursor:pointer;background:#FFF;transition:all .15s;user-select:none}
+.sintomo-chip:hover{border-color:var(--accent);color:var(--accent)}
+.sintomo-chip.sel{background:var(--accent-l);border-color:var(--accent);color:var(--accent-d);font-weight:600}
+.sintomi-grid{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+
+/* ── TABELLA ELEMENTI ────────────────────────────────────── */
+.tbl{width:100%;border-collapse:collapse;min-width:600px}
+.tbl th{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-m);padding:9px 10px;text-align:left;border-bottom:1px solid var(--border);background:#F7F6F3;white-space:nowrap}
+.tbl th.r{text-align:right}
+.tbl td{padding:7px 6px;vertical-align:middle;border-bottom:1px solid #F0EDE8;font-size:13px}
+.tbl tbody tr:last-child td{border-bottom:none}
+.tbl tbody tr:hover td{background:#FAFAF8}
+.tbl td input,.tbl td select{padding:5px 7px;font-size:12px;border-radius:4px}
+
+/* ── TOTALI ──────────────────────────────────────────────── */
+.totali{max-width:280px;margin-left:auto;display:flex;flex-direction:column;gap:6px;padding:14px 20px}
+.tot-row{display:flex;justify-content:space-between;font-size:13px}
+.tot-row .l{color:var(--text-m)}
+.tot-row .v{font-weight:600;font-variant-numeric:tabular-nums}
+.tot-row.big{font-size:17px;font-weight:700;padding-top:10px;border-top:2px solid var(--border-dk);margin-top:4px}
+.tot-row.big .v{color:var(--accent);font-size:20px}
+
+/* ── STATO AVANZAMENTO ───────────────────────────────────── */
+.stato-bar{display:flex;gap:0;border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.stato-step{flex:1;padding:10px 14px;text-align:center;font-size:12px;font-weight:600;background:#FFF;color:var(--text-m);cursor:pointer;border-right:1px solid var(--border);transition:all .15s}
+.stato-step:last-child{border-right:none}
+.stato-step.active{background:var(--accent);color:#FFF}
+.stato-step.done{background:var(--ok-bg);color:var(--ok)}
+
+/* ── FOOTER BAR ──────────────────────────────────────────── */
+.fbar{position:fixed;bottom:0;left:0;right:0;background:#FFF;border-top:1px solid var(--border);padding:10px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;z-index:200;box-shadow:0 -4px 20px rgba(0,0,0,.07)}
+.fbar-stato{font-size:12px;color:var(--text-m)}
+.fbar-stato.saved{color:var(--ok)}
+.fbar-actions{display:flex;gap:10px}
+
+/* ── TOAST ───────────────────────────────────────────────── */
+.toasts{position:fixed;bottom:68px;right:20px;display:flex;flex-direction:column;gap:8px;z-index:300}
+.toast{background:var(--dark);color:#FFF;padding:10px 16px;border-radius:var(--r);font-size:13px;max-width:340px;animation:fadeUp .22s ease;transition:opacity .3s}
+.toast.ok{background:var(--ok)}
+.toast.err{background:var(--err)}
+.toast.info{background:var(--info)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── MODAL ───────────────────────────────────────────────── */
+.mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;align-items:center;justify-content:center}
+.mo.open{display:flex}
+.modal{background:#FFF;border-radius:var(--r);width:min(540px,calc(100vw - 32px));max-height:85vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.mh{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.mt{font-size:15px;font-weight:700}
+.mb{padding:18px 20px;display:flex;flex-direction:column;gap:14px}
+.mf{padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
+
+/* ── PRINT DOC ───────────────────────────────────────────── */
+#printDoc{display:none}
+@media print{#printDoc{display:block}}
+
+.pdoc-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #111}
+.pdoc-logo{font-size:18pt;font-weight:800;letter-spacing:-.02em}
+.pdoc-logo span{color:#E85A00}
+.pdoc-meta{text-align:right}
+.pdoc-num{font-size:14pt;font-weight:700}
+.pdoc-date{font-size:9pt;color:#666;margin-top:3px}
+
+.pdoc-section{margin-bottom:14px}
+.pdoc-label{font-size:7.5pt;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#888;margin-bottom:5px}
+.pdoc-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pdoc-field{display:flex;flex-direction:column;gap:2px}
+.pdoc-field-label{font-size:7pt;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#999}
+.pdoc-field-val{font-size:10pt;font-weight:500;border-bottom:1px solid #E0E0E0;padding-bottom:3px;min-height:20px}
+
+.pdoc-table{width:100%;border-collapse:collapse;font-size:9pt;margin-top:8px}
+.pdoc-table th{background:#F5F4F0;padding:5px 8px;text-align:left;font-size:7.5pt;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#666;border-bottom:1.5px solid #DDD}
+.pdoc-table th.r{text-align:right}
+.pdoc-table td{padding:5px 8px;border-bottom:1px solid #EEE;vertical-align:top}
+.pdoc-table td.r{text-align:right}
+.pdoc-table tbody tr:last-child td{border-bottom:none}
+
+.pdoc-totals{margin-top:10px;max-width:200px;margin-left:auto}
+.pdoc-tot-row{display:flex;justify-content:space-between;font-size:9.5pt;padding:3px 0}
+.pdoc-tot-row.final{font-weight:800;font-size:12pt;border-top:1.5px solid #111;margin-top:5px;padding-top:6px}
+.pdoc-tot-row.final .v{color:#E85A00}
+
+.pdoc-firma{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-top:24px;padding-top:16px;border-top:1px solid #DDD}
+.pdoc-firma-box{display:flex;flex-direction:column;gap:6px}
+.pdoc-firma-label{font-size:7.5pt;color:#888;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+.pdoc-firma-line{border-bottom:1px solid #BBB;height:40px;margin-top:4px}
+
+.pdoc-note{background:#F9F8F5;border:1px solid #E8E5DF;border-radius:5px;padding:10px 12px;font-size:9pt;color:#444;line-height:1.6;margin-top:10px}
+
+/* ── RAPPORTINI GIORNALIERI ──────────────────────────────── */
+.rap-card{border:1px solid var(--border);border-radius:var(--rs);overflow:hidden;margin-bottom:10px}
+.rap-card:last-child{margin-bottom:0}
+.rap-head{padding:10px 14px;background:#F7F6F3;display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer}
+.rap-head:hover{background:#EEECE7}
+.rap-date{font-size:13px;font-weight:700}
+.rap-tecnico{font-size:12px;color:var(--text-m)}
+.rap-stats{display:flex;gap:12px;align-items:center}
+.rap-tot{font-size:13px;font-weight:700;color:var(--accent)}
+.rap-body{border-top:1px solid var(--border);overflow:hidden;transition:max-height .25s;max-height:0}
+.rap-body.open{max-height:600px}
+.rap-note{padding:8px 14px;font-size:12px;color:var(--text-m);background:#FAFAF8;border-bottom:1px solid #F0EDE8}
+
+@media(max-width:640px){.g2,.g3,.g4{grid-template-columns:1fr}.sp2,.sp3{grid-column:auto}}
+</style>
+</head>
+<body>
+
+<!-- ═══ HEADER ══════════════════════════════════════════════ -->
+<header class="hdr no-print">
+  <div class="hdr-left">
+    <span class="brand">Gestione Veicoli</span>
+    <span class="doc-num" id="hNum">Nuova scheda</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px">
+    <span class="badge b-bozza" id="hBadge">Bozza</span>
+    <button class="btn-back" onclick="location.href='index.html'">← Menu</button>
+  </div>
+</header>
+
+<!-- ═══ PAGE ════════════════════════════════════════════════ -->
+<div class="page no-print">
+
+  <!-- STATO AVANZAMENTO -->
+  <div class="stato-bar">
+    <div class="stato-step active" id="step1" onclick="setStato('bozza',this)">1 · Accettazione</div>
+    <div class="stato-step"       id="step2" onclick="setStato('aperta',this)">2 · In lavorazione</div>
+    <div class="stato-step"       id="step3" onclick="setStato('pronta',this)">3 · Pronta</div>
+    <div class="stato-step"       id="step4" onclick="setStato('consegnata',this)">4 · Consegnata</div>
+  </div>
+
+  <!-- TIPO SCHEDA / SUFFISSO NUMERAZIONE -->
+  <div style="display:flex;align-items:stretch;gap:10px;flex-wrap:wrap">
+
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px 18px;display:flex;align-items:center;gap:14px;flex:1;box-shadow:var(--sh)">
+      <div>
+        <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-m);margin-bottom:4px">Tipo scheda</div>
+        <select id="tipoScheda" onchange="setTipoScheda(this.value)"
+          style="font-size:14px;font-weight:600;padding:7px 12px;border:1px solid var(--border);border-radius:var(--rs);min-width:300px">
+          <option value="CA">-CA · Da pagare</option>
+          <option value="CP">-CP · Pagata, non ancora fatturata</option>
+          <option value="V"> -V  · Veicolo in vendita / venduto</option>
+          <option value="R"> -R  · Pagata con scontrino fiscale</option>
+          <option value="F"> -F  · Fatturata</option>
+          <option value="FF">-FF · Fatturata su altro veicolo</option>
+        </select>
+      </div>
+      <div style="border-left:1px solid var(--border);padding-left:14px">
+        <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-m);margin-bottom:4px">N° scheda</div>
+        <div id="numeroDisplay" style="font-size:18px;font-weight:800;font-family:monospace;letter-spacing:.04em;color:var(--accent)">—</div>
+      </div>
+    </div>
+
+    <div id="tipoDescrizione" style="background:var(--accent-l);border:1px solid #F0C8A8;border-radius:var(--r);padding:12px 18px;font-size:13px;color:var(--accent-d);font-weight:600;display:flex;align-items:center;max-width:280px;box-shadow:var(--sh)">
+    </div>
+
+  </div>
+
+  <!-- VEICOLO -->
+  <div class="card">
+    <div class="ch">
+      <span class="ct">Veicolo</span>
+      <span class="targa-badge" id="targaBadge"></span>
+    </div>
+    <div class="cb">
+      <div class="g4">
+        <div class="field">
+          <label>Targa *</label>
+          <input class="targa-input" type="text" id="targa" placeholder="AB123CD" maxlength="7"
+            oninput="onTarga(this.value)">
+        </div>
+        <div class="field">
+          <label>Marca / Modello *</label>
+          <input type="text" id="modello" placeholder="es. Fiat Ducato"
+            oninput="SL.modello=this.value;dirty()">
+        </div>
+        <div class="field">
+          <label>Anno</label>
+          <input type="text" id="anno" placeholder="2021" maxlength="4"
+            oninput="SL.anno=this.value;dirty()">
+        </div>
+        <div class="field">
+          <label>Km ingresso</label>
+          <input type="number" id="km" placeholder="0" min="0"
+            oninput="SL.km=this.value;dirty()">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CLIENTE -->
+  <div class="card">
+    <div class="ch">
+      <span class="ct">Cliente</span>
+      <button class="btn btn-s btn-sm" onclick="apriMo('moCliente')">Cerca cliente</button>
+    </div>
+    <div class="cb">
+      <div class="g3">
+        <div class="field sp2">
+          <label>Ragione sociale / Nome *</label>
+          <input type="text" id="cNome" placeholder="Cerca o inserisci..."
+            oninput="SL.cliente.nome=this.value;dirty()">
+        </div>
+        <div class="field">
+          <label>Telefono</label>
+          <input type="text" id="cTel" placeholder="+39 030..."
+            oninput="SL.cliente.tel=this.value;dirty()">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DATI SCHEDA -->
+  <div class="card">
+    <div class="ch"><span class="ct">Dati scheda</span></div>
+    <div class="cb">
+      <div class="g4">
+        <div class="field">
+          <label>Tecnico *</label>
+          <select id="tecnico" onchange="SL.tecnico=this.value;dirty()">
+            <option value="">— Seleziona —</option>
+            <option value="Enrico">Enrico</option>
+            <option value="Andrea">Andrea</option>
+            <option value="Matteo">Matteo</option>
+            <option value="Gianluca">Gianluca</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Data apertura</label>
+          <input type="date" id="dataAp" oninput="SL.data=this.value;dirty()">
+        </div>
+        <div class="field">
+          <label>Data prevista consegna</label>
+          <input type="date" id="dataConsCons" oninput="SL.data_consegna=this.value;dirty()">
+        </div>
+        <div class="field">
+          <label>N° scheda</label>
+          <input type="text" id="numero" readonly>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SINTOMI / PROBLEMA -->
+  <div class="card">
+    <div class="ch"><span class="ct">Problema riportato dal cliente</span></div>
+    <div class="cb">
+      <!-- Chip sintomi rapidi -->
+      <div class="sintomi-grid" id="sintomsGrid">
+        <div class="sintomo-chip" onclick="toggleSintomo(this,'Rumore sospetto')">Rumore sospetto</div>
+        <div class="sintomo-chip" onclick="toggleSintomo(this,'Spia accesa')">Spia accesa</div>
+        <div class="sintomo-chip" onclick="toggleSintomo(this,'Perdita olio')">Perdita olio</div>
+        <div class="sintomo-chip" onclick="toggleSintomo(this,'Tagliando')">Tagliando</div>
+        <div class="sintomo-chip" onclick="toggleSintomo(this,'Freni')">Freni</div>
+        <div class="sintomo-chip" onclick="toggleSintomo(this,'Batteria / avviamento')">Batteria / avviamento</div>
+        <div class="sintomo-chip" onclick="toggleSintomo(this,'Climatizzatore')">Climatizzatore</div>
+        <div class="sintomo-chip" onclick="toggleSintomo(this,'Gomme / pneumatici')">Gomme / pneumatici</div>
+        <div class="sintomo-chip" onclick="toggleSintomo(this,'Diagnosi elettronica')">Diagnosi elettronica</div>
+        <div class="sintomo-chip" onclick="toggleSintomo(this,'Revisione')">Revisione</div>
+      </div>
+      <div class="field">
+        <label>Descrizione dettagliata</label>
+        <textarea id="problema" rows="3"
+          placeholder="Descrivi il problema riportato dal cliente o le operazioni richieste..."
+          oninput="SL.problema=this.value;dirty()"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- RAPPORTINI DI LAVORO -->
+  <div class="card">
+    <div class="ch">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="ct">Rapportini di lavoro</span>
+        <span class="badge" style="background:var(--info-bg);color:var(--info)" id="rapCount">Nessuno</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span style="font-size:11px;color:var(--text-m)" id="daDDT"></span>
+        <button class="btn btn-p btn-sm" onclick="nuovoRapportino()">+ Nuovo rapportino giornaliero</button>
+      </div>
+    </div>
+
+    <!-- Lista rapportini -->
+    <div id="rapList" style="padding:14px 16px">
+      <div id="rapEmpty" style="text-align:center;padding:24px;color:var(--text-l);font-size:13px">
+        Nessun rapportino ancora — clicca "Nuovo rapportino giornaliero" per registrare le lavorazioni di oggi.
+      </div>
+    </div>
+
+    <!-- Totali aggregati da tutti i rapportini -->
+    <div style="border-top:2px solid var(--border);background:#F7F6F3;padding:14px 20px">
+      <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-m);margin-bottom:10px">Totale aggregato tutti i rapportini</div>
+      <div class="totali" style="padding:0">
+        <div class="tot-row"><span class="l">Imponibile</span><span class="v" id="tImp">€ 0,00</span></div>
+        <div class="tot-row" id="r22"><span class="l">IVA 22%</span><span class="v" id="t22">€ 0,00</span></div>
+        <div class="tot-row" id="r10" style="display:none"><span class="l">IVA 10%</span><span class="v" id="t10">€ 0,00</span></div>
+        <div class="tot-row big"><span>Totale</span><span class="v" id="tTot">€ 0,00</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RETTIFICA ORE FINALI -->
+  <div class="card" style="border-left:4px solid var(--accent)">
+    <div class="ch">
+      <div>
+        <span class="ct">Rettifica ore finali</span>
+        <div style="font-size:11px;color:var(--text-m);margin-top:2px">Solo il responsabile compila questo campo alla chiusura della scheda</div>
+      </div>
+      <span id="effBadge" style="display:none"></span>
+    </div>
+    <div class="cb">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:16px;align-items:end">
+        <div class="field">
+          <label>Ore dichiarate (dai rapportini)</label>
+          <input type="text" id="oreDichiarate" readonly
+            style="font-size:18px;font-weight:700;color:var(--text-m);text-align:center">
+        </div>
+        <div class="field">
+          <label>Ore riconosciute *</label>
+          <input type="number" id="oreRiconosciute" min="0" step="0.5" placeholder="0"
+            oninput="SL.ore_riconosciute=parseFloat(this.value)||0;aggiornaRettifica();dirty()"
+            style="font-size:18px;font-weight:700;text-align:center">
+        </div>
+        <div class="field">
+          <label>Differenza (δ)</label>
+          <input type="text" id="oreDelta" readonly
+            style="font-size:18px;font-weight:700;text-align:center">
+        </div>
+        <div class="field">
+          <label>Efficienza</label>
+          <input type="text" id="oreEff" readonly
+            style="font-size:18px;font-weight:700;text-align:center">
+        </div>
+      </div>
+      <div class="field gt">
+        <label>Motivazione rettifica</label>
+        <textarea id="motivazioneRett" rows="2"
+          placeholder="Es. Lavorazione più complessa del previsto, attesa ricambi, problema non diagnosticato inizialmente..."
+          oninput="SL.motivazione_rettifica=this.value;dirty()"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- NOTE INTERNE -->
+  <div class="card">
+    <div class="ch"><span class="ct">Note interne (non stampate)</span></div>
+    <div class="cb">
+      <textarea id="noteInt" rows="2"
+        placeholder="Annotazioni per uso interno — non compaiono nella stampa..."
+        oninput="SL.note_interne=this.value;dirty()"></textarea>
+    </div>
+  </div>
+
+  <!-- NOTE PER IL CLIENTE -->
+  <div class="card">
+    <div class="ch"><span class="ct">Note per il cliente (stampate)</span></div>
+    <div class="cb">
+      <textarea id="noteCliente" rows="3"
+        placeholder="Raccomandazioni, garanzie, prossima revisione, avvisi..."
+        oninput="SL.note_cliente=this.value;dirty()"></textarea>
+    </div>
+  </div>
+
+</div><!-- /page -->
+
+<!-- ═══ DOCUMENTO STAMPABILE ════════════════════════════════ -->
+<div id="printDoc">
+  <div class="pdoc-header">
+    <div>
+      <div class="pdoc-logo">PAGHERA<span> AUTO</span></div>
+      <div style="font-size:8pt;color:#666;margin-top:3px">Italia Automotive Service</div>
+      <div style="font-size:8pt;color:#666">Castiglione delle Stiviere (MN)</div>
+    </div>
+    <div class="pdoc-meta">
+      <div class="pdoc-num" id="pNum">—</div>
+      <div class="pdoc-date" id="pDate">—</div>
+      <div style="margin-top:8px;display:inline-block;padding:3px 10px;background:#111;color:#FFF;font-size:8pt;font-weight:700;border-radius:3px;letter-spacing:.06em" id="pStato">SCHEDA DI LAVORO</div>
+    </div>
+  </div>
+
+  <!-- Veicolo + Cliente -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:14px">
+    <div class="pdoc-section">
+      <div class="pdoc-label">Veicolo</div>
+      <div class="pdoc-grid" style="grid-template-columns:auto 1fr;gap:6px 12px">
+        <div class="pdoc-field"><div class="pdoc-field-label">Targa</div><div class="pdoc-field-val" id="pTarga" style="font-weight:800;letter-spacing:.12em;font-size:12pt"></div></div>
+        <div class="pdoc-field"><div class="pdoc-field-label">Modello</div><div class="pdoc-field-val" id="pModello"></div></div>
+        <div class="pdoc-field"><div class="pdoc-field-label">Anno</div><div class="pdoc-field-val" id="pAnno"></div></div>
+        <div class="pdoc-field"><div class="pdoc-field-label">Km ingresso</div><div class="pdoc-field-val" id="pKm"></div></div>
+      </div>
+    </div>
+    <div class="pdoc-section">
+      <div class="pdoc-label">Cliente</div>
+      <div class="pdoc-field" style="margin-bottom:6px"><div class="pdoc-field-label">Ragione sociale / Nome</div><div class="pdoc-field-val" id="pCliente" style="font-weight:700"></div></div>
+      <div class="pdoc-field"><div class="pdoc-field-label">Telefono</div><div class="pdoc-field-val" id="pTel"></div></div>
+    </div>
+  </div>
+
+  <!-- Problema -->
+  <div class="pdoc-section">
+    <div class="pdoc-label">Problema / Lavorazioni richieste</div>
+    <div class="pdoc-note" id="pProblema">—</div>
+  </div>
+
+  <!-- Tecnico e date -->
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
+    <div class="pdoc-field"><div class="pdoc-field-label">Tecnico</div><div class="pdoc-field-val" id="pTecnico"></div></div>
+    <div class="pdoc-field"><div class="pdoc-field-label">Data apertura</div><div class="pdoc-field-val" id="pDataAp"></div></div>
+    <div class="pdoc-field"><div class="pdoc-field-label">Data consegna prevista</div><div class="pdoc-field-val" id="pDataCons"></div></div>
+  </div>
+
+  <!-- Righe -->
+  <div class="pdoc-section">
+    <div class="pdoc-label">Ricambi &amp; servizi</div>
+    <table class="pdoc-table">
+      <thead><tr>
+        <th style="width:80px">Tipo</th>
+        <th style="width:90px">Codice</th>
+        <th>Descrizione</th>
+        <th class="r" style="width:40px">Qtà</th>
+        <th class="r" style="width:70px">Prezzo</th>
+        <th class="r" style="width:45px">IVA</th>
+        <th class="r" style="width:75px">Subtot.</th>
+      </tr></thead>
+      <tbody id="pLines"></tbody>
+    </table>
+    <div class="pdoc-totals">
+      <div class="pdoc-tot-row"><span>Imponibile</span><span class="v" id="pImp">€ 0,00</span></div>
+      <div class="pdoc-tot-row" id="p22"><span>IVA 22%</span><span class="v" id="pT22">€ 0,00</span></div>
+      <div class="pdoc-tot-row final"><span>TOTALE</span><span class="v" id="pTot">€ 0,00</span></div>
+    </div>
+  </div>
+
+  <!-- Note cliente -->
+  <div class="pdoc-note" id="pNoteCliente" style="display:none;margin-top:10px"></div>
+
+  <!-- Firme -->
+  <div class="pdoc-firma">
+    <div class="pdoc-firma-box">
+      <div class="pdoc-firma-label">Firma del cliente per accettazione</div>
+      <div class="pdoc-firma-line"></div>
+    </div>
+    <div class="pdoc-firma-box">
+      <div class="pdoc-firma-label">Firma del tecnico</div>
+      <div class="pdoc-firma-line"></div>
+    </div>
+  </div>
+
+  <div style="margin-top:16px;font-size:7pt;color:#AAA;border-top:1px solid #EEE;padding-top:8px">
+    Documento generato il <span id="pGenData"></span> — Paghera Auto SRL / Italia Automotive Service
+  </div>
+</div><!-- /printDoc -->
+
+<!-- ═══ MODAL CLIENTE ════════════════════════════════════════ -->
+<div class="mo" id="moCliente">
+  <div class="modal">
+    <div class="mh"><span class="mt">Cerca cliente</span><button class="btn btn-g btn-sm" onclick="chiudiMo('moCliente')">✕</button></div>
+    <div class="mb">
+      <div class="field">
+        <label>Cerca per nome o P. IVA</label>
+        <input type="text" id="clienteSearch" placeholder="Digita per cercare..."
+          oninput="cercaCliente(this.value)">
+      </div>
+      <div id="clienteResults" style="display:flex;flex-direction:column;gap:6px;max-height:280px;overflow:auto"></div>
+      <p style="font-size:12px;color:var(--text-m)">Non trovato? Inserisci direttamente i dati nella scheda.</p>
+    </div>
+    <div class="mf"><button class="btn btn-s" onclick="chiudiMo('moCliente')">Chiudi</button></div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<!-- ═══ FOOTER BAR ════════════════════════════════════════════ -->
+<div class="fbar no-print">
+  <div class="fbar-stato" id="fStato">Bozza non salvata</div>
+  <div class="fbar-actions">
+    <button class="btn btn-s" onclick="salvaBozza()">Salva</button>
+    <button class="btn btn-s" onclick="stampa()">🖨 Stampa PDF</button>
+    <button class="btn btn-ok btn-lg" onclick="chiudiScheda()">✓ Chiudi &amp; Fattura →</button>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+const SUPABASE_URL = 'https://iztrrgqkzsovorcmixum.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml6dHJyZ3FrenNvdm9yY21peHVtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMDI3NzMsImV4cCI6MjA4OTc3ODc3M30.3IyUCDpFs9x_iSi5C4asodt5_O3F_cwgdb3eBkoQh3U';
+const _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ══════════════════════════════════════════════════════════
+// STATO
+// ══════════════════════════════════════════════════════════
+const SL = {
+  id: null, numero: '', numeroBase: '', tipo: 'CA', stato: 'bozza',
+  data: '', data_consegna: '',
+  targa: '', modello: '', anno: '', km: '',
+  tecnico: '', problema: '', sintomi: [],
+  note_interne: '', note_cliente: '',
+  ore_riconosciute: 0, motivazione_rettifica: '',
+  cliente: { id:null, nome:'', tel:'' },
+  rapportini: [],
+  _dirty: false, _daDDT: null
+};
+let _elId = 1;
+
+// ══════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════
+function init(){
+  const oggi = new Date().toISOString().slice(0,10);
+  SL.data = oggi;
+  document.getElementById('dataAp').value = oggi;
+
+  // Numero scheda base (senza suffisso)
+  const anno = new Date().getFullYear();
+  const prog  = String(Date.now()).slice(-4);
+  SL.numeroBase = `SCH-${anno}-${prog}`;
+  setTipoScheda('CA'); // default -CA
+
+  // Parametri URL
+  const p = new URLSearchParams(window.location.search);
+
+  // Apertura da rapportino operatore
+  if(p.get('from') === 'rapportino') caricaDaRapportino();
+
+  // Apertura da DDT confermata
+  if(p.get('ddt_id')) caricaDaDDT(p.get('ddt_id'));
+  if(p.get('targa'))  precompilaTarga(p.get('targa'));
+  if(p.get('modello'))precompilaModello(p.get('modello'));
+
+  // Apertura da scheda esistente
+  if(p.get('id')) caricaScheda(p.get('id'));
+
+  // Modal overlay
+  document.querySelectorAll('.mo').forEach(m=>{
+    m.addEventListener('click',e=>{ if(e.target===m) m.classList.remove('open'); });
+  });
+}
+
+// ══════════════════════════════════════════════════════════
+// TIPO SCHEDA E NUMERAZIONE CON SUFFISSO
+// ══════════════════════════════════════════════════════════
+const TIPI_SCHEDA = {
+  'CA': { label:'-CA',  desc:'Da pagare — lavoro eseguito, pagamento in attesa',           colore:'#854F0B', bg:'#FAEEDA' },
+  'CP': { label:'-CP',  desc:'Pagata — incasso ricevuto, fattura non ancora emessa',        colore:'#1A4FAA', bg:'#EBF0FD' },
+  'V':  { label:'-V',   desc:'Veicolo in vendita o già venduto',                            colore:'#534AB7', bg:'#EEEDFE' },
+  'R':  { label:'-R',   desc:'Pagata con scontrino fiscale — chiusa con corrispettivo',     colore:'#1F7A35', bg:'#E6F5EB' },
+  'F':  { label:'-F',   desc:'Fatturata — fattura emessa e collegata a questa scheda',      colore:'#1F7A35', bg:'#E6F5EB' },
+  'FF': { label:'-FF',  desc:'Fatturata su altro veicolo — costi imputati a targa diversa', colore:'#706C65', bg:'#F0EDE8' },
+};
+
+function setTipoScheda(tipo){
+  SL.tipo   = tipo;
+  SL.numero = SL.numeroBase + '-' + tipo;
+
+  document.getElementById('tipoScheda').value = tipo;
+  document.getElementById('numeroDisplay').textContent = SL.numero;
+  document.getElementById('hNum').textContent = SL.numero;
+
+  // Campo numero nel form (readonly)
+  const numEl = document.getElementById('numero');
+  if(numEl) numEl.value = SL.numero;
+
+  // Box descrizione tipo
+  const t = TIPI_SCHEDA[tipo];
+  const box = document.getElementById('tipoDescrizione');
+  if(box && t){
+    box.style.background  = t.bg;
+    box.style.borderColor = t.colore+'44';
+    box.style.color       = t.colore;
+    box.textContent       = t.desc;
+  }
+
+  // Badge header colore
+  const badge = document.getElementById('hBadge');
+  if(badge && t){
+    badge.style.background = t.bg;
+    badge.style.color      = t.colore;
+    badge.textContent      = t.label;
+  }
+
+  dirty();
+}
+
+// ══════════════════════════════════════════════════════════
+// TARGA
+// ══════════════════════════════════════════════════════════
+function onTarga(v){
+  const t = v.replace(/[^A-Z0-9]/gi,'').toUpperCase();
+  SL.targa = t;
+  document.getElementById('targa').value = t;
+  const badge = document.getElementById('targaBadge');
+  if(t.length >= 4){ badge.textContent = t; badge.style.display = 'inline-block'; }
+  else badge.style.display = 'none';
+  dirty();
+}
+
+function precompilaTarga(t){
+  document.getElementById('targa').value = t;
+  onTarga(t);
+}
+function precompilaModello(m){
+  document.getElementById('modello').value = m;
+  SL.modello = m;
+}
+
+// ══════════════════════════════════════════════════════════
+// SINTOMI
+// ══════════════════════════════════════════════════════════
+function toggleSintomo(el, testo){
+  el.classList.toggle('sel');
+  if(el.classList.contains('sel')) SL.sintomi.push(testo);
+  else SL.sintomi = SL.sintomi.filter(s=>s!==testo);
+  // Aggiorna textarea problema con sintomi selezionati
+  const extra = SL.sintomi.length > 0 ? SL.sintomi.join(', ') : '';
+  const manuale = document.getElementById('problema').value
+    .replace(/^[^·]+· /, '').replace(/^\[.*?\] /, '');
+  if(SL.sintomi.length > 0){
+    document.getElementById('problema').value = extra + (manuale ? ' · ' + manuale : '');
+  }
+  SL.problema = document.getElementById('problema').value;
+  dirty();
+}
+
+// ══════════════════════════════════════════════════════════
+// RAPPORTINI GIORNALIERI
+// ══════════════════════════════════════════════════════════
+let _rapId = 1;
+
+function nuovoRapportino(){
+  // Salva scheda in sessionStorage e apri rapportino
+  const dati = {
+    _from: 'scheda',
+    scheda_id:  SL.id || SL.numero,
+    scheda_num: SL.numero,
+    targa:   SL.targa,
+    modello: SL.modello,
+    km:      SL.km,
+    cliente: { ...SL.cliente },
+  };
+  sessionStorage.setItem('rapportino_prefill', JSON.stringify(dati));
+  window.open('rapportino.html?from=scheda', '_blank');
+}
+
+// Riceve un rapportino completato dal rapportino.html
+function riceviRapportino(rap){
+  // Cerca se esiste già (aggiornamento) o aggiungi nuovo
+  const idx = SL.rapportini.findIndex(r=>r._id===rap._id);
+  if(idx>=0) SL.rapportini[idx] = rap;
+  else SL.rapportini.push({ ...rap, _id: _rapId++ });
+  renderRapportini();
+  aggiornaTotali();
+  dirty();
+}
+
+function renderRapportini(){
+  const list  = document.getElementById('rapList');
+  const empty = document.getElementById('rapEmpty');
+  const count = document.getElementById('rapCount');
+
+  if(!SL.rapportini.length){
+    empty.style.display='';
+    list.innerHTML='';
+    list.appendChild(empty);
+    count.textContent='Nessuno';
+    return;
+  }
+  empty.style.display='none';
+  count.textContent = SL.rapportini.length + (SL.rapportini.length===1?' rapportino':' rapportini');
+
+  // Ordina per data decrescente
+  const sorted = [...SL.rapportini].sort((a,b)=>b.data.localeCompare(a.data));
+
+  list.innerHTML = sorted.map(r=>{
+    const tot = (r.elementi||[]).reduce((s,el)=>s+el.qty*el.prezzo,0);
+    const nEl = (r.elementi||[]).length;
+    const fmtD = d=>d?new Date(d).toLocaleDateString('it-IT',{weekday:'short',day:'2-digit',month:'short'}):d;
+
+    const righe = (r.elementi||[]).map(el=>`
+      <tr>
+        <td style="font-size:11px;color:var(--text-m)">${el.tipo}</td>
+        <td style="font-size:11px;font-family:monospace">${el.codice||'—'}</td>
+        <td style="font-size:12px">${el.descrizione}</td>
+        <td style="text-align:right;font-size:12px">${el.qty}</td>
+        <td style="text-align:right;font-size:12px">${fmt(el.prezzo)}</td>
+        <td style="text-align:right;font-size:12px;font-weight:600">${fmt(el.qty*el.prezzo)}</td>
+      </tr>
+    `).join('');
+
+    return `<div class="rap-card">
+      <div class="rap-head" onclick="toggleRap(this)">
+        <div>
+          <span class="rap-date">${fmtD(r.data)}</span>
+          <span class="rap-tecnico" style="margin-left:10px">— ${r.tecnico||'—'}</span>
+          ${r.numero?`<span style="font-size:11px;color:var(--text-l);margin-left:8px">${r.numero}</span>`:''}
+        </div>
+        <div class="rap-stats">
+          <span style="font-size:12px;color:var(--text-m)">${nEl} voci</span>
+          <span class="rap-tot">${fmt(tot)}</span>
+          <span style="font-size:11px;color:var(--text-l)">▾</span>
+        </div>
+      </div>
+      ${r.note?`<div class="rap-note">📝 ${r.note}</div>`:''}
+      <div class="rap-body">
+        <div style="overflow-x:auto">
+          <table class="tbl" style="min-width:500px">
+            <thead><tr>
+              <th style="width:90px">Tipo</th>
+              <th style="width:90px">Codice</th>
+              <th>Descrizione</th>
+              <th class="r" style="width:50px">Qtà</th>
+              <th class="r" style="width:80px">Prezzo</th>
+              <th class="r" style="width:80px">Subtot.</th>
+            </tr></thead>
+            <tbody>${righe||'<tr><td colspan="6" style="text-align:center;color:var(--text-l);padding:14px">Nessun elemento</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleRap(head){
+  const body = head.parentElement.querySelector('.rap-body');
+  body.classList.toggle('open');
+}
+
+function aggiornaTotali(){
+  let imp=0, i22=0, i10=0, hTot=0;
+  SL.rapportini.forEach(r=>{
+    (r.ore||[]).forEach(o=>{ hTot += o.ore||0; });
+    (r.elementi||[]).forEach(el=>{
+      const s = el.qty*el.prezzo;
+      imp += s;
+      if(el.iva_pct===22) i22 += s*.22;
+      else if(el.iva_pct===10) i10 += s*.10;
+    });
+  });
+  const tot = imp+i22+i10;
+  document.getElementById('tImp').textContent = fmt(imp);
+  document.getElementById('t22').textContent  = fmt(i22);
+  if(i10>0){ document.getElementById('t10').textContent=fmt(i10); document.getElementById('r10').style.display=''; }
+  else document.getElementById('r10').style.display='none';
+  document.getElementById('tTot').textContent = fmt(tot);
+  SL._imp=imp; SL._iva=i22+i10; SL._tot=tot; SL._hDichiarate=hTot;
+
+  // Aggiorna campo ore dichiarate nella rettifica
+  const odEl = document.getElementById('oreDichiarate');
+  if(odEl) odEl.value = fmtH(hTot);
+
+  aggiornaRettifica();
+}
+
+function aggiornaRettifica(){
+  const hDich = SL._hDichiarate||0;
+  const hRic  = SL.ore_riconosciute||0;
+  const delta  = hRic - hDich;
+  const eff    = hDich>0 ? Math.round((hRic/hDich)*100) : null;
+
+  const deltaEl = document.getElementById('oreDelta');
+  const effEl   = document.getElementById('oreEff');
+  const badge   = document.getElementById('effBadge');
+
+  if(!deltaEl) return;
+
+  if(hRic>0){
+    const segno = delta>=0?'+':'';
+    deltaEl.value = segno+fmtH(delta);
+    deltaEl.style.color = delta>0?'var(--ok)':delta<0?'var(--err)':'var(--text-m)';
+
+    effEl.value = eff!==null ? eff+'%' : '—';
+    effEl.style.color = eff>=90?'var(--ok)':eff>=70?'var(--warn)':'var(--err)';
+
+    // Badge efficienza
+    badge.style.display='';
+    const cls = eff>=90?'b-ok':eff>=70?'b-warn':'b-err';
+    badge.className = 'badge '+cls;
+    badge.textContent = eff+'% efficienza';
+
+    // Aggiungi dati rettifica al payload
+    SL._deltaH = delta;
+    SL._eff    = eff;
+  } else {
+    deltaEl.value='—'; effEl.value='—';
+    badge.style.display='none';
+  }
+}
+
+function fmtH(h){
+  if(!h) return '0h';
+  const pos = Math.abs(h);
+  const str = Number.isInteger(pos) ? pos+'h' : pos.toFixed(1).replace('.',',')+'h';
+  return (h<0?'-':'')+str;
+}
+
+// Elementi aggregati per la fattura e la stampa
+function elementiAggregati(){
+  const tutti = [];
+  SL.rapportini.forEach(r=>{
+    (r.elementi||[]).forEach(el=>tutti.push({...el, _rapNum:r.numero, _rapData:r.data}));
+  });
+  return tutti;
+}
+
+// ══════════════════════════════════════════════════════════
+// CARICA DA RAPPORTINO OPERATORE
+// ══════════════════════════════════════════════════════════
+function caricaDaRapportino(){
+  const raw = sessionStorage.getItem('scheda_prefill');
+  if(!raw) return;
+
+  try {
+    const d = JSON.parse(raw);
+    sessionStorage.removeItem('scheda_prefill'); // usa una volta sola
+
+    if(d.targa)   precompilaTarga(d.targa);
+    if(d.modello) precompilaModello(d.modello);
+    if(d.anno)    { document.getElementById('anno').value = d.anno; SL.anno = d.anno; }
+    if(d.km)      { document.getElementById('km').value = d.km; SL.km = d.km; }
+    if(d.tecnico) { document.getElementById('tecnico').value = d.tecnico; SL.tecnico = d.tecnico; }
+
+    if(d.cliente?.nome){
+      SL.cliente = { ...d.cliente };
+      document.getElementById('cNome').value = d.cliente.nome;
+      document.getElementById('cTel').value  = d.cliente.tel||'';
+    }
+
+    if(d.problema){
+      document.getElementById('problema').value = d.problema;
+      SL.problema = d.problema;
+    }
+
+    // Carica elementi dal rapportino come primo rapportino della scheda
+    if(d.elementi?.length){
+      riceviRapportino({
+        _id: _rapId++,
+        numero: d.numero_rap||'',
+        data:   new Date().toISOString().slice(0,10),
+        tecnico: d.tecnico||'',
+        note: '',
+        elementi: d.elementi
+      });
+      document.getElementById('daDDT').textContent =
+        `Da rapportino ${d.numero_rap||''} — ${d.elementi.length} voci importate`;
+    }
+
+    toast(`Dati importati dal rapportino ${d.numero_rap||''}`, 'ok');
+    dirty();
+  } catch(e){
+    console.error('Errore caricamento da rapportino:', e);
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// CARICA DA DDT
+// ══════════════════════════════════════════════════════════
+async function caricaDaDDT(ddtId){
+  // ─── TODO SUPABASE ──────────────────────────────────────
+  // const { data } = await _sb.from('ddt_in_arrivo').select('*').eq('id', ddtId).single();
+  // if(data?.ddt_estratto){
+  //   const d = data.ddt_estratto;
+  //   precompilaTarga(d.targa||'');
+  //   precompilaModello(d.modello||'');
+  //   (d.righe||[]).forEach(r => addEl(r.tipo||'ricambio', r));
+  //   SL._daDDT = ddtId;
+  //   document.getElementById('daDDT').textContent = `Da DDT: ${d.numero||ddtId}`;
+  // }
+  // ────────────────────────────────────────────────────────
+  console.log('TODO: carica da DDT', ddtId);
+}
+
+async function caricaScheda(id){
+  // ─── TODO SUPABASE ──────────────────────────────────────
+  // const { data } = await _sb.from('rapportini')
+  //   .select('*, elementi(*), clienti(*), veicoli(*)')
+  //   .eq('id', id).single();
+  // if(data) populaForm(data);
+  // ────────────────────────────────────────────────────────
+  console.log('TODO: carica scheda', id);
+}
+
+// ══════════════════════════════════════════════════════════
+// STATO AVANZAMENTO
+// ══════════════════════════════════════════════════════════
+const STATI = ['bozza','aperta','pronta','consegnata'];
+const STATI_LABEL = {bozza:'Bozza',aperta:'In lavorazione',pronta:'Pronta',consegnata:'Consegnata'};
+const STEP_IDS = ['step1','step2','step3','step4'];
+
+function setStato(stato, el){
+  SL.stato = stato;
+  const idx = STATI.indexOf(stato);
+  STEP_IDS.forEach((id,i)=>{
+    const s = document.getElementById(id);
+    s.className = 'stato-step' + (i<idx?' done':i===idx?' active':'');
+  });
+  const badge = document.getElementById('hBadge');
+  badge.className = 'badge ' + (stato==='bozza'?'b-bozza':stato==='consegnata'?'b-chiusa':'b-aperta');
+  badge.textContent = STATI_LABEL[stato];
+  dirty();
+}
+
+// ══════════════════════════════════════════════════════════
+// VALIDAZIONE
+// ══════════════════════════════════════════════════════════
+function valida(){
+  if(!SL.targa)  { toast('Inserisci la targa','err'); return false; }
+  if(!SL.modello){ toast('Inserisci il modello','err'); return false; }
+  if(!SL.tecnico){ toast('Seleziona il tecnico','err'); return false; }
+  if(!SL.cliente.nome){ toast('Inserisci i dati del cliente','err'); return false; }
+  return true;
+}
+
+// ══════════════════════════════════════════════════════════
+// SALVA
+// ══════════════════════════════════════════════════════════
+async function salvaBozza(){
+  const payload = buildPayload();
+  console.log('💾 SALVA SCHEDA:', payload);
+
+  // ─── TODO SUPABASE ──────────────────────────────────────
+  // const { data, error } = await _sb.from('rapportini')
+  //   .upsert({ ...payload.scheda }).select().single();
+  // if(error){ toast('Errore: '+error.message,'err'); return; }
+  // SL.id = data.id;
+  // await _sb.from('elementi').delete().eq('rapportino_id', data.id);
+  // await _sb.from('elementi').insert(
+  //   payload.elementi.map(e=>({ ...e, rapportino_id: data.id }))
+  // );
+  // ────────────────────────────────────────────────────────
+
+  SL._dirty = false;
+  document.getElementById('fStato').textContent = '✓ Salvata';
+  document.getElementById('fStato').className = 'fbar-stato saved';
+  toast('Scheda salvata','ok');
+}
+
+async function chiudiScheda(){
+  if(!valida()) return;
+  if(!confirm('Chiudere la scheda e passare alla fattura?')) return;
+  await salvaBozza();
+  setStato('pronta', document.getElementById('step3'));
+
+  // ─── Redirect a fattura ─────────────────────────────────
+  // window.location.href = `fattura.html?rapportino_id=${SL.id}`;
+  toast('Scheda chiusa — apertura modulo fattura...','ok');
+  setTimeout(()=>{ window.location.href = `fattura.html?rapportino_id=${SL.id||'demo'}`; }, 800);
+}
+
+function buildPayload(){
+  return {
+    scheda: {
+      id: SL.id, numero: SL.numero, numeroBase: SL.numeroBase,
+      tipo: SL.tipo, stato: SL.stato,
+      data: SL.data, data_consegna: SL.data_consegna,
+      targa: SL.targa, modello: SL.modello, anno: SL.anno, km: parseInt(SL.km)||0,
+      tecnico: SL.tecnico, problema: SL.problema,
+      note_interne: SL.note_interne, note_cliente: SL.note_cliente,
+      cliente_nome: SL.cliente.nome, cliente_tel: SL.cliente.tel,
+      imponibile: SL._imp||0, iva: SL._iva||0, totale: SL._tot||0,
+      n_rapportini: SL.rapportini.length,
+      // Rettifica ore
+      ore_dichiarate:    SL._hDichiarate||0,
+      ore_riconosciute:  SL.ore_riconosciute||0,
+      ore_delta:         SL._deltaH||0,
+      efficienza_pct:    SL._eff||null,
+      motivazione_rettifica: SL.motivazione_rettifica||''
+    },
+    rapportini: SL.rapportini,
+    elementi_aggregati: elementiAggregati()
+  };
+}
+
+// ══════════════════════════════════════════════════════════
+// STAMPA PDF
+// ══════════════════════════════════════════════════════════
+function stampa(){
+  if(!valida()) return;
+
+  // Popola il documento stampabile
+  const fmtData = d => d ? new Date(d).toLocaleDateString('it-IT',{day:'2-digit',month:'long',year:'numeric'}) : '—';
+
+  document.getElementById('pNum').textContent    = SL.numero;
+  document.getElementById('pDate').textContent   = 'Data: ' + fmtData(SL.data);
+  document.getElementById('pTarga').textContent  = SL.targa;
+  document.getElementById('pModello').textContent= SL.modello;
+  document.getElementById('pAnno').textContent   = SL.anno||'—';
+  document.getElementById('pKm').textContent     = SL.km ? SL.km.toLocaleString('it-IT')+' km' : '—';
+  document.getElementById('pCliente').textContent= SL.cliente.nome||'—';
+  document.getElementById('pTel').textContent    = SL.cliente.tel||'—';
+  document.getElementById('pTecnico').textContent= SL.tecnico||'—';
+  document.getElementById('pDataAp').textContent = fmtData(SL.data);
+  document.getElementById('pDataCons').textContent = fmtData(SL.data_consegna);
+  document.getElementById('pProblema').textContent = SL.problema||'—';
+  document.getElementById('pGenData').textContent= new Date().toLocaleDateString('it-IT');
+
+  // Righe — usa tutti gli elementi aggregati dai rapportini
+  const tutti = elementiAggregati();
+  const tbody = document.getElementById('pLines');
+  tbody.innerHTML = tutti.map((el,i)=>`
+    <tr>
+      <td style="font-size:8pt;color:#888">${el.tipo}</td>
+      <td style="font-family:monospace;font-size:8pt">${el.codice||'—'}</td>
+      <td>${el.descrizione}${el._rapData?`<span style="font-size:7.5pt;color:#AAA;margin-left:6px">(${new Date(el._rapData).toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit'})})</span>`:''}</td>
+      <td class="r">${el.qty}</td>
+      <td class="r">${fmt(el.prezzo)}</td>
+      <td class="r">${el.iva_pct||22}%</td>
+      <td class="r" style="font-weight:600">${fmt(el.qty*el.prezzo)}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="7" style="text-align:center;color:#999;padding:12px">Nessun elemento</td></tr>';
+
+  // Totali stampa
+  document.getElementById('pImp').textContent = fmt(SL._imp||0);
+  document.getElementById('pT22').textContent = fmt(SL._iva||0);
+  document.getElementById('pTot').textContent = fmt(SL._tot||0);
+
+  // Note cliente
+  const nEl = document.getElementById('pNoteCliente');
+  if(SL.note_cliente){ nEl.textContent = SL.note_cliente; nEl.style.display=''; }
+  else nEl.style.display='none';
+
+  // Stato sul documento
+  const statoMap = {bozza:'ACCETTAZIONE',aperta:'IN LAVORAZIONE',pronta:'PRONTA PER RITIRO',consegnata:'CONSEGNATA'};
+  const tipoInfo = TIPI_SCHEDA[SL.tipo];
+  const pStato = document.getElementById('pStato');
+  pStato.textContent = (tipoInfo?.label.trim()||'') + ' · ' + (statoMap[SL.stato]||'SCHEDA DI LAVORO');
+  if(tipoInfo) pStato.style.background = tipoInfo.colore;
+
+  setTimeout(()=>window.print(), 100);
+}
+
+// ══════════════════════════════════════════════════════════
+// MODAL CLIENTE
+// ══════════════════════════════════════════════════════════
+function apriMo(id){ document.getElementById(id).classList.add('open'); }
+function chiudiMo(id){ document.getElementById(id).classList.remove('open'); }
+
+async function cercaCliente(q){
+  const res = document.getElementById('clienteResults');
+  if(q.length < 2){ res.innerHTML=''; return; }
+
+  // ─── TODO SUPABASE ──────────────────────────────────────
+  // const { data } = await _sb.from('clienti')
+  //   .select('id,ragione_sociale,piva,cf,tipo,pec,codice_sdi')
+  //   .or(`ragione_sociale.ilike.%${q}%,piva.ilike.%${q}%`)
+  //   .limit(10);
+  // renderClienti(data||[]);
+  // ────────────────────────────────────────────────────────
+
+  // Demo
+  const demo = [
+    {id:'1',ragione_sociale:'Trasporti Bianchi Srl',piva:'IT01234567890',tipo:'b2b'},
+    {id:'2',ragione_sociale:'Mario Rossi',cf:'RSSMRA80A01H501U',tipo:'b2c'},
+  ].filter(c=>c.ragione_sociale.toLowerCase().includes(q.toLowerCase()));
+  renderClienti(demo);
+}
+
+function renderClienti(lista){
+  const res = document.getElementById('clienteResults');
+  if(!lista.length){ res.innerHTML='<p style="font-size:13px;color:var(--text-m)">Nessun risultato</p>'; return; }
+  res.innerHTML = lista.map(c=>`
+    <div onclick='selCliente(${JSON.stringify(c).replace(/'/g,"&apos;")})'
+      style="padding:10px 12px;border:1px solid var(--border);border-radius:var(--rs);cursor:pointer;transition:background .1s"
+      onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
+      <div style="font-weight:600;font-size:13px">${c.ragione_sociale}</div>
+      <div style="font-size:11px;color:var(--text-m);margin-top:2px">${c.piva||c.cf||''} · ${c.tipo==='b2b'?'Azienda':'Privato'}</div>
+    </div>
+  `).join('');
+}
+
+function selCliente(c){
+  SL.cliente = { id:c.id, nome:c.ragione_sociale, tel:'' };
+  document.getElementById('cNome').value = c.ragione_sociale;
+  chiudiMo('moCliente');
+  toast(`Cliente: ${c.ragione_sociale}`,'ok');
+  dirty();
+}
+
+// ══════════════════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════════════════
+function dirty(){
+  SL._dirty = true;
+  document.getElementById('fStato').textContent = 'Modifiche non salvate';
+  document.getElementById('fStato').className = 'fbar-stato';
+}
+
+function fmt(n){
+  return '€\u00a0' + (n||0).toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+function toast(msg,tipo=''){
+  const w = document.getElementById('toasts');
+  const t = document.createElement('div');
+  t.className = 'toast'+(tipo?' '+tipo:'');
+  t.textContent = msg;
+  w.appendChild(t);
+  setTimeout(()=>{ t.style.opacity='0'; setTimeout(()=>t.remove(),350); },3200);
+}
+
+// Avvisa se si esce con modifiche non salvate
+window.addEventListener('beforeunload', e=>{
+  if(SL._dirty){ e.preventDefault(); e.returnValue=''; }
+});
+
+init();
+</script>
+</body>
+</html>
