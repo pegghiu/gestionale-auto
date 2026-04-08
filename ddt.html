@@ -839,7 +839,7 @@ Struttura:
   "targa": "targa veicolo 7 caratteri SENZA spazi (es. AB123CD), stringa vuota se non trovata",
   "telaio": "VIN/numero telaio 17 caratteri se presente, altrimenti stringa vuota",
   "righe": [
-    { "codice": "codice articolo", "descrizione": "descrizione completa", "qty": 1, "prezzo": 0.00, "tipo": "ricambio" }
+    { "codice": "codice articolo", "descrizione": "descrizione completa", "qty": 1, "prezzo_listino": 0.00, "prezzo_netto": 0.00, "tipo": "ricambio" }
   ]
 }
 REGOLE TARGA (IMPORTANTISSIMO):
@@ -849,6 +849,11 @@ Formato targa italiana: 2 lettere + 3 cifre + 2 lettere. Può apparire in questi
 Restituisci SEMPRE la targa SENZA spazi né trattini: "AB123CD" non "AB 123 CD".
 Se non trovi la targa dopo una ricerca attenta, restituisci stringa vuota — NON inventare.
 Commesse aperte: ${commesseAperte||'nessuna'}.
+PREZZI RIGA (IMPORTANTISSIMO — le DDT italiane hanno quasi sempre DUE prezzi per riga):
+- "prezzo_listino": prezzo di listino ufficiale del fornitore (colonna "Listino", "Pr. Listino", "Prezzo listino")
+- "prezzo_netto": prezzo netto effettivo dopo sconti (colonna "Netto", "Pr. Netto", "Prezzo netto", "Importo")
+- Se il documento ha una sola colonna prezzo, mettila in entrambi i campi.
+- Usa sempre valori numerici positivi senza simbolo €.
 ALTRE REGOLE: tipo = "ricambio", "servizio" o "manodopera". qty sempre positivo. Se un campo manca usa stringa vuota o 0.`;
 
   const res = await fetch('https://api.anthropic.com/v1/messages',{
@@ -922,9 +927,11 @@ function mostraRighe(dati){
 
   (dati.righe||[]).forEach(r=>DR.righe.push({
     _id:_rigaId++, codice:r.codice||'', descrizione:r.descrizione||'',
-    qty: parseFloat(r.qty)||1, prezzo:parseFloat(r.prezzo)||0,
-    // Se listino mancante usa prezzo fornitore come partenza (modificabile)
-    prezzo_listino: parseFloat(r.prezzo_listino)||parseFloat(r.prezzo)||0,
+    qty: parseFloat(r.qty)||1,
+    // prezzo = prezzo netto acquisto da fornitore
+    prezzo: parseFloat(r.prezzo_netto||r.prezzo)||0,
+    // prezzo_listino = listino fornitore (base per il prezzo al cliente)
+    prezzo_listino: parseFloat(r.prezzo_listino)||parseFloat(r.prezzo_netto||r.prezzo)||0,
     tipo:r.tipo||'ricambio', assegna: assegnaDefault
   }));
 
