@@ -1208,6 +1208,7 @@ async function salvaBozza(){
   document.getElementById('fStato').textContent = '✓ Salvata';
   document.getElementById('fStato').className = 'fbar-stato saved';
   toast('Scheda salvata','ok');
+  setTimeout(()=>{ window.location.href = 'schede.html'; }, 900);
 }
 
 async function chiudiScheda(){
