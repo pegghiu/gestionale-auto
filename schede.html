@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Schede di Lavoro</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --accent:#E85A00;--accent-d:#C04800;--accent-l:#FFF3EC;
+  --dark:#1A1A1A;--surface:#FFF;--bg:#EDEBE6;
+  --border:#DEDAD4;--border-dk:#C4C0B8;
+  --text:#1A1A1A;--text-m:#706C65;--text-l:#9A9690;
+  --ok:#1F7A35;--ok-bg:#E6F5EB;
+  --warn:#7A5000;--warn-bg:#FFF8E6;
+  --err:#B82020;--err-bg:#FDECEC;
+  --info:#1A4FAA;--info-bg:#EBF0FD;
+  --purple:#534AB7;--purple-l:#EEEDFE;
+  --r:8px;--rs:5px;--sh:0 1px 3px rgba(0,0,0,.07)
+}
+body{font-family:'Helvetica Neue',Arial,-apple-system,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;min-height:100vh}
+
+.hdr{background:var(--dark);color:#FFF;height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;position:sticky;top:0;z-index:100}
+.hdr-l{display:flex;align-items:center;gap:20px}
+.brand{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.4)}
+.hdr-title{font-size:15px;font-weight:600}
+.btn-back{background:transparent;border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.7);padding:5px 12px;border-radius:var(--rs);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s}
+.btn-back:hover{background:rgba(255,255,255,.08);color:#FFF}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--rs);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;border:1px solid transparent;transition:all .15s;white-space:nowrap;text-decoration:none}
+.btn-p{background:var(--accent);color:#FFF;border-color:var(--accent)}
+.btn-p:hover{background:var(--accent-d)}
+.btn-s{background:#FFF;color:var(--text);border-color:var(--border)}
+.btn-s:hover{background:var(--bg)}
+.btn-sm{padding:5px 10px;font-size:12px}
+
+.page{max-width:1060px;margin:0 auto;padding:20px 16px 60px}
+
+/* FILTRI */
+.toolbar{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.toolbar select,.toolbar input{padding:7px 11px;border:1px solid var(--border);border-radius:var(--rs);font-size:13px;font-family:inherit;background:#FFF;color:var(--text);outline:none}
+.toolbar select:focus,.toolbar input:focus{border-color:var(--accent)}
+.toolbar input[type=text]{width:220px}
+
+/* KPI MINI */
+.kpi-row{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.kpi-mini{background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);padding:10px 16px;box-shadow:var(--sh);display:flex;flex-direction:column;gap:2px;min-width:120px}
+.kpi-mini-val{font-size:20px;font-weight:800;letter-spacing:-.02em}
+.kpi-mini-lbl{font-size:10px;color:var(--text-m);font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+
+/* LISTA SCHEDE */
+.scheda-row{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
+  box-shadow:var(--sh);margin-bottom:8px;
+  display:grid;
+  grid-template-columns: 130px 100px 1fr 1fr 120px 90px 90px 80px;
+  align-items:center;gap:0;
+  cursor:pointer;transition:box-shadow .15s,transform .12s;
+  text-decoration:none;color:inherit;overflow:hidden;
+}
+.scheda-row:hover{box-shadow:0 4px 16px rgba(0,0,0,.1);transform:translateY(-1px)}
+.scheda-row.header{
+  background:#F7F6F3;cursor:default;font-size:10px;font-weight:700;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--text-m);
+  transform:none;box-shadow:none;border-bottom:2px solid var(--border-dk);
+  border-radius:var(--r) var(--r) 0 0;margin-bottom:0;
+}
+.scheda-row.header:hover{box-shadow:none;transform:none}
+.sc-cell{padding:11px 14px;border-right:1px solid #F0EDE8}
+.sc-cell:last-child{border-right:none}
+.scheda-row.header .sc-cell{padding:9px 14px}
+
+.sc-num{font-family:monospace;font-size:12px;font-weight:700;letter-spacing:.04em}
+.sc-targa{font-weight:800;letter-spacing:.1em;font-size:13px}
+.sc-modello{font-size:12px;color:var(--text-m);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sc-cliente{font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sc-sub{font-size:11px;color:var(--text-m);margin-top:1px}
+.sc-data{font-size:12px;color:var(--text-m);white-space:nowrap}
+.sc-tot{font-weight:700;font-size:13px;font-variant-numeric:tabular-nums;text-align:right}
+
+/* BADGE TIPO */
+.tipo-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:800;letter-spacing:.06em;font-family:monospace}
+
+/* BADGE STATO */
+.stato-dot{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600}
+.stato-dot::before{content:'';width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.s-bozza::before{background:#9A9690}
+.s-aperta::before{background:var(--info)}
+.s-pronta::before{background:var(--ok)}
+.s-consegnata::before{background:var(--text-l)}
+
+/* SEZIONE PREVENTIVI */
+.sezione-title{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-m);margin:20px 0 8px;display:flex;align-items:center;gap:10px}
+.sezione-title::after{content:'';flex:1;height:1px;background:var(--border)}
+
+.empty-state{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:48px;text-align:center;color:var(--text-l)}
+.empty-state-icon{font-size:36px;margin-bottom:12px}
+.empty-state-title{font-size:15px;font-weight:600;color:var(--text-m);margin-bottom:6px}
+.empty-state-sub{font-size:13px}
+
+.toasts{position:fixed;bottom:20px;right:20px;display:flex;flex-direction:column;gap:8px;z-index:300}
+.toast{background:var(--dark);color:#FFF;padding:10px 16px;border-radius:var(--r);font-size:13px;animation:fadeUp .22s ease;transition:opacity .3s}
+.toast.ok{background:var(--ok)}
+.toast.err{background:var(--err)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+@media(max-width:800px){
+  .scheda-row{grid-template-columns:1fr 1fr;border-radius:var(--r)}
+  .sc-cell{border-right:none;border-bottom:1px solid #F0EDE8}
+}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="hdr-l">
+    <span class="brand">Gestione Veicoli</span>
+    <span class="hdr-title">Schede di Lavoro</span>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center">
+    <a href="scheda.html?modo=preventivo" class="btn btn-s" style="font-size:12px">+ Preventivo -S</a>
+    <a href="scheda.html" class="btn btn-p">+ Nuova scheda</a>
+    <button class="btn-back" onclick="location.href='index.html'">← Menu</button>
+  </div>
+</header>
+
+<div class="page">
+
+  <!-- TOOLBAR -->
+  <div class="toolbar">
+    <input type="text" id="cerca" placeholder="Cerca targa, cliente, numero..." oninput="filtra()">
+    <select id="fStato" onchange="filtra()">
+      <option value="">Tutti gli stati</option>
+      <option value="bozza">Accettazione</option>
+      <option value="aperta">In lavorazione</option>
+      <option value="pronta">Pronta</option>
+      <option value="consegnata">Consegnata</option>
+    </select>
+    <select id="fTipo" onchange="filtra()">
+      <option value="">Tutti i tipi</option>
+      <option value="aperta">Aperte (senza suffisso)</option>
+      <option value="CA">-CA Da pagare</option>
+      <option value="CP">-CP Pagata</option>
+      <option value="V">-V Vendita</option>
+      <option value="R">-R Scontrino</option>
+      <option value="F">-F Fatturata</option>
+      <option value="FF">-FF Fatturata altro</option>
+      <option value="S">-S Preventivo</option>
+    </select>
+    <select id="fTecnico" onchange="filtra()">
+      <option value="">Tutti i tecnici</option>
+      <option>Davide</option><option>Cristian</option><option>Ivan</option>
+      <option>Marco</option><option>Luca</option><option>Stagista</option>
+    </select>
+    <span id="risultati" style="font-size:12px;color:var(--text-m);margin-left:auto"></span>
+  </div>
+
+  <!-- KPI -->
+  <div class="kpi-row">
+    <div class="kpi-mini"><div class="kpi-mini-val" id="kTot">—</div><div class="kpi-mini-lbl">Totali</div></div>
+    <div class="kpi-mini"><div class="kpi-mini-val" style="color:var(--info)" id="kAperte">—</div><div class="kpi-mini-lbl">In lavorazione</div></div>
+    <div class="kpi-mini"><div class="kpi-mini-val" style="color:var(--ok)" id="kPronte">—</div><div class="kpi-mini-lbl">Pronte</div></div>
+    <div class="kpi-mini"><div class="kpi-mini-val" style="color:var(--warn)" id="kCA">—</div><div class="kpi-mini-lbl">Da pagare (-CA)</div></div>
+    <div class="kpi-mini"><div class="kpi-mini-val" style="color:var(--purple)" id="kPrev">—</div><div class="kpi-mini-lbl">Preventivi (-S)</div></div>
+  </div>
+
+  <!-- LISTA SCHEDE -->
+  <div id="listaSchede"></div>
+
+  <!-- PREVENTIVI (sezione separata) -->
+  <div id="sezPreventivi" style="display:none">
+    <div class="sezione-title">Preventivi (-S)</div>
+    <div id="listaPreventivi"></div>
+  </div>
+
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+const SUPABASE_URL = 'https://iztrrgqkzsovorcmixum.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml6dHJyZ3FrenNvdm9yY21peHVtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMDI3NzMsImV4cCI6MjA4OTc3ODc3M30.3IyUCDpFs9x_iSi5C4asodt5_O3F_cwgdb3eBkoQh3U';
+const _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const TIPI = {
+  '':   { label:'Aperta',  col:'#706C65', bg:'#F0EDE8' },
+  'CA': { label:'-CA',     col:'#854F0B', bg:'#FAEEDA' },
+  'CP': { label:'-CP',     col:'#1A4FAA', bg:'#EBF0FD' },
+  'V':  { label:'-V',      col:'#534AB7', bg:'#EEEDFE' },
+  'R':  { label:'-R',      col:'#1F7A35', bg:'#E6F5EB' },
+  'F':  { label:'-F',      col:'#1F7A35', bg:'#E6F5EB' },
+  'FF': { label:'-FF',     col:'#706C65', bg:'#F0EDE8' },
+  'S':  { label:'-S',      col:'#534AB7', bg:'#EEEDFE' },
+};
+
+// Demo schede — in prod: Supabase
+let TUTTE = [
+  {id:'1', numero:'26/0001',    tipo:'',   stato:'aperta',    data:'2026-04-08', targa:'FD890RC', modello:'Fiat Panda 1.3',   cliente:'Arval Italia',      tecnico:'Davide',   tot:156.00, rap:2, note:'Tagliando + filtri'},
+  {id:'2', numero:'26/0002-CA', tipo:'CA', stato:'pronta',    data:'2026-04-07', targa:'CC345NG', modello:'VW Lupo',          cliente:'Mario Rossi',       tecnico:'Cristian', tot:349.50, rap:1, note:'Alzavetri SX'},
+  {id:'3', numero:'26/0003',    tipo:'',   stato:'bozza',     data:'2026-04-06', targa:'FV535JH', modello:'Iveco Daily',      cliente:'Trasporti Bianchi', tecnico:'Ivan',     tot:0,      rap:0, note:'Accettazione in corso'},
+  {id:'4', numero:'26/0004-CP', tipo:'CP', stato:'consegnata',data:'2026-04-05', targa:'AB123CD', modello:'Fiat Ducato',      cliente:'Luca Ferrari Srl',  tecnico:'Marco',    tot:891.00, rap:3, note:'Revisione completa'},
+  {id:'5', numero:'26/0005-S',  tipo:'S',  stato:'bozza',     data:'2026-04-04', targa:'',        modello:'',                cliente:'Cliente TBD',       tecnico:'',         tot:0,      rap:0, note:'Preventivo sostituzione freni'},
+  {id:'6', numero:'26/0006',    tipo:'',   stato:'aperta',    data:'2026-04-03', targa:'FG456EF', modello:'VW Transit',       cliente:'Autonoleggio Sud',  tecnico:'Luca',     tot:234.00, rap:1, note:'Diagnosi centralina'},
+];
+
+let _filtrate = [...TUTTE];
+
+function init(){
+  // TODO Supabase:
+  // const { data } = await _sb.from('rapportini')
+  //   .select('id,numero,tipo,stato,data,targa,modello,cliente_nome,tecnico,totale,note')
+  //   .not('stato','eq','eliminata')
+  //   .order('data',{ascending:false});
+  // TUTTE = data||[];
+
+  filtra();
+}
+
+function filtra(){
+  const q       = document.getElementById('cerca').value.toLowerCase();
+  const stato   = document.getElementById('fStato').value;
+  const tipo    = document.getElementById('fTipo').value;
+  const tecnico = document.getElementById('fTecnico').value;
+
+  _filtrate = TUTTE.filter(s=>{
+    if(stato && s.stato!==stato) return false;
+    if(tipo==='aperta' && s.tipo!=='') return false;
+    if(tipo && tipo!=='aperta' && s.tipo!==tipo) return false;
+    if(tecnico && s.tecnico!==tecnico) return false;
+    if(q && ![s.numero,s.targa,s.modello,s.cliente,s.note].join(' ').toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  renderKpi();
+  renderLista();
+}
+
+function renderKpi(){
+  document.getElementById('kTot').textContent    = TUTTE.length;
+  document.getElementById('kAperte').textContent = TUTTE.filter(s=>s.stato==='aperta').length;
+  document.getElementById('kPronte').textContent = TUTTE.filter(s=>s.stato==='pronta').length;
+  document.getElementById('kCA').textContent     = TUTTE.filter(s=>s.tipo==='CA').length;
+  document.getElementById('kPrev').textContent   = TUTTE.filter(s=>s.tipo==='S').length;
+}
+
+function renderLista(){
+  const schede     = _filtrate.filter(s=>s.tipo!=='S').sort((a,b)=>b.data.localeCompare(a.data));
+  const preventivi = _filtrate.filter(s=>s.tipo==='S').sort((a,b)=>b.data.localeCompare(a.data));
+
+  document.getElementById('risultati').textContent =
+    `${_filtrate.length} schede${_filtrate.length!==TUTTE.length?' (filtrate)':''}`;
+
+  const lista = document.getElementById('listaSchede');
+  if(!schede.length){
+    lista.innerHTML = `<div class="empty-state">
+      <div class="empty-state-icon">📋</div>
+      <div class="empty-state-title">Nessuna scheda trovata</div>
+      <div class="empty-state-sub">Cambia i filtri o crea una nuova scheda</div>
+    </div>`;
+  } else {
+    lista.innerHTML = `
+      <div class="scheda-row header">
+        <div class="sc-cell">N° Scheda</div>
+        <div class="sc-cell">Targa</div>
+        <div class="sc-cell">Veicolo / Note</div>
+        <div class="sc-cell">Cliente</div>
+        <div class="sc-cell">Tecnico / Data</div>
+        <div class="sc-cell">Rapportini</div>
+        <div class="sc-cell">Totale</div>
+        <div class="sc-cell">Stato</div>
+      </div>
+      ${schede.map(s=>rigaScheda(s)).join('')}
+    `;
+  }
+
+  const sezPrev = document.getElementById('sezPreventivi');
+  const listaPrev = document.getElementById('listaPreventivi');
+  if(preventivi.length){
+    sezPrev.style.display='';
+    listaPrev.innerHTML = `
+      <div class="scheda-row header">
+        <div class="sc-cell">N° Preventivo</div>
+        <div class="sc-cell">Targa</div>
+        <div class="sc-cell">Descrizione</div>
+        <div class="sc-cell">Cliente</div>
+        <div class="sc-cell">Tecnico / Data</div>
+        <div class="sc-cell">—</div>
+        <div class="sc-cell">Totale</div>
+        <div class="sc-cell">Stato</div>
+      </div>
+      ${preventivi.map(s=>rigaScheda(s)).join('')}
+    `;
+  } else {
+    sezPrev.style.display='none';
+  }
+}
+
+function rigaScheda(s){
+  const tipo = TIPI[s.tipo]||TIPI[''];
+  const stati = {
+    bozza:      {cls:'s-bozza',     lbl:'Accettazione'},
+    aperta:     {cls:'s-aperta',    lbl:'In lavorazione'},
+    pronta:     {cls:'s-pronta',    lbl:'Pronta'},
+    consegnata: {cls:'s-consegnata',lbl:'Consegnata'},
+  };
+  const st = stati[s.stato]||{cls:'s-bozza',lbl:s.stato};
+
+  return `<a href="scheda.html?id=${s.id}" class="scheda-row">
+    <div class="sc-cell">
+      <div class="sc-num">${s.numero}</div>
+      <div style="margin-top:4px">
+        <span class="tipo-badge" style="background:${tipo.bg};color:${tipo.col}">${tipo.label}</span>
+      </div>
+    </div>
+    <div class="sc-cell">
+      <div class="sc-targa">${s.targa||'—'}</div>
+      <div class="sc-modello">${s.modello||''}</div>
+    </div>
+    <div class="sc-cell">
+      <div style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px">${s.note||'—'}</div>
+    </div>
+    <div class="sc-cell">
+      <div class="sc-cliente">${s.cliente||'—'}</div>
+    </div>
+    <div class="sc-cell">
+      <div class="sc-data">${s.tecnico||'—'}</div>
+      <div class="sc-data" style="margin-top:2px">${fmtData(s.data)}</div>
+    </div>
+    <div class="sc-cell" style="text-align:center">
+      <div style="font-size:18px;font-weight:700;color:var(--info)">${s.rap||0}</div>
+      <div style="font-size:10px;color:var(--text-l)">rapportini</div>
+    </div>
+    <div class="sc-cell">
+      <div class="sc-tot">${s.tot>0?fmt(s.tot):'—'}</div>
+    </div>
+    <div class="sc-cell">
+      <div class="stato-dot ${st.cls}">${st.lbl}</div>
+    </div>
+  </a>`;
+}
+
+function fmtData(d){
+  if(!d) return '—';
+  return new Date(d).toLocaleDateString('it-IT',{day:'2-digit',month:'short',year:'2-digit'});
+}
+function fmt(n){
+  return '€\u00a0'+(n||0).toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function toast(msg,tipo=''){
+  const w=document.getElementById('toasts');
+  const t=document.createElement('div');
+  t.className='toast'+(tipo?' '+tipo:'');t.textContent=msg;w.appendChild(t);
+  setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),350)},3200);
+}
+
+init();
+</script>
+</body>
+</html>

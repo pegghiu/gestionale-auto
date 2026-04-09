@@ -198,7 +198,7 @@ textarea{resize:vertical;min-height:70px;line-height:1.6}
   <div class="hdr-r">
     <span id="alertScorte" class="badge b-warn" style="display:none">⚠ Scorte basse</span>
     <span id="badgeEmail"  class="badge b-info" style="display:none;cursor:pointer" onclick="goTab('ddt',document.querySelector('.tab'))">✉ <span id="badgeEmailN">0</span> DDT in arrivo</span>
-    <button class="btn-back" onclick="window.location.href='rapportino.html'">← Rapportino</button>
+    <button class="btn-back" onclick="location.href='index.html'">← Menu</button>
   </div>
 </header>
 
@@ -207,6 +207,7 @@ textarea{resize:vertical;min-height:70px;line-height:1.6}
   <button class="tab"    onclick="goTab('mag',this)">🗄 Magazzino</button>
   <button class="tab"    onclick="goTab('mov',this)">↕ Movimenti</button>
   <button class="tab"    onclick="goTab('for',this)">🏭 Fornitori</button>
+  <button class="tab"    onclick="goTab('resi',this)" id="tabResi">↩ Resi <span id="badgeResi" style="display:none;background:#B82020;color:#FFF;border-radius:20px;padding:1px 7px;font-size:10px;margin-left:4px">0</span></button>
 </div>
 
 <!-- ══════════════════════════════════════════════════════
@@ -404,6 +405,7 @@ textarea{resize:vertical;min-height:70px;line-height:1.6}
           <th class="r" style="width:72px">Margine</th>
           <th style="width:160px">Assegna a</th>
           <th style="width:36px"></th>
+          <th style="width:36px" title="Segna per reso">↩</th>
         </tr></thead>
         <tbody id="righeBody"></tbody>
       </table>
@@ -418,9 +420,13 @@ textarea{resize:vertical;min-height:70px;line-height:1.6}
       </div>
     </div>
 
-    <div style="padding:14px 20px;display:flex;justify-content:flex-end;gap:10px">
-      <button class="btn btn-s" onclick="resetDDT()">✕ Annulla</button>
-      <button class="btn btn-p btn-lg" id="btnConferma" onclick="confermaDDT()">✓ Conferma e carica in magazzino / commesse</button>
+    <div style="padding:14px 20px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <button class="btn btn-s btn-sm" id="btnApriScheda" style="display:none;background:var(--ok-bg);color:var(--ok);border-color:var(--ok);font-weight:700"
+        onclick="apriSchedaDaEmail()">📋 Apri scheda di lavoro →</button>
+      <div style="display:flex;gap:10px;margin-left:auto">
+        <button class="btn btn-s" onclick="resetDDT()">✕ Annulla</button>
+        <button class="btn btn-p btn-lg" id="btnConferma" onclick="confermaDDT()">✓ Conferma e carica in magazzino</button>
+      </div>
     </div>
   </div>
 
@@ -533,6 +539,26 @@ textarea{resize:vertical;min-height:70px;line-height:1.6}
       </table>
     </div>
   </div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════════════
+     TAB 5 — RESI
+══════════════════════════════════════════════════════ -->
+<div id="tab-resi" class="page" style="display:none">
+
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:10px">
+    <div>
+      <div style="font-size:13px;color:var(--text-m)">Ricambi segnalati per reso al fornitore — raggruppati per DDT di origine.</div>
+    </div>
+    <button class="btn btn-p btn-sm" id="btnConvalidaResi" onclick="convalidaTuttiResi()" style="display:none">📤 Convalida tutti i resi</button>
+  </div>
+
+  <div id="resiVuoto" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:40px;text-align:center;color:var(--text-l);font-size:13px">
+    Nessun ricambio in attesa di reso.<br>Clicca il pulsante ↩ su un ricambio dalla DDT o dalla scheda di lavoro.
+  </div>
+
+  <div id="resiGruppi"></div>
 
 </div>
 
@@ -729,6 +755,9 @@ function init() {
   renderChipsGlobali();
   startEmailPolling();
 
+  // Importa resi segnalati dalla scheda di lavoro
+  importaResiDaScheda();
+
   // Drag & drop
   const dz = document.getElementById('dropZone');
   dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over')});
@@ -836,7 +865,7 @@ Struttura:
   "numero": "numero DDT/documento",
   "data": "YYYY-MM-DD",
   "ordine": "numero ordine di riferimento se presente, altrimenti stringa vuota",
-  "targa": "targa veicolo 7 caratteri SENZA spazi (es. AB123CD), stringa vuota se non trovata",
+  "targa": "targa veicolo 7 caratteri SEMPRE IN MAIUSCOLO SENZA spazi (es. AB123CD), stringa vuota se non trovata",
   "telaio": "VIN/numero telaio 17 caratteri se presente, altrimenti stringa vuota",
   "righe": [
     { "codice": "codice articolo", "descrizione": "descrizione completa", "qty": 1, "prezzo_listino": 0.00, "prezzo_netto": 0.00, "tipo": "ricambio" }
@@ -1133,6 +1162,7 @@ function renderRighe(){
         ${commOptions}
       </select></td>
       <td style="${rowBg}"><button class="btn btn-g btn-sm del" onclick="rimuoviRiga(${r._id})">✕</button></td>
+      <td style="${rowBg}"><button class="btn btn-g btn-sm" title="Segna per reso" onclick="segnalaReso(${r._id})" style="color:var(--err);font-size:13px">↩</button></td>
     `;
     tbody.appendChild(tr);
   });
@@ -1238,17 +1268,225 @@ function confermaDDT(){
     : `✓ DDT confermata — ${DR.righe.length} articoli caricati`;
   toast(msg, isReso ? 'info' : 'ok');
   if(DR._emailId) segnaEmailConfermata(DR._emailId);
+
+  // Mostra pulsante scheda di lavoro se c'è una targa
+  if(!isReso && DR.targa){
+    const btnScheda = document.getElementById('btnApriScheda');
+    if(btnScheda) btnScheda.style.display = '';
+    // Nascondi pulsante conferma
+    const btnConferma = document.getElementById('btnConferma');
+    if(btnConferma) btnConferma.style.display = 'none';
+    toast('Vuoi aprire la scheda di lavoro per questo veicolo?', 'info');
+  } else {
+    resetDDT();
+  }
+}
+
+function apriSchedaDaEmail(){
+  // Passa targa, modello e ricambi alla scheda di lavoro
+  const dati = {
+    _from: 'ddt',
+    ddt_numero: DR.numero,
+    targa:   DR.targa,
+    modello: DR.modello || '',
+    cliente: {},
+    problema: '',
+    elementi: DR.righe.map(r=>({
+      tipo:        r.tipo||'ricambio',
+      codice:      r.codice||'',
+      descrizione: r.descrizione||'',
+      qty:         r.qty||1,
+      prezzo:      r.prezzo_listino||r.prezzo||0,
+      iva_pct:     22
+    }))
+  };
+  sessionStorage.setItem('scheda_prefill', JSON.stringify(dati));
+  window.open('scheda.html?from=rapportino', '_blank');
   resetDDT();
 }
 
+function importaResiDaScheda(){
+  const KEY = 'resi_da_scheda';
+  const resi = JSON.parse(sessionStorage.getItem(KEY)||'[]');
+  if(!resi.length) return;
+
+  resi.forEach(r=>{
+    const già = RESI_CODA.find(x=>x.id===r.id);
+    if(!già) RESI_CODA.push(r);
+  });
+  sessionStorage.removeItem(KEY);
+  renderResi();
+
+  if(resi.length>0){
+    toast(`↩ ${resi.length} reso${resi.length>1?'i':''} importato${resi.length>1?'i':''} dalla scheda — vai al tab Resi`, 'info');
+    // Porta automaticamente al tab resi
+    const tabResi = document.getElementById('tabResi');
+    if(tabResi) setTimeout(()=>tabResi.click(), 800);
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// RESI — coda ricambi da restituire al fornitore
+// ══════════════════════════════════════════════════════════
+// Struttura: { id, codice, descrizione, qty, prezzo, ddt_num, ddt_data, fornitore, segnalato_at }
+let RESI_CODA = [];
+
+function segnalaReso(rigaId){
+  const r = DR.righe.find(r=>r._id===rigaId);
+  if(!r) return;
+
+  // Controlla se già in coda
+  const giaSegnalato = RESI_CODA.find(x=>
+    x.codice===r.codice && x.ddt_num===DR.numero && x.descrizione===r.descrizione
+  );
+  if(giaSegnalato){
+    toast('Articolo già segnalato per reso','info');
+    return;
+  }
+
+  RESI_CODA.push({
+    id:          Date.now()+'_'+rigaId,
+    codice:      r.codice||'',
+    descrizione: r.descrizione||'',
+    qty:         r.qty||1,
+    prezzo_netto: r.prezzo||0,
+    ddt_num:     DR.numero||'',
+    ddt_data:    DR.data||'',
+    fornitore:   DR.fornitore||'',
+    segnalato_at: new Date().toISOString(),
+    note:        '',
+    convalidato: false
+  });
+
+  renderResi();
+  toast(`↩ ${r.descrizione||r.codice} — segnalato per reso`, 'info');
+
+  // Evidenzia la riga come segnalata
+  const row = document.querySelector(`[onclick="segnalaReso(${rigaId})"]`)?.closest('tr');
+  if(row) row.style.opacity = '0.5';
+}
+
+function renderResi(){
+  const vuoto  = document.getElementById('resiVuoto');
+  const gruppi = document.getElementById('resiGruppi');
+  const badge  = document.getElementById('badgeResi');
+  const btnConv= document.getElementById('btnConvalidaResi');
+
+  const attesa = RESI_CODA.filter(r=>!r.convalidato);
+
+  badge.textContent = attesa.length;
+  badge.style.display = attesa.length>0 ? '' : 'none';
+
+  if(!attesa.length){
+    vuoto.style.display='';
+    gruppi.innerHTML='';
+    btnConv && (btnConv.style.display='none');
+    return;
+  }
+
+  vuoto.style.display='none';
+  btnConv && (btnConv.style.display='');
+
+  // Raggruppa per DDT di origine
+  const byDDT = {};
+  attesa.forEach(r=>{
+    const key = r.ddt_num || 'Senza riferimento DDT';
+    if(!byDDT[key]) byDDT[key] = { ddt_num:r.ddt_num, fornitore:r.fornitore, ddt_data:r.ddt_data, righe:[] };
+    byDDT[key].righe.push(r);
+  });
+
+  gruppi.innerHTML = Object.values(byDDT).map(g=>`
+    <div class="card" style="border-left:4px solid var(--err);margin-bottom:12px">
+      <div class="ch" style="background:var(--err-bg)">
+        <div>
+          <span class="ct" style="color:var(--err)">↩ Reso — DDT origine: ${g.ddt_num||'—'}</span>
+          ${g.fornitore?`<span style="font-size:12px;color:var(--text-m);margin-left:10px">${g.fornitore}</span>`:''}
+          ${g.ddt_data?`<span style="font-size:11px;color:var(--text-l);margin-left:8px">${g.ddt_data}</span>`:''}
+        </div>
+        <button class="btn btn-sm" style="background:var(--err);color:#FFF;border:none"
+          onclick="convalidaGruppoReso('${g.ddt_num||''}')">📤 Convalida reso DDT ${g.ddt_num||''}</button>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="tbl" style="min-width:400px">
+          <thead><tr>
+            <th>Codice</th><th>Descrizione</th>
+            <th class="r" style="width:60px">Qtà</th>
+            <th class="r" style="width:90px">Prezzo netto</th>
+            <th style="width:160px">Note</th>
+            <th style="width:36px"></th>
+          </tr></thead>
+          <tbody>
+            ${g.righe.map(r=>`<tr>
+              <td style="font-family:monospace;font-size:11px">${r.codice||'—'}</td>
+              <td>${r.descrizione}</td>
+              <td class="r">${r.qty}</td>
+              <td class="r">${fmt2(r.prezzo_netto)}</td>
+              <td><input type="text" value="${r.note||''}" placeholder="Motivo reso..."
+                oninput="updNoteReso('${r.id}',this.value)"
+                style="font-size:12px;padding:4px 8px;width:100%"></td>
+              <td><button class="btn btn-g btn-sm del" onclick="rimuoviDaCodaResi('${r.id}')" title="Rimuovi">✕</button></td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `).join('');
+}
+
+function updNoteReso(id, val){
+  const r = RESI_CODA.find(r=>r.id===id);
+  if(r) r.note = val;
+}
+
+function rimuoviDaCodaResi(id){
+  RESI_CODA = RESI_CODA.filter(r=>r.id!==id);
+  renderResi();
+}
+
+function convalidaGruppoReso(ddtNum){
+  const gruppo = RESI_CODA.filter(r=>!r.convalidato && r.ddt_num===ddtNum);
+  if(!gruppo.length) return;
+  if(!confirm(`Convalidare il reso di ${gruppo.length} articoli per la DDT ${ddtNum||''}?\n\nVerranno scaricati dal magazzino.`)) return;
+
+  const ts = new Date().toISOString().slice(0,10);
+  gruppo.forEach(r=>{
+    r.convalidato = true;
+    // Scarico magazzino
+    const art = ARTICOLI.find(a=>a.codice===r.codice);
+    if(art) art.qta = Math.max(0, art.qta - r.qty);
+    // Movimento reso
+    MOVIMENTI.unshift({
+      id:Date.now()+Math.random(), data:ts, tipo:'out',
+      codice:r.codice||'—', descrizione:r.descrizione,
+      qta:-r.qty, rif:`RESO DDT ${r.ddt_num||''} — ${r.fornitore||''}`,
+      utente:'Tu'
+    });
+  });
+
+  renderMag(); renderMov(); renderResi();
+  toast(`↩ Reso DDT ${ddtNum||''} convalidato — ${gruppo.length} articoli scaricati`, 'ok');
+}
+
+function convalidaTuttiResi(){
+  const gruppi = [...new Set(RESI_CODA.filter(r=>!r.convalidato).map(r=>r.ddt_num))];
+  gruppi.forEach(g=>convalidaGruppoReso(g));
+}
+
+function fmt2(n){ return '€\u00a0'+(n||0).toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+
 function resetDDT(){
   DR={fornitore:'',numero:'',data:'',ordine:'',targa:'',telaio:'',
-      causale:'',rif_ddt_originale:'',tipo_movimento:'entrata',righe:[]};
+      causale:'',rif_ddt_originale:'',tipo_movimento:'entrata',righe:[],modello:''};
   document.getElementById('cardRighe').style.display='none';
   document.getElementById('ddtMeta').textContent='';
   document.getElementById('targaMatchBanner').innerHTML='';
   document.getElementById('targaCommessaField').style.display='none';
   document.getElementById('bannerReso').style.display='none';
+  // Ripristina pulsanti
+  const btnScheda = document.getElementById('btnApriScheda');
+  if(btnScheda) btnScheda.style.display='none';
+  const btnConferma = document.getElementById('btnConferma');
+  if(btnConferma) btnConferma.style.display='';
   renderBannerReso();
 }
 
