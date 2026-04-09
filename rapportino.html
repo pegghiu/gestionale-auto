@@ -261,8 +261,8 @@ function init(){
   const oggi = new Date().toISOString().slice(0,10);
   R.data = oggi;
   document.getElementById('rData').value = oggi;
-  const anno = new Date().getFullYear();
-  R.numero = 'RAP-'+anno+'-'+String(Date.now()).slice(-4);
+  const annoBreve = String(new Date().getFullYear()).slice(-2);
+  R.numero = `${annoBreve}/${String(Math.floor(Math.random()*9000)+1000)}`;
   document.getElementById('rNumero').value = R.numero;
   document.getElementById('hNum').textContent = R.numero;
 
