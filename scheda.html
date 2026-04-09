@@ -1191,13 +1191,69 @@ async function caricaDaDDT(ddtId){
 }
 
 async function caricaScheda(id){
-  // ─── TODO SUPABASE ──────────────────────────────────────
-  // const { data } = await _sb.from('rapportini')
-  //   .select('*, elementi(*), clienti(*), veicoli(*)')
-  //   .eq('id', id).single();
-  // if(data) populaForm(data);
-  // ────────────────────────────────────────────────────────
-  console.log('TODO: carica scheda', id);
+  try {
+    const { data: s, error } = await _sb.from('rapportini')
+      .select('*').eq('id', id).single();
+    if(error || !s){ toast('Scheda non trovata','err'); return; }
+
+    SL.id          = s.id;
+    SL.numeroBase  = s.numero_base || s.numero;
+    SL.stato       = s.stato || 'bozza';
+    SL.targa       = s.targa || '';
+    SL.modello     = s.modello || '';
+    SL.anno        = s.anno ? String(s.anno) : '';
+    SL.km          = s.km ? String(s.km) : '';
+    SL.tecnico     = s.tecnico || '';
+    SL.data        = s.data || '';
+    SL.data_consegna = s.data_consegna || '';
+    SL.problema    = s.problema || '';
+    SL.note_interne= s.note_interne || '';
+    SL.note_cliente= s.note_cliente || '';
+    SL.cliente     = { id: s.cliente_id, nome: s.cliente_nome||'', tel: s.cliente_tel||'' };
+    SL.ore_riconosciute    = s.ore_riconosciute || 0;
+    SL.motivazione_rettifica = s.motivazione_rettifica || '';
+    SL.rapportini  = s.rapportini_giornalieri || [];
+
+    setTipoScheda(s.tipo || '');
+
+    // Popola i campi form
+    document.getElementById('targa').value    = SL.targa;
+    document.getElementById('modello').value  = SL.modello;
+    document.getElementById('anno').value     = SL.anno;
+    document.getElementById('km').value       = SL.km;
+    document.getElementById('dataAp').value   = SL.data;
+    document.getElementById('dataConsCons').value = SL.data_consegna;
+    document.getElementById('tecnico').value  = SL.tecnico;
+    document.getElementById('problema').value = SL.problema;
+    document.getElementById('noteInt').value  = SL.note_interne;
+    document.getElementById('noteCliente').value = SL.note_cliente;
+    document.getElementById('cNome').value    = SL.cliente.nome;
+    document.getElementById('cTel').value     = SL.cliente.tel;
+    document.getElementById('oreRiconosciute').value = SL.ore_riconosciute||'';
+    document.getElementById('motivazioneRett').value = SL.motivazione_rettifica;
+
+    if(SL.targa.length===7){
+      const badge = document.getElementById('targaBadge');
+      badge.textContent = SL.targa; badge.style.display='inline-block';
+      const btnCerca = document.getElementById('btnCercaCollegati');
+      if(btnCerca) btnCerca.style.display='';
+    }
+
+    const stepIdx = {bozza:1,aperta:2,pronta:3,consegnata:4}[SL.stato]||1;
+    setStato(SL.stato, document.getElementById('step'+stepIdx));
+
+    renderRapportini();
+    aggiornaTotali();
+
+  } catch(e){
+    console.error('caricaScheda:', e);
+    toast('Errore caricamento scheda','err');
+  }
+
+  // Auto-stampa
+  if(new URLSearchParams(window.location.search).get('print')==='1'){
+    setTimeout(()=>stampa(), 600);
+  }
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1235,25 +1291,66 @@ function valida(){
 // SALVA
 // ══════════════════════════════════════════════════════════
 async function salvaBozza(){
-  const payload = buildPayload();
+  const payload = buildPayload().scheda;
   console.log('💾 SALVA SCHEDA:', payload);
 
-  // ─── TODO SUPABASE ──────────────────────────────────────
-  // const { data, error } = await _sb.from('rapportini')
-  //   .upsert({ ...payload.scheda }).select().single();
-  // if(error){ toast('Errore: '+error.message,'err'); return; }
-  // SL.id = data.id;
-  // await _sb.from('elementi').delete().eq('rapportino_id', data.id);
-  // await _sb.from('elementi').insert(
-  //   payload.elementi.map(e=>({ ...e, rapportino_id: data.id }))
-  // );
-  // ────────────────────────────────────────────────────────
+  try {
+    // Genera numero scheda da Supabase se nuovo
+    if(!SL.id && !SL.numeroBase){
+      const { data: numData } = await _sb.rpc('next_numero_scheda');
+      if(numData) { SL.numeroBase = numData; setTipoScheda(SL.tipo); }
+    }
 
-  SL._dirty = false;
-  document.getElementById('fStato').textContent = '✓ Salvata';
-  document.getElementById('fStato').className = 'fbar-stato saved';
-  toast('Scheda salvata','ok');
-  setTimeout(()=>{ window.location.href = 'schede.html'; }, 900);
+    const record = {
+      numero:         SL.numero,
+      numero_base:    SL.numeroBase,
+      tipo:           SL.tipo,
+      stato:          SL.stato,
+      data:           SL.data || new Date().toISOString().slice(0,10),
+      data_consegna:  SL.data_consegna || null,
+      targa:          SL.targa,
+      modello:        SL.modello,
+      anno:           parseInt(SL.anno)||null,
+      km:             parseInt(SL.km)||0,
+      tecnico:        SL.tecnico,
+      problema:       SL.problema,
+      note_interne:   SL.note_interne,
+      note_cliente:   SL.note_cliente,
+      cliente_nome:   SL.cliente.nome,
+      cliente_tel:    SL.cliente.tel,
+      imponibile:     SL._imp||0,
+      iva:            SL._iva||0,
+      totale:         SL._tot||0,
+      ore_dichiarate: SL._hDichiarate||0,
+      ore_riconosciute: SL.ore_riconosciute||0,
+      ore_delta:      SL._deltaH||0,
+      efficienza_pct: SL._eff||null,
+      motivazione_rettifica: SL.motivazione_rettifica||'',
+      rapportini_giornalieri: SL.rapportini
+    };
+
+    let error, data;
+    if(SL.id){
+      ({ error, data } = await _sb.from('rapportini')
+        .update(record).eq('id', SL.id).select().single());
+    } else {
+      ({ error, data } = await _sb.from('rapportini')
+        .insert(record).select().single());
+      if(data) SL.id = data.id;
+    }
+
+    if(error) throw error;
+
+    SL._dirty = false;
+    document.getElementById('fStato').textContent = '✓ Salvata';
+    document.getElementById('fStato').className = 'fbar-stato saved';
+    toast('Scheda salvata','ok');
+    setTimeout(()=>{ window.location.href = 'schede.html'; }, 900);
+
+  } catch(e){
+    console.error('Salvataggio:', e);
+    toast('Errore salvataggio: '+e.message,'err');
+  }
 }
 
 async function chiudiScheda(){
