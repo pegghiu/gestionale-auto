@@ -239,12 +239,14 @@ textarea{resize:vertical;min-height:80px;line-height:1.6}
         <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-m);margin-bottom:4px">Tipo scheda</div>
         <select id="tipoScheda" onchange="setTipoScheda(this.value)"
           style="font-size:14px;font-weight:600;padding:7px 12px;border:1px solid var(--border);border-radius:var(--rs);min-width:300px">
+          <option value="">Aperta (lavoro in corso)</option>
           <option value="CA">-CA · Da pagare</option>
           <option value="CP">-CP · Pagata, non ancora fatturata</option>
           <option value="V"> -V  · Veicolo in vendita / venduto</option>
           <option value="R"> -R  · Pagata con scontrino fiscale</option>
           <option value="F"> -F  · Fatturata</option>
           <option value="FF">-FF · Fatturata su altro veicolo</option>
+          <option value="S"> -S  · Preventivo</option>
         </select>
       </div>
       <div style="border-left:1px solid var(--border);padding-left:14px">
@@ -262,7 +264,11 @@ textarea{resize:vertical;min-height:80px;line-height:1.6}
   <div class="card">
     <div class="ch">
       <span class="ct">Veicolo</span>
-      <span class="targa-badge" id="targaBadge"></span>
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="btn btn-s btn-sm" id="btnCercaCollegati" style="display:none"
+          onclick="cercaCollegate()">🔍 Cerca DDT e rapportini disponibili</button>
+        <span class="targa-badge" id="targaBadge"></span>
+      </div>
     </div>
     <div class="cb">
       <div class="g4">
@@ -554,6 +560,21 @@ textarea{resize:vertical;min-height:80px;line-height:1.6}
 </div><!-- /printDoc -->
 
 <!-- ═══ MODAL CLIENTE ════════════════════════════════════════ -->
+<div class="mo" id="moCollegati">
+  <div class="modal" style="width:min(640px,calc(100vw - 32px))">
+    <div class="mh">
+      <span class="mt" id="moCollegatiTitle">Documenti disponibili per questa targa</span>
+      <button class="btn btn-g btn-sm" onclick="chiudiMo('moCollegati')">✕</button>
+    </div>
+    <div class="mb" id="moCollegatiBody" style="gap:10px">
+      <p style="font-size:13px;color:var(--text-m)">Caricamento...</p>
+    </div>
+    <div class="mf">
+      <button class="btn btn-s" onclick="chiudiMo('moCollegati')">Chiudi</button>
+    </div>
+  </div>
+</div>
+
 <div class="mo" id="moCliente">
   <div class="modal">
     <div class="mh"><span class="mt">Cerca cliente</span><button class="btn btn-g btn-sm" onclick="chiudiMo('moCliente')">✕</button></div>
@@ -612,14 +633,21 @@ function init(){
   SL.data = oggi;
   document.getElementById('dataAp').value = oggi;
 
-  // Numero scheda base (senza suffisso)
-  const anno = new Date().getFullYear();
-  const prog  = String(Date.now()).slice(-4);
-  SL.numeroBase = `SCH-${anno}-${prog}`;
-  setTipoScheda('CA'); // default -CA
+  // Numero scheda formato: 26/0001 (anno 2 cifre / progressivo 4 cifre)
+  const annoBreve = String(new Date().getFullYear()).slice(-2);
+  const prog = String(Math.floor(Math.random()*9000)+1000); // TODO: Supabase sequence
+  SL.numeroBase = `${annoBreve}/${prog}`;
 
   // Parametri URL
   const p = new URLSearchParams(window.location.search);
+
+  // Controlla modalità da URL
+  const modo = p.get('modo');
+  if(modo === 'preventivo'){
+    setTipoScheda('S');
+  } else {
+    setTipoScheda('');
+  }
 
   // Apertura da rapportino operatore
   if(p.get('from') === 'rapportino') caricaDaRapportino();
@@ -642,28 +670,28 @@ function init(){
 // TIPO SCHEDA E NUMERAZIONE CON SUFFISSO
 // ══════════════════════════════════════════════════════════
 const TIPI_SCHEDA = {
-  'CA': { label:'-CA',  desc:'Da pagare — lavoro eseguito, pagamento in attesa',           colore:'#854F0B', bg:'#FAEEDA' },
-  'CP': { label:'-CP',  desc:'Pagata — incasso ricevuto, fattura non ancora emessa',        colore:'#1A4FAA', bg:'#EBF0FD' },
-  'V':  { label:'-V',   desc:'Veicolo in vendita o già venduto',                            colore:'#534AB7', bg:'#EEEDFE' },
-  'R':  { label:'-R',   desc:'Pagata con scontrino fiscale — chiusa con corrispettivo',     colore:'#1F7A35', bg:'#E6F5EB' },
-  'F':  { label:'-F',   desc:'Fatturata — fattura emessa e collegata a questa scheda',      colore:'#1F7A35', bg:'#E6F5EB' },
-  'FF': { label:'-FF',  desc:'Fatturata su altro veicolo — costi imputati a targa diversa', colore:'#706C65', bg:'#F0EDE8' },
+  '':   { label:'Aperta', desc:'Scheda aperta — lavoro in corso, suffisso da aggiungere al termine', colore:'#706C65', bg:'#F0EDE8' },
+  'CA': { label:'-CA',    desc:'Da pagare — lavoro eseguito, pagamento in attesa',                   colore:'#854F0B', bg:'#FAEEDA' },
+  'CP': { label:'-CP',    desc:'Pagata — incasso ricevuto, fattura non ancora emessa',               colore:'#1A4FAA', bg:'#EBF0FD' },
+  'V':  { label:'-V',     desc:'Veicolo in vendita o già venduto',                                   colore:'#534AB7', bg:'#EEEDFE' },
+  'R':  { label:'-R',     desc:'Pagata con scontrino fiscale — chiusa con corrispettivo',            colore:'#1F7A35', bg:'#E6F5EB' },
+  'F':  { label:'-F',     desc:'Fatturata — fattura emessa e collegata a questa scheda',             colore:'#1F7A35', bg:'#E6F5EB' },
+  'FF': { label:'-FF',    desc:'Fatturata su altro veicolo — costi imputati a targa diversa',       colore:'#706C65', bg:'#F0EDE8' },
+  'S':  { label:'-S',     desc:'Preventivo — può diventare scheda definitiva',                      colore:'#534AB7', bg:'#EEEDFE' },
 };
 
 function setTipoScheda(tipo){
   SL.tipo   = tipo;
-  SL.numero = SL.numeroBase + '-' + tipo;
+  SL.numero = tipo ? SL.numeroBase + '-' + tipo : SL.numeroBase;
 
   document.getElementById('tipoScheda').value = tipo;
   document.getElementById('numeroDisplay').textContent = SL.numero;
   document.getElementById('hNum').textContent = SL.numero;
 
-  // Campo numero nel form (readonly)
   const numEl = document.getElementById('numero');
   if(numEl) numEl.value = SL.numero;
 
-  // Box descrizione tipo
-  const t = TIPI_SCHEDA[tipo];
+  const t = TIPI_SCHEDA[tipo] || TIPI_SCHEDA[''];
   const box = document.getElementById('tipoDescrizione');
   if(box && t){
     box.style.background  = t.bg;
@@ -672,12 +700,11 @@ function setTipoScheda(tipo){
     box.textContent       = t.desc;
   }
 
-  // Badge header colore
   const badge = document.getElementById('hBadge');
   if(badge && t){
     badge.style.background = t.bg;
     badge.style.color      = t.colore;
-    badge.textContent      = t.label;
+    badge.textContent      = tipo ? t.label : 'Aperta';
   }
 
   dirty();
@@ -693,7 +720,111 @@ function onTarga(v){
   const badge = document.getElementById('targaBadge');
   if(t.length >= 4){ badge.textContent = t; badge.style.display = 'inline-block'; }
   else badge.style.display = 'none';
+
+  // Mostra pulsante cerca collegati se la targa è completa
+  const btnCerca = document.getElementById('btnCercaCollegati');
+  if(btnCerca) btnCerca.style.display = t.length===7 ? '' : 'none';
+
   dirty();
+}
+
+// ── Cerca DDT e rapportini non archiviati con la stessa targa ──
+async function cercaCollegate(){
+  if(!SL.targa || SL.targa.length<4) return;
+  apriMo('moCollegati');
+  document.getElementById('moCollegatiTitle').textContent =
+    `Documenti disponibili — Targa ${SL.targa}`;
+  document.getElementById('moCollegatiBody').innerHTML =
+    '<p style="color:var(--text-m);font-size:13px">Cerco...</p>';
+
+  // ─── TODO Supabase ──────────────────────────────────────────
+  // const [ddtRes, rapRes] = await Promise.all([
+  //   _sb.from('ddt_in_arrivo').select('*').eq('targa_estratta',SL.targa).eq('stato','da_confermare'),
+  //   _sb.from('rapportini').select('*').eq('targa',SL.targa).eq('stato','bozza')
+  // ]);
+  // const ddtDisp = ddtRes.data||[];
+  // const rapDisp = rapRes.data||[];
+  // ────────────────────────────────────────────────────────────
+
+  // Demo: cerca in sessionStorage (dati passati da ddt.html o rapportino.html)
+  const ddtDisp = JSON.parse(sessionStorage.getItem('ddt_disponibili')||'[]')
+    .filter(d=>d.targa===SL.targa);
+  const rapDisp = JSON.parse(sessionStorage.getItem('rapportini_disponibili')||'[]')
+    .filter(r=>r.targa===SL.targa);
+
+  let html = '';
+
+  if(ddtDisp.length){
+    html += `<div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-m);margin-bottom:8px">DDT non ancora archiviate</div>`;
+    html += ddtDisp.map(d=>`
+      <div style="border:1px solid var(--border);border-radius:var(--rs);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#FFF">
+        <div>
+          <div style="font-weight:600;font-size:13px">DDT ${d.numero_ddt||d.id}</div>
+          <div style="font-size:11px;color:var(--text-m)">${d.fornitore||''} · ${d.data_ddt||''} · ${d.n_righe||0} ricambi</div>
+        </div>
+        <button class="btn btn-p btn-sm" onclick="aggiungiDDTaScheda(${JSON.stringify(d).replace(/"/g,'&quot;')})">+ Aggiungi</button>
+      </div>
+    `).join('');
+  }
+
+  if(rapDisp.length){
+    html += `<div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-m);margin:12px 0 8px">Rapportini non ancora archiviati</div>`;
+    html += rapDisp.map(r=>`
+      <div style="border:1px solid var(--border);border-radius:var(--rs);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#FFF">
+        <div>
+          <div style="font-weight:600;font-size:13px">${r.numero||'Rapportino'}</div>
+          <div style="font-size:11px;color:var(--text-m)">${r.data||''} · ${r.tecnico||''} · ${(r.elementi||[]).length} voci</div>
+        </div>
+        <button class="btn btn-p btn-sm" onclick="aggiungiRapportinoAScheda(${JSON.stringify(r).replace(/"/g,'&quot;')})">+ Aggiungi</button>
+      </div>
+    `).join('');
+  }
+
+  if(!ddtDisp.length && !rapDisp.length){
+    html = `<div style="text-align:center;padding:20px;color:var(--text-l)">
+      <div style="font-size:24px;margin-bottom:8px">✓</div>
+      Nessun documento in attesa per la targa <strong>${SL.targa}</strong>
+    </div>`;
+  }
+
+  document.getElementById('moCollegatiBody').innerHTML = html;
+}
+
+function aggiungiDDTaScheda(d){
+  riceviRapportino({
+    _id: _rapId++,
+    numero: `DDT ${d.numero_ddt||d.id}`,
+    data:   d.data_ddt || new Date().toISOString().slice(0,10),
+    tecnico: '',
+    note: `Ricambi da DDT ${d.numero_ddt||''} — ${d.fornitore||''}`,
+    elementi: (d.righe||[]).map(r=>({
+      tipo:'ricambio', codice:r.codice||'', descrizione:r.descrizione||'',
+      qty:r.qty||1, prezzo:r.prezzo_listino||r.prezzo||0, iva_pct:22
+    }))
+  });
+  // Archivia DDT
+  let ddtDisp = JSON.parse(sessionStorage.getItem('ddt_disponibili')||'[]');
+  ddtDisp = ddtDisp.filter(x=>x.id!==d.id);
+  sessionStorage.setItem('ddt_disponibili', JSON.stringify(ddtDisp));
+  toast(`DDT ${d.numero_ddt||''} aggiunta alla scheda ✓`, 'ok');
+  chiudiMo('moCollegati');
+}
+
+function aggiungiRapportinoAScheda(r){
+  riceviRapportino({
+    _id: _rapId++,
+    numero: r.numero||'',
+    data:   r.data || new Date().toISOString().slice(0,10),
+    tecnico: r.tecnico||'',
+    note: r.note||'',
+    elementi: r.elementi||[]
+  });
+  // Archivia rapportino
+  let rapDisp = JSON.parse(sessionStorage.getItem('rapportini_disponibili')||'[]');
+  rapDisp = rapDisp.filter(x=>x.id!==r.id);
+  sessionStorage.setItem('rapportini_disponibili', JSON.stringify(rapDisp));
+  toast(`Rapportino ${r.numero||''} aggiunto alla scheda ✓`, 'ok');
+  chiudiMo('moCollegati');
 }
 
 function precompilaTarga(t){
@@ -777,7 +908,7 @@ function renderRapportini(){
     const nEl = (r.elementi||[]).length;
     const fmtD = d=>d?new Date(d).toLocaleDateString('it-IT',{weekday:'short',day:'2-digit',month:'short'}):d;
 
-    const righe = (r.elementi||[]).map(el=>`
+    const righe = (r.elementi||[]).map((el,elIdx)=>`
       <tr>
         <td style="font-size:11px;color:var(--text-m)">${el.tipo}</td>
         <td style="font-size:11px;font-family:monospace">${el.codice||'—'}</td>
@@ -785,6 +916,17 @@ function renderRapportini(){
         <td style="text-align:right;font-size:12px">${el.qty}</td>
         <td style="text-align:right;font-size:12px">${fmt(el.prezzo)}</td>
         <td style="text-align:right;font-size:12px;font-weight:600">${fmt(el.qty*el.prezzo)}</td>
+        <td style="text-align:center">${el.tipo==='ricambio'?
+          `<button class="btn btn-g btn-sm" title="Segna per reso"
+            style="color:var(--err);font-size:13px"
+            data-rap="${(r.numero||'').replace(/"/g,'')}"
+            data-data="${r.data||''}"
+            data-codice="${(el.codice||'').replace(/"/g,'')}"
+            data-desc="${(el.descrizione||'').replace(/"/g,'&quot;')}"
+            data-qty="${el.qty||1}"
+            data-prezzo="${el.prezzo||0}"
+            onclick="segnalaResoScheda(this)">↩</button>`:''}
+        </td>
       </tr>
     `).join('');
 
@@ -804,7 +946,7 @@ function renderRapportini(){
       ${r.note?`<div class="rap-note">📝 ${r.note}</div>`:''}
       <div class="rap-body">
         <div style="overflow-x:auto">
-          <table class="tbl" style="min-width:500px">
+          <table class="tbl" style="min-width:520px">
             <thead><tr>
               <th style="width:90px">Tipo</th>
               <th style="width:90px">Codice</th>
@@ -812,8 +954,9 @@ function renderRapportini(){
               <th class="r" style="width:50px">Qtà</th>
               <th class="r" style="width:80px">Prezzo</th>
               <th class="r" style="width:80px">Subtot.</th>
+              <th style="width:36px" title="Segna per reso">↩</th>
             </tr></thead>
-            <tbody>${righe||'<tr><td colspan="6" style="text-align:center;color:var(--text-l);padding:14px">Nessun elemento</td></tr>'}</tbody>
+            <tbody>${righe||'<tr><td colspan="7" style="text-align:center;color:var(--text-l);padding:14px">Nessun elemento</td></tr>'}</tbody>
           </table>
         </div>
       </div>
@@ -824,6 +967,37 @@ function renderRapportini(){
 function toggleRap(head){
   const body = head.parentElement.querySelector('.rap-body');
   body.classList.toggle('open');
+}
+
+// ── Reso da scheda: apre ddt.html con i dati in sessionStorage ──
+function segnalaResoScheda(btn){
+  const rapNumero = btn.dataset.rap   || '';
+  const rapData   = btn.dataset.data  || '';
+  const codice    = btn.dataset.codice|| '';
+  const descrizione = btn.dataset.desc|| '';
+  const qty       = parseFloat(btn.dataset.qty)   || 1;
+  const prezzo    = parseFloat(btn.dataset.prezzo) || 0;
+
+  const KEY = 'resi_da_scheda';
+  const existing = JSON.parse(sessionStorage.getItem(KEY)||'[]');
+  const giaSegnalato = existing.find(r=>r.codice===codice && r.ddt_num===rapNumero);
+  if(giaSegnalato){ toast('Articolo già segnalato per reso','info'); return; }
+
+  existing.push({
+    id: Date.now()+'_'+Math.random(),
+    codice, descrizione, qty, prezzo_netto: prezzo,
+    ddt_num:  rapNumero,
+    ddt_data: rapData,
+    fornitore: '',
+    note: '',
+    convalidato: false,
+    segnalato_at: new Date().toISOString()
+  });
+  sessionStorage.setItem(KEY, JSON.stringify(existing));
+  btn.textContent = '✓';
+  btn.style.color = 'var(--ok)';
+  btn.disabled = true;
+  toast(`↩ ${descrizione||codice} — segnalato per reso (apri DDT per convalidare)`, 'info');
 }
 
 function aggiornaTotali(){
@@ -931,18 +1105,19 @@ function caricaDaRapportino(){
       SL.problema = d.problema;
     }
 
-    // Carica elementi dal rapportino come primo rapportino della scheda
+    // Carica elementi come primo rapportino della scheda
     if(d.elementi?.length){
+      const nomeFonte = d._from==='ddt' ? `DDT ${d.ddt_numero||''}` : `Rapportino ${d.numero_rap||''}`;
       riceviRapportino({
         _id: _rapId++,
-        numero: d.numero_rap||'',
+        numero: nomeFonte,
         data:   new Date().toISOString().slice(0,10),
         tecnico: d.tecnico||'',
-        note: '',
+        note: d._from==='ddt' ? `Ricambi da DDT ${d.ddt_numero||''}` : '',
         elementi: d.elementi
       });
       document.getElementById('daDDT').textContent =
-        `Da rapportino ${d.numero_rap||''} — ${d.elementi.length} voci importate`;
+        `Da ${nomeFonte} — ${d.elementi.length} voci importate`;
     }
 
     toast(`Dati importati dal rapportino ${d.numero_rap||''}`, 'ok');
