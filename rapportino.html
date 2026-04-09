@@ -333,12 +333,12 @@ function renderOre(){
       <td style="padding:5px 6px">
         <input type="number" id="ore-h-${o._id}" value="${o.ore||''}"
           min="0" step="0.5" placeholder="0"
-          onchange="updOra(${o._id},'ore',this.value)"
+          oninput="updOra(${o._id},'ore',this.value)"
           style="text-align:right;width:88px;font-size:15px;font-weight:700">
       </td>
       <td style="padding:5px 6px">
         <input type="number" value="${o.tariffa}" min="0" step="1"
-          onchange="updOra(${o._id},'tariffa',this.value)"
+          oninput="updOra(${o._id},'tariffa',this.value)"
           style="text-align:right;width:82px;font-size:13px">
       </td>
       <td style="padding:5px 12px;text-align:right;font-weight:700;font-size:14px;font-variant-numeric:tabular-nums">
@@ -394,7 +394,7 @@ function renderRicambi(){
       </td>
       <td style="padding:5px 6px">
         <input type="number" value="${r.qty}" min="0.01" step="1"
-          onchange="updRicQty(${r._id},this.value)"
+          oninput="updRicQty(${r._id},this.value)"
           style="text-align:right;width:56px">
       </td>
       <td style="padding:5px 8px;text-align:right">
@@ -470,6 +470,13 @@ function salva(){
 
 function invia(){
   if(!R.data){toast('Inserisci la data','err');return;}
+
+  // Forza lettura valori dai campi prima di costruire il payload
+  document.querySelectorAll('[id^="ore-h-"]').forEach(inp=>{
+    const id = parseInt(inp.id.replace('ore-h-',''));
+    updOra(id,'ore',inp.value);
+  });
+
   const ok=R.ore.some(o=>o.ore>0)||R.ricambi.length>0;
   if(!ok){toast('Aggiungi almeno un\'ora o un ricambio','err');return;}
   if(!confirm('Inviare il rapportino alla scheda di lavoro?'))return;
