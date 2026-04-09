@@ -397,7 +397,25 @@ textarea{resize:vertical;min-height:80px;line-height:1.6}
 
     <!-- Totali aggregati da tutti i rapportini -->
     <div style="border-top:2px solid var(--border);background:#F7F6F3;padding:14px 20px">
-      <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-m);margin-bottom:10px">Totale aggregato tutti i rapportini</div>
+      <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-m);margin-bottom:12px">Totale aggregato tutti i rapportini</div>
+
+      <!-- Riepilogo ore + ricambi -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px">
+        <div style="background:#FFF;border:1px solid var(--border);border-radius:var(--rs);padding:10px 14px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-m);margin-bottom:4px">Ore lavorate</div>
+          <div style="font-size:16px;font-weight:800;color:var(--info)" id="riepoOre">0h · € 0,00</div>
+        </div>
+        <div style="background:#FFF;border:1px solid var(--border);border-radius:var(--rs);padding:10px 14px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-m);margin-bottom:4px">Ricambi</div>
+          <div style="font-size:16px;font-weight:800;color:var(--ok)" id="riepoRic">€ 0,00</div>
+        </div>
+        <div style="background:var(--dark);border-radius:var(--rs);padding:10px 14px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:4px">Totale scheda</div>
+          <div style="font-size:16px;font-weight:800;color:#FFF" id="riepoTot">€ 0,00</div>
+        </div>
+      </div>
+
+      <!-- Totali IVA -->
       <div class="totali" style="padding:0">
         <div class="tot-row"><span class="l">Imponibile</span><span class="v" id="tImp">€ 0,00</span></div>
         <div class="tot-row" id="r22"><span class="l">IVA 22%</span><span class="v" id="t22">€ 0,00</span></div>
@@ -1001,23 +1019,50 @@ function segnalaResoScheda(btn){
 }
 
 function aggiornaTotali(){
-  let imp=0, i22=0, i10=0, hTot=0;
+  let imp=0, i22=0, i10=0, hTot=0, totOre=0, totRic=0;
+
   SL.rapportini.forEach(r=>{
-    (r.ore||[]).forEach(o=>{ hTot += o.ore||0; });
+    // Ore: somma da r.ore[] (struttura rapportino nativo)
+    (r.ore||[]).forEach(o=>{
+      const h = parseFloat(o.ore)||0;
+      const tariffa = parseFloat(o.tariffa)||0;
+      hTot   += h;
+      totOre += h * tariffa;
+    });
+
+    // Elementi: include sia manodopera (da ore) che ricambi
     (r.elementi||[]).forEach(el=>{
-      const s = el.qty*el.prezzo;
+      const s = (parseFloat(el.qty)||0) * (parseFloat(el.prezzo)||0);
       imp += s;
-      if(el.iva_pct===22) i22 += s*.22;
-      else if(el.iva_pct===10) i10 += s*.10;
+      if(el.tipo==='ricambio') totRic += s;
+      else if(el.tipo==='manodopera'){
+        // Se non c'erano ore[], conta la manodopera dagli elementi
+        if(!(r.ore||[]).length) totOre += s;
+      }
+      if((el.iva_pct||22)===22) i22 += s*.22;
+      else if((el.iva_pct||22)===10) i10 += s*.10;
     });
   });
+
   const tot = imp+i22+i10;
+
+  // Totali IVA
   document.getElementById('tImp').textContent = fmt(imp);
   document.getElementById('t22').textContent  = fmt(i22);
   if(i10>0){ document.getElementById('t10').textContent=fmt(i10); document.getElementById('r10').style.display=''; }
   else document.getElementById('r10').style.display='none';
   document.getElementById('tTot').textContent = fmt(tot);
-  SL._imp=imp; SL._iva=i22+i10; SL._tot=tot; SL._hDichiarate=hTot;
+
+  // Riepilogo ore + ricambi
+  const riepoOre = document.getElementById('riepoOre');
+  const riepoRic = document.getElementById('riepoRic');
+  const riepoTot = document.getElementById('riepoTot');
+  if(riepoOre) riepoOre.textContent = fmtH(hTot) + ' · ' + fmt(totOre);
+  if(riepoRic) riepoRic.textContent = fmt(totRic);
+  if(riepoTot) riepoTot.textContent = fmt(tot);
+
+  SL._imp=imp; SL._iva=i22+i10; SL._tot=tot;
+  SL._hDichiarate=hTot; SL._totOre=totOre; SL._totRic=totRic;
 
   // Aggiorna campo ore dichiarate nella rettifica
   const odEl = document.getElementById('oreDichiarate');
