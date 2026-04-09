@@ -482,6 +482,7 @@ function invia(){
       document.getElementById('hBadge').className='badge b-inviato';
       document.getElementById('hBadge').textContent='Inviato';
       toast('Inviato alla scheda ✓','ok');
+      window.opener.focus(); // porta la scheda in primo piano
       setTimeout(()=>window.close(),1400);
       return;
     }catch(e){console.error(e);}
