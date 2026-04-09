@@ -53,7 +53,7 @@ body{font-family:'Helvetica Neue',Arial,-apple-system,sans-serif;background:var(
   background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
   box-shadow:var(--sh);margin-bottom:8px;
   display:grid;
-  grid-template-columns: 130px 100px 1fr 1fr 120px 90px 90px 80px;
+  grid-template-columns: 130px 100px 1fr 1fr 120px 90px 90px 80px 80px;
   align-items:center;gap:0;
   cursor:pointer;transition:box-shadow .15s,transform .12s;
   text-decoration:none;color:inherit;overflow:hidden;
@@ -194,26 +194,72 @@ const TIPI = {
 };
 
 // Demo schede — in prod: Supabase
-let TUTTE = [
-  {id:'1', numero:'26/0001',    tipo:'',   stato:'aperta',    data:'2026-04-08', targa:'FD890RC', modello:'Fiat Panda 1.3',   cliente:'Arval Italia',      tecnico:'Davide',   tot:156.00, rap:2, note:'Tagliando + filtri'},
-  {id:'2', numero:'26/0002-CA', tipo:'CA', stato:'pronta',    data:'2026-04-07', targa:'CC345NG', modello:'VW Lupo',          cliente:'Mario Rossi',       tecnico:'Cristian', tot:349.50, rap:1, note:'Alzavetri SX'},
-  {id:'3', numero:'26/0003',    tipo:'',   stato:'bozza',     data:'2026-04-06', targa:'FV535JH', modello:'Iveco Daily',      cliente:'Trasporti Bianchi', tecnico:'Ivan',     tot:0,      rap:0, note:'Accettazione in corso'},
-  {id:'4', numero:'26/0004-CP', tipo:'CP', stato:'consegnata',data:'2026-04-05', targa:'AB123CD', modello:'Fiat Ducato',      cliente:'Luca Ferrari Srl',  tecnico:'Marco',    tot:891.00, rap:3, note:'Revisione completa'},
-  {id:'5', numero:'26/0005-S',  tipo:'S',  stato:'bozza',     data:'2026-04-04', targa:'',        modello:'',                cliente:'Cliente TBD',       tecnico:'',         tot:0,      rap:0, note:'Preventivo sostituzione freni'},
-  {id:'6', numero:'26/0006',    tipo:'',   stato:'aperta',    data:'2026-04-03', targa:'FG456EF', modello:'VW Transit',       cliente:'Autonoleggio Sud',  tecnico:'Luca',     tot:234.00, rap:1, note:'Diagnosi centralina'},
-];
+const LS_KEY = 'gestionale_schede'; // fallback locale
 
-let _filtrate = [...TUTTE];
+let TUTTE = [];
+let _filtrate = [];
 
-function init(){
-  // TODO Supabase:
-  // const { data } = await _sb.from('rapportini')
-  //   .select('id,numero,tipo,stato,data,targa,modello,cliente_nome,tecnico,totale,note')
-  //   .not('stato','eq','eliminata')
-  //   .order('data',{ascending:false});
-  // TUTTE = data||[];
-
+async function init(){
+  await caricaDaSupabase();
   filtra();
+}
+
+async function caricaDaSupabase(){
+  try {
+    const { data, error } = await _sb
+      .from('schede_aperte')
+      .select('*')
+      .order('data', { ascending: false });
+
+    if(error) throw error;
+    TUTTE = (data||[]).map(s=>({
+      id:      s.id,
+      numero:  s.numero,
+      tipo:    s.tipo||'',
+      stato:   s.stato,
+      data:    s.data,
+      targa:   s.targa||'',
+      modello: s.modello||'',
+      cliente: s.cliente_nome||'',
+      tecnico: s.tecnico||'',
+      tot:     s.totale||0,
+      rap:     s.n_rapportini||0,
+      note:    s.problema||''
+    }));
+  } catch(e){
+    console.warn('Supabase non disponibile, uso localStorage:', e.message);
+    // Fallback localStorage
+    try { TUTTE = JSON.parse(localStorage.getItem(LS_KEY)||'[]'); } catch { TUTTE = []; }
+  }
+}
+
+async function eliminaScheda(id, e){
+  e.preventDefault();
+  e.stopPropagation();
+  const s = TUTTE.find(x=>x.id===id);
+  if(!s) return;
+  if(!confirm(`Eliminare la scheda ${s.numero}?\n\nI rapportini e le DDT collegate torneranno disponibili.`)) return;
+
+  try {
+    const { error } = await _sb.from('rapportini')
+      .update({ stato: 'eliminata' }).eq('id', id);
+    if(error) throw error;
+  } catch(e){
+    // Fallback localStorage
+    let schede = JSON.parse(localStorage.getItem(LS_KEY)||'[]');
+    schede = schede.filter(x=>x.id!==id);
+    localStorage.setItem(LS_KEY, JSON.stringify(schede));
+  }
+
+  TUTTE = TUTTE.filter(x=>x.id!==id);
+  filtra();
+  toast(`Scheda ${s.numero} eliminata`, 'ok');
+}
+
+function stampaScheda(id, e){
+  e.preventDefault();
+  e.stopPropagation();
+  window.open(`scheda.html?id=${id}&print=1`, '_blank');
 }
 
 function filtra(){
@@ -268,6 +314,7 @@ function renderLista(){
         <div class="sc-cell">Rapportini</div>
         <div class="sc-cell">Totale</div>
         <div class="sc-cell">Stato</div>
+        <div class="sc-cell">Azioni</div>
       </div>
       ${schede.map(s=>rigaScheda(s)).join('')}
     `;
@@ -287,6 +334,7 @@ function renderLista(){
         <div class="sc-cell">—</div>
         <div class="sc-cell">Totale</div>
         <div class="sc-cell">Stato</div>
+        <div class="sc-cell">Azioni</div>
       </div>
       ${preventivi.map(s=>rigaScheda(s)).join('')}
     `;
@@ -335,6 +383,12 @@ function rigaScheda(s){
     </div>
     <div class="sc-cell">
       <div class="stato-dot ${st.cls}">${st.lbl}</div>
+    </div>
+    <div class="sc-cell" style="display:flex;flex-direction:column;gap:6px;align-items:center" onclick="event.preventDefault()">
+      <button onclick="stampaScheda('${s.id}',event)"
+        style="background:none;border:1px solid var(--border);border-radius:4px;padding:4px 8px;cursor:pointer;font-size:13px;width:100%" title="Stampa">🖨</button>
+      <button onclick="eliminaScheda('${s.id}',event)"
+        style="background:none;border:1px solid #FFBBBB;border-radius:4px;padding:4px 8px;cursor:pointer;font-size:13px;color:var(--err);width:100%" title="Elimina">🗑</button>
     </div>
   </a>`;
 }
