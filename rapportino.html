@@ -498,14 +498,15 @@ function invia(){
   document.getElementById('hBadge').textContent='Inviato';
   toast('Inviato alla scheda ✓','ok');
 
+  // Torna alla scheda di lavoro
   if(window.opener && !window.opener.closed){
     window.opener.focus();
-    setTimeout(()=>window.close(),1400);
+    setTimeout(()=>window.close(), 1000);
+  } else if(R._scheda_id){
+    // Nessun opener — naviga direttamente alla scheda
+    setTimeout(()=>{ window.location.href = `scheda.html?id=${R._scheda_id}`; }, 900);
   } else {
-    // Nessun opener — torna alla scheda manualmente
-    setTimeout(()=>{
-      toast('Torna alla scheda di lavoro per vedere il rapportino','info');
-    },800);
+    setTimeout(()=>{ window.location.href = 'schede.html'; }, 900);
   }
   return;
 }
