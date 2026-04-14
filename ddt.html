@@ -872,11 +872,17 @@ Struttura:
   ]
 }
 REGOLE TARGA (IMPORTANTISSIMO):
-La targa è il dato più critico. Cerca in TUTTO il documento: intestazione, tabelle, note, riquadri, corpo testo, piè di pagina.
-Formato targa italiana: 2 lettere + 3 cifre + 2 lettere. Può apparire in questi modi:
-  AB123CD · AB 123 CD · AB-123-CD · Targa: AB123CD · Veicolo: AB 123 CD · [AB123CD] · Per il veicolo AB 123 CD
-Restituisci SEMPRE la targa SENZA spazi né trattini: "AB123CD" non "AB 123 CD".
-Se non trovi la targa dopo una ricerca attenta, restituisci stringa vuota — NON inventare.
+La targa è il dato più critico. Cerca in TUTTO il documento senza eccezioni.
+Formato targa italiana: 2 lettere + 3 cifre + 2 lettere. Può apparire così:
+  AB123CD · AB 123 CD · AB-123-CD · [AB123CD]
+Campi dove cercare CON PRIORITÀ (tipici DDT BLM e fornitori italiani):
+  1. Campo "Riferimento" o "Rif." nell'intestazione
+  2. Campo "Targa" o "Targa veicolo"
+  3. Campo "Veicolo" o "Auto" o "Mezzo"
+  4. Colonna "Riferimento" nelle righe articolo
+  5. Note, descrizioni, corpo testo, piè di pagina
+Restituisci SEMPRE in MAIUSCOLO e SENZA spazi: "AB123CD" non "ab123cd" né "AB 123 CD".
+Se non trovi la targa restituisci stringa vuota — NON inventare.
 Commesse aperte: ${commesseAperte||'nessuna'}.
 PREZZI RIGA (IMPORTANTISSIMO — le DDT italiane hanno quasi sempre DUE prezzi per riga):
 - "prezzo_listino": prezzo di listino ufficiale del fornitore (colonna "Listino", "Pr. Listino", "Prezzo listino")
