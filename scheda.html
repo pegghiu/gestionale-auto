@@ -678,7 +678,20 @@ function init(){
   // Apertura da scheda esistente
   if(p.get('id')) caricaScheda(p.get('id'));
 
-  // Modal overlay
+  // Ascolta il focus della finestra — arriva il rapportino dal tab figlio
+  window.addEventListener('focus', () => {
+    const raw = sessionStorage.getItem('rapportino_in_arrivo');
+    if(raw){
+      try {
+        const rap = JSON.parse(raw);
+        sessionStorage.removeItem('rapportino_in_arrivo');
+        riceviRapportino(rap);
+        toast(`Rapportino ${rap.numero||''} aggiunto ✓`, 'ok');
+      } catch(e){ console.error(e); }
+    }
+  });
+
+  // Modal overlay — chiudi cliccando fuori
   document.querySelectorAll('.mo').forEach(m=>{
     m.addEventListener('click',e=>{ if(e.target===m) m.classList.remove('open'); });
   });
