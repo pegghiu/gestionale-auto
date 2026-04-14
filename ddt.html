@@ -1307,8 +1307,8 @@ function apriSchedaDaEmail(){
     }))
   };
   sessionStorage.setItem('scheda_prefill', JSON.stringify(dati));
-  window.open('scheda.html?from=rapportino', '_blank');
   resetDDT();
+  window.location.href = 'scheda.html?from=rapportino';
 }
 
 function importaResiDaScheda(){
