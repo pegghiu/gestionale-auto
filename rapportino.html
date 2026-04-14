@@ -481,21 +481,33 @@ function invia(){
   if(!ok){toast('Aggiungi almeno un\'ora o un ricambio','err');return;}
   if(!confirm('Inviare il rapportino alla scheda di lavoro?'))return;
 
-  const payload=buildPayload();
+  const payload = buildPayload();
 
-  if(window.opener&&!window.opener.closed){
+  // Salva in sessionStorage — la scheda lo legge al focus
+  sessionStorage.setItem('rapportino_in_arrivo', JSON.stringify(payload));
+
+  // Prova anche via window.opener (funziona se stessa origine)
+  if(window.opener && !window.opener.closed){
     try{
       window.opener.riceviRapportino(payload);
-      document.getElementById('hBadge').className='badge b-inviato';
-      document.getElementById('hBadge').textContent='Inviato';
-      toast('Inviato alla scheda ✓','ok');
-      window.opener.focus(); // porta la scheda in primo piano
-      setTimeout(()=>window.close(),1400);
-      return;
-    }catch(e){console.error(e);}
+      sessionStorage.removeItem('rapportino_in_arrivo'); // già consegnato
+    }catch(e){ console.warn('opener non disponibile, uso sessionStorage'); }
   }
-  console.log('✅ PAYLOAD:',payload);
-  toast('Rapportino pronto','ok');
+
+  document.getElementById('hBadge').className='badge b-inviato';
+  document.getElementById('hBadge').textContent='Inviato';
+  toast('Inviato alla scheda ✓','ok');
+
+  if(window.opener && !window.opener.closed){
+    window.opener.focus();
+    setTimeout(()=>window.close(),1400);
+  } else {
+    // Nessun opener — torna alla scheda manualmente
+    setTimeout(()=>{
+      toast('Torna alla scheda di lavoro per vedere il rapportino','info');
+    },800);
+  }
+  return;
 }
 
 function buildPayload(){
