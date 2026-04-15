@@ -1770,7 +1770,7 @@ async function segnaEmailConfermata(emailId){
   // Aggiorna Supabase
   try {
     await _sb.from('ddt_in_arrivo')
-      .update({ stato:'confermato', confermato_at: new Date().toISOString() })
+      .update({ stato: 'confermato' })
       .eq('id', emailId);
   } catch(e){ console.error('segnaEmailConfermata:', e); }
 
