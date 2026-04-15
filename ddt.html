@@ -1289,25 +1289,53 @@ function confermaDDT(){
   }
 }
 
-function apriSchedaDaEmail(){
-  // Passa targa, modello e ricambi alla scheda di lavoro
-  const dati = {
-    _from: 'ddt',
-    ddt_numero: DR.numero,
-    targa:   DR.targa,
-    modello: DR.modello || '',
-    cliente: {},
-    problema: '',
-    elementi: DR.righe.map(r=>({
-      tipo:        r.tipo||'ricambio',
-      codice:      r.codice||'',
-      descrizione: r.descrizione||'',
-      qty:         r.qty||1,
-      prezzo:      r.prezzo_listino||r.prezzo||0,
-      iva_pct:     22
-    }))
-  };
-  sessionStorage.setItem('scheda_prefill', JSON.stringify(dati));
+async function apriSchedaDaEmail(){
+  const elementi = DR.righe.map(r=>({
+    tipo:        r.tipo||'ricambio',
+    codice:      r.codice||'',
+    descrizione: r.descrizione||'',
+    qty:         r.qty||1,
+    prezzo:      r.prezzo_listino||r.prezzo||0,
+    iva_pct:     22
+  }));
+
+  // Cerca scheda aperta per questa targa
+  if(DR.targa){
+    try {
+      const { data } = await _sb
+        .from('rapportini')
+        .select('id,numero,stato')
+        .eq('targa', DR.targa)
+        .in('stato', ['bozza','aperta','pronta'])
+        .order('created_at', {ascending: false})
+        .limit(1);
+
+      if(data && data.length > 0){
+        const scheda = data[0];
+        if(confirm(`Trovata scheda aperta per ${DR.targa}: ${scheda.numero}\n\nVuoi aggiungere i ricambi a questa scheda?`)){
+          sessionStorage.setItem('rapportino_in_arrivo', JSON.stringify({
+            _id: Date.now(),
+            numero: 'DDT ' + DR.numero,
+            data: DR.data || new Date().toISOString().slice(0,10),
+            tecnico: '',
+            note: 'Ricambi da DDT ' + DR.numero + ' — ' + DR.fornitore,
+            elementi: elementi,
+            ore: []
+          }));
+          resetDDT();
+          window.location.href = 'scheda.html?id=' + scheda.id;
+          return;
+        }
+      }
+    } catch(e){ console.warn('Ricerca scheda:', e); }
+  }
+
+  // Nessuna scheda trovata — crea nuova
+  sessionStorage.setItem('scheda_prefill', JSON.stringify({
+    _from: 'ddt', ddt_numero: DR.numero,
+    targa: DR.targa, modello: DR.modello||'',
+    cliente: {}, problema: '', elementi
+  }));
   resetDDT();
   window.location.href = 'scheda.html?from=rapportino';
 }
