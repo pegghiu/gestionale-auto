@@ -421,8 +421,6 @@ textarea{resize:vertical;min-height:70px;line-height:1.6}
     </div>
 
     <div style="padding:14px 20px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-      <button class="btn btn-s btn-sm" id="btnApriScheda" style="display:none;background:var(--ok-bg);color:var(--ok);border-color:var(--ok);font-weight:700"
-        onclick="apriSchedaDaEmail()">📋 Apri scheda di lavoro →</button>
       <div style="display:flex;gap:10px;margin-left:auto">
         <button class="btn btn-s" onclick="resetDDT()">✕ Annulla</button>
         <button class="btn btn-p btn-lg" id="btnConferma" onclick="confermaDDT()">✓ Conferma e carica in magazzino</button>
@@ -1207,7 +1205,7 @@ function assegnaGlobal(id,el){
 // ╔══════════════════════════════════════════════════════════╗
 // ║  CONFERMA DDT — carica magazzino e commesse              ║
 // ╚══════════════════════════════════════════════════════════╝
-function confermaDDT(){
+async function confermaDDT(){
   if(!DR.fornitore){toast('Inserisci il nome del fornitore','err');return;}
   if(DR.righe.length===0){toast('Nessuna riga da confermare','err');return;}
   const incomplete=DR.righe.filter(r=>!r.descrizione.trim());
@@ -1276,14 +1274,9 @@ function confermaDDT(){
   toast(msg, isReso ? 'info' : 'ok');
   if(DR._emailId) segnaEmailConfermata(DR._emailId);
 
-  // Mostra pulsante scheda di lavoro se c'è una targa
-  if(!isReso && DR.targa){
-    const btnScheda = document.getElementById('btnApriScheda');
-    if(btnScheda) btnScheda.style.display = '';
-    // Nascondi pulsante conferma
-    const btnConferma = document.getElementById('btnConferma');
-    if(btnConferma) btnConferma.style.display = 'none';
-    toast('Vuoi aprire la scheda di lavoro per questo veicolo?', 'info');
+  // Vai automaticamente alla scheda di lavoro
+  if(!isReso){
+    await apriSchedaDaEmail();
   } else {
     resetDDT();
   }
