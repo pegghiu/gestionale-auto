@@ -1305,31 +1305,35 @@ async function apriSchedaDaEmail(){
 
       if(data && data.length > 0){
         const scheda = data[0];
-        if(confirm(`Trovata scheda aperta per ${DR.targa}: ${scheda.numero}\n\nVuoi aggiungere i ricambi a questa scheda?`)){
-          sessionStorage.setItem('rapportino_in_arrivo', JSON.stringify({
-            _id: Date.now(),
-            numero: 'DDT ' + DR.numero,
-            data: DR.data || new Date().toISOString().slice(0,10),
-            tecnico: '',
-            note: 'Ricambi da DDT ' + DR.numero + ' — ' + DR.fornitore,
-            elementi: elementi,
-            ore: []
-          }));
-          resetDDT();
-          window.location.href = 'scheda.html?id=' + scheda.id;
-          return;
-        }
+        // Vai direttamente alla scheda esistente con i ricambi
+        sessionStorage.setItem('rapportino_in_arrivo', JSON.stringify({
+          _id: Date.now(),
+          numero: 'DDT ' + DR.numero,
+          data: DR.data || new Date().toISOString().slice(0,10),
+          tecnico: '',
+          note: 'Ricambi da DDT ' + DR.numero + ' — ' + DR.fornitore,
+          elementi: elementi,
+          ore: []
+        }));
+        toast('Scheda ' + scheda.numero + ' trovata — carico i ricambi...', 'ok');
+        const emailId = DR._emailId;
+        resetDDT();
+        if(emailId) await segnaEmailConfermata(emailId);
+        window.location.href = 'scheda.html?id=' + scheda.id;
+        return;
       }
     } catch(e){ console.warn('Ricerca scheda:', e); }
   }
 
   // Nessuna scheda trovata — crea nuova
+  const emailId = DR._emailId;
   sessionStorage.setItem('scheda_prefill', JSON.stringify({
     _from: 'ddt', ddt_numero: DR.numero,
     targa: DR.targa, modello: DR.modello||'',
     cliente: {}, problema: '', elementi
   }));
   resetDDT();
+  if(emailId) await segnaEmailConfermata(emailId);
   window.location.href = 'scheda.html?from=rapportino';
 }
 
@@ -1760,16 +1764,17 @@ function scartaDDTEmail(id){
   toast('DDT scartata', 'ok');
 }
 
-function segnaEmailConfermata(emailId){
-  // Chiamata dopo confermaDDT() se la DDT viene da email
+async function segnaEmailConfermata(emailId){
   if(!emailId) return;
 
-  // ─── TODO SUPABASE ──────────────────────────────────────
-  // await _sb.from('ddt_in_arrivo')
-  //   .update({ stato:'confermato', confermato_at: new Date().toISOString() })
-  //   .eq('id', emailId)
-  // ────────────────────────────────────────────────────────
+  // Aggiorna Supabase
+  try {
+    await _sb.from('ddt_in_arrivo')
+      .update({ stato:'confermato', confermato_at: new Date().toISOString() })
+      .eq('id', emailId);
+  } catch(e){ console.error('segnaEmailConfermata:', e); }
 
+  // Rimuovi dalla lista locale
   EMAIL_QUEUE = EMAIL_QUEUE.filter(d => d.id !== emailId);
   renderEmailQueue();
 }
