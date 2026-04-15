@@ -891,10 +891,9 @@ function toggleSintomo(el, testo){
 let _rapId = 1;
 
 function nuovoRapportino(){
-  // Salva scheda in sessionStorage e apri rapportino
   const dati = {
     _from: 'scheda',
-    scheda_id:  SL.id || SL.numero,
+    scheda_id:  SL.id || SL.numeroBase,
     scheda_num: SL.numero,
     targa:   SL.targa,
     modello: SL.modello,
@@ -902,7 +901,7 @@ function nuovoRapportino(){
     cliente: { ...SL.cliente },
   };
   sessionStorage.setItem('rapportino_prefill', JSON.stringify(dati));
-  window.open('rapportino.html?from=scheda', '_blank');
+  window.location.href = 'rapportino.html?from=scheda';
 }
 
 // Riceve un rapportino completato dal rapportino.html

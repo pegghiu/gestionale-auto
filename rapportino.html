@@ -479,7 +479,6 @@ function invia(){
 
   const ok=R.ore.some(o=>o.ore>0)||R.ricambi.length>0;
   if(!ok){toast('Aggiungi almeno un\'ora o un ricambio','err');return;}
-  if(!confirm('Inviare il rapportino alla scheda di lavoro?'))return;
 
   const payload = buildPayload();
 
