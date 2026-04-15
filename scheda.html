@@ -890,10 +890,17 @@ function toggleSintomo(el, testo){
 // ══════════════════════════════════════════════════════════
 let _rapId = 1;
 
-function nuovoRapportino(){
+async function nuovoRapportino(){
+  // Salva prima la scheda su Supabase così al ritorno caricaScheda trova tutto
+  if(SL._dirty || !SL.id){
+    toast('Salvo la scheda prima di aprire il rapportino...','info');
+    await salvaBozzaSilente(); // salva senza navigare
+    if(!SL.id){ toast('Errore salvataggio scheda','err'); return; }
+  }
+
   const dati = {
     _from: 'scheda',
-    scheda_id:  SL.id || SL.numeroBase,
+    scheda_id:  SL.id,
     scheda_num: SL.numero,
     targa:   SL.targa,
     modello: SL.modello,
@@ -1334,6 +1341,63 @@ function valida(){
 // ══════════════════════════════════════════════════════════
 // SALVA
 // ══════════════════════════════════════════════════════════
+async function salvaBozzaSilente(){
+  try {
+    if(!SL.numeroBase){
+      const annoBreve = String(new Date().getFullYear()).slice(-2);
+      const prog = String(Math.floor(Math.random()*9000)+1000);
+      SL.numeroBase = `${annoBreve}/${prog}`;
+      setTipoScheda(SL.tipo||'');
+    }
+
+    const record = {
+      numero:         SL.numero,
+      numero_base:    SL.numeroBase,
+      tipo:           SL.tipo,
+      stato:          SL.stato,
+      data:           SL.data || new Date().toISOString().slice(0,10),
+      targa:          SL.targa,
+      modello:        SL.modello,
+      anno:           parseInt(SL.anno)||null,
+      km:             parseInt(SL.km)||0,
+      tecnico:        SL.tecnico,
+      problema:       SL.problema,
+      note_interne:   SL.note_interne,
+      note_cliente:   SL.note_cliente,
+      cliente_nome:   SL.cliente.nome,
+      cliente_tel:    SL.cliente.tel,
+      imponibile:     SL._imp||0,
+      iva:            SL._iva||0,
+      totale:         SL._tot||0,
+      ore_dichiarate: SL._hDichiarate||0,
+      ore_riconosciute: SL.ore_riconosciute||0,
+      ore_delta:      SL._deltaH||0,
+      efficienza_pct: SL._eff||null,
+      motivazione_rettifica: SL.motivazione_rettifica||'',
+      rapportini_giornalieri: SL.rapportini
+    };
+
+    let error, data;
+    if(SL.id){
+      ({ error, data } = await _sb.from('rapportini')
+        .update(record).eq('id', SL.id).select().single());
+    } else {
+      ({ error, data } = await _sb.from('rapportini')
+        .insert(record).select().single());
+      if(data) SL.id = data.id;
+    }
+
+    if(error) throw error;
+    SL._dirty = false;
+    document.getElementById('fStato').textContent = '✓ Salvata';
+    document.getElementById('fStato').className = 'fbar-stato saved';
+  } catch(e){
+    console.error('salvaBozzaSilente:', e);
+    toast('Errore salvataggio: '+e.message,'err');
+    throw e;
+  }
+}
+
 async function salvaBozza(){
   const payload = buildPayload().scheda;
   console.log('💾 SALVA SCHEDA:', payload);
