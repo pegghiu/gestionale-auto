@@ -864,7 +864,8 @@ Struttura:
   "fornitore": "nome del fornitore come appare nel documento",
   "numero": "numero DDT/documento",
   "data": "YYYY-MM-DD",
-  "ordine": "numero ordine di riferimento se presente, altrimenti stringa vuota",
+  "ordine": "numero ordine (es. STD/2687000)",
+  "riferimento": "contenuto ESATTO del campo Riferimento nell'intestazione (es. ED014ND PUNTO 08:57)",
   "targa": "targa veicolo 7 caratteri SEMPRE IN MAIUSCOLO SENZA spazi (es. AB123CD), stringa vuota se non trovata",
   "telaio": "VIN/numero telaio 17 caratteri se presente, altrimenti stringa vuota",
   "righe": [
@@ -1630,7 +1631,14 @@ function renderEmailQueue(){
   list.innerHTML = pending.map(d => {
     const targaPill = d.targa
       ? `<span class="eq-pill eq-targa">${d.targa}</span>`
-      : '';
+      : `<span style="display:inline-flex;align-items:center;gap:6px">
+           <input type="text" id="targa-${d.id}" placeholder="Inserisci targa"
+             maxlength="7" value=""
+             oninput="this.value=this.value.replace(/[^A-Z0-9]/gi,'').toUpperCase()"
+             style="font-family:monospace;font-weight:700;letter-spacing:.1em;width:90px;padding:3px 7px;font-size:13px;border:2px solid var(--warn);border-radius:4px;text-transform:uppercase;background:#FFF8E6"
+             title="Targa non trovata nel documento — inseriscila manualmente">
+           <span style="font-size:10px;color:var(--warn);font-weight:600">⚠ inserire</span>
+         </span>`;
     const modelloPill = (d.modello || d.ddt_estratto?.modello)
       ? `<span class="eq-pill" style="background:var(--accent-l);color:var(--accent-d);font-size:11px">${d.modello || d.ddt_estratto?.modello}</span>`
       : '';
@@ -1662,12 +1670,33 @@ function renderEmailQueue(){
       <div class="eq-actions">
         ${d.errore
           ? `<button class="btn btn-s btn-sm" onclick="scartaDDTEmail('${d.id}')">Scarta</button>`
-          : `<button class="btn btn-p btn-sm" onclick="caricaDDTEmail('${d.id}')">Carica →</button>
+          : `<button class="btn btn-p btn-sm" onclick="caricaDDTEmailConTarga('${d.id}')">Carica →</button>
              <button class="btn btn-g btn-sm" onclick="scartaDDTEmail('${d.id}')">Scarta</button>`
         }
       </div>
     </div>`;
   }).join('');
+}
+
+function caricaDDTEmailConTarga(id){
+  // Leggi targa dal campo manuale se presente
+  const inputTarga = document.getElementById('targa-'+id);
+  if(inputTarga){
+    const targaManuale = inputTarga.value.replace(/[^A-Z0-9]/gi,'').toUpperCase();
+    const ddt = EMAIL_QUEUE.find(d=>d.id===id);
+    if(ddt && !ddt.targa && targaManuale.length===7){
+      ddt.targa = targaManuale;
+      // Aggiorna anche in Supabase
+      _sb.from('ddt_in_arrivo')
+        .update({ targa_estratta: targaManuale })
+        .eq('id', id)
+        .then(({error})=>{ if(error) console.error('Update targa:', error); });
+    } else if(ddt && !ddt.targa && targaManuale.length>0 && targaManuale.length!==7){
+      toast('Targa non valida — deve essere 7 caratteri (es. AB123CD)', 'err');
+      return;
+    }
+  }
+  caricaDDTEmail(id);
 }
 
 function caricaDDTEmail(id){
