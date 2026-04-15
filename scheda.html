@@ -1386,8 +1386,11 @@ async function salvaBozzaSilente(){
         .insert(record).select().single());
       if(data) SL.id = data.id;
     }
-
     if(error) throw error;
+
+    // Salva anche nella tabella rapportini_giornalieri per i report
+    await salvaRapportiniSeparati(SL.id);
+
     SL._dirty = false;
     document.getElementById('fStato').textContent = '✓ Salvata';
     document.getElementById('fStato').className = 'fbar-stato saved';
@@ -1396,6 +1399,39 @@ async function salvaBozzaSilente(){
     toast('Errore salvataggio: '+e.message,'err');
     throw e;
   }
+}
+
+// Sincronizza i rapportini_giornalieri nella tabella separata
+async function salvaRapportiniSeparati(schedaId){
+  if(!schedaId || !SL.rapportini.length) return;
+  try {
+    // Cancella quelli esistenti e reinserisce (upsert semplice)
+    await _sb.from('rapportini_giornalieri').delete().eq('scheda_id', schedaId);
+    if(SL.rapportini.length === 0) return;
+
+    const righe = SL.rapportini.map(r=>{
+      const hTot  = (r.ore||[]).reduce((s,o)=>s+(parseFloat(o.ore)||0),0);
+      const tOre  = (r.ore||[]).reduce((s,o)=>s+(parseFloat(o.ore)||0)*(parseFloat(o.tariffa)||0),0);
+      const tRic  = (r.elementi||[]).filter(el=>el.tipo==='ricambio')
+                      .reduce((s,el)=>s+(el.qty||0)*(el.prezzo||0),0);
+      return {
+        scheda_id:   schedaId,
+        numero:      r.numero||'',
+        data:        r.data || new Date().toISOString().slice(0,10),
+        tecnico:     r.tecnico||SL.tecnico||'',
+        note:        r.note||'',
+        ore:         r.ore||[],
+        elementi:    r.elementi||[],
+        h_totali:    hTot,
+        tot_ore:     tOre,
+        tot_ricambi: tRic,
+        totale:      tOre+tRic
+      };
+    });
+
+    const { error } = await _sb.from('rapportini_giornalieri').insert(righe);
+    if(error) console.error('salvaRapportiniSeparati:', error);
+  } catch(e){ console.error('salvaRapportiniSeparati:', e); }
 }
 
 async function salvaBozza(){
@@ -1447,6 +1483,9 @@ async function salvaBozza(){
     }
 
     if(error) throw error;
+
+    // Salva anche nella tabella rapportini_giornalieri per i report
+    await salvaRapportiniSeparati(SL.id || data?.id);
 
     SL._dirty = false;
     document.getElementById('fStato').textContent = '✓ Salvata';
