@@ -678,21 +678,6 @@ function init(){
   // Apertura da scheda esistente
   if(p.get('id')) caricaScheda(p.get('id'));
 
-  // Controlla subito se c'è un rapportino in arrivo dal sessionStorage
-  // (arriva quando rapportino.html naviga back a scheda.html)
-  const rawRap = sessionStorage.getItem('rapportino_in_arrivo');
-  if(rawRap){
-    try {
-      const rap = JSON.parse(rawRap);
-      sessionStorage.removeItem('rapportino_in_arrivo');
-      // Aspetta che caricaScheda finisca prima di aggiungere il rapportino
-      setTimeout(()=>{
-        riceviRapportino(rap);
-        toast(`Rapportino ${rap.numero||''} aggiunto ✓`, 'ok');
-      }, 800);
-    } catch(e){ console.error(e); }
-  }
-
   // Ascolta il focus della finestra — arriva il rapportino dal tab figlio
   window.addEventListener('focus', () => {
     const raw = sessionStorage.getItem('rapportino_in_arrivo');
@@ -1293,6 +1278,17 @@ async function caricaScheda(id){
 
     renderRapportini();
     aggiornaTotali();
+
+    // Controlla se c'è un rapportino in arrivo (da rapportino.html)
+    const rawRap = sessionStorage.getItem('rapportino_in_arrivo');
+    if(rawRap){
+      try {
+        const rap = JSON.parse(rawRap);
+        sessionStorage.removeItem('rapportino_in_arrivo');
+        riceviRapportino(rap);
+        toast(`Rapportino ${rap.numero||''} aggiunto ✓`, 'ok');
+      } catch(e){ console.error(e); }
+    }
 
   } catch(e){
     console.error('caricaScheda:', e);
