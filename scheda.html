@@ -1256,21 +1256,22 @@ async function caricaScheda(id){
 
     setTipoScheda(s.tipo || '');
 
-    // Popola i campi form
-    document.getElementById('targa').value    = SL.targa;
-    document.getElementById('modello').value  = SL.modello;
-    document.getElementById('anno').value     = SL.anno;
-    document.getElementById('km').value       = SL.km;
-    document.getElementById('dataAp').value   = SL.data;
-    document.getElementById('dataConsCons').value = SL.data_consegna;
-    document.getElementById('tecnico').value  = SL.tecnico;
-    document.getElementById('problema').value = SL.problema;
-    document.getElementById('noteInt').value  = SL.note_interne;
-    document.getElementById('noteCliente').value = SL.note_cliente;
-    document.getElementById('cNome').value    = SL.cliente.nome;
-    document.getElementById('cTel').value     = SL.cliente.tel;
-    document.getElementById('oreRiconosciute').value = SL.ore_riconosciute||'';
-    document.getElementById('motivazioneRett').value = SL.motivazione_rettifica;
+    // Popola i campi form — optional chaining per evitare crash su elementi mancanti
+    const setVal = (id, val) => { const el = document.getElementById(id); if(el) el.value = val||''; };
+    setVal('targa',            SL.targa);
+    setVal('modello',          SL.modello);
+    setVal('anno',             SL.anno);
+    setVal('km',               SL.km);
+    setVal('dataAp',           SL.data);
+    setVal('dataConsCons',     SL.data_consegna);
+    setVal('tecnico',          SL.tecnico);
+    setVal('problema',         SL.problema);
+    setVal('noteInt',          SL.note_interne);
+    setVal('noteCliente',      SL.note_cliente);
+    setVal('cNome',            SL.cliente.nome);
+    setVal('cTel',             SL.cliente.tel);
+    setVal('oreRiconosciute',  SL.ore_riconosciute||'');
+    setVal('motivazioneRett',  SL.motivazione_rettifica);
 
     if(SL.targa.length===7){
       const badge = document.getElementById('targaBadge');
