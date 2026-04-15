@@ -1272,12 +1272,12 @@ async function confermaDDT(){
     ? `📤 Reso confermato — ${DR.righe.length} articoli scaricati`
     : `✓ DDT confermata — ${DR.righe.length} articoli caricati`;
   toast(msg, isReso ? 'info' : 'ok');
-  if(DR._emailId) segnaEmailConfermata(DR._emailId);
 
   // Vai automaticamente alla scheda di lavoro
   if(!isReso){
     await apriSchedaDaEmail();
   } else {
+    if(DR._emailId) await segnaEmailConfermata(DR._emailId);
     resetDDT();
   }
 }
