@@ -483,30 +483,28 @@ function invia(){
 
   const payload = buildPayload();
 
-  // Salva in sessionStorage — la scheda lo legge al focus
+  // Salva in sessionStorage — la scheda lo legge dopo il caricamento
   sessionStorage.setItem('rapportino_in_arrivo', JSON.stringify(payload));
-
-  // Prova anche via window.opener (funziona se stessa origine)
-  if(window.opener && !window.opener.closed){
-    try{
-      window.opener.riceviRapportino(payload);
-      sessionStorage.removeItem('rapportino_in_arrivo'); // già consegnato
-    }catch(e){ console.warn('opener non disponibile, uso sessionStorage'); }
-  }
 
   document.getElementById('hBadge').className='badge b-inviato';
   document.getElementById('hBadge').textContent='Inviato';
+
+  // Azzera dirty PRIMA di navigare — evita l'avviso Chrome "vuoi lasciare la pagina"
+  R._dirty = false;
+
   toast('Inviato alla scheda ✓','ok');
 
-  // Torna alla scheda di lavoro
   if(window.opener && !window.opener.closed){
+    try{
+      window.opener.riceviRapportino(payload);
+      sessionStorage.removeItem('rapportino_in_arrivo');
+    }catch(e){ console.warn('opener:', e); }
     window.opener.focus();
-    setTimeout(()=>window.close(), 1000);
+    setTimeout(()=>window.close(), 800);
   } else if(R._scheda_id){
-    // Nessun opener — naviga direttamente alla scheda
-    setTimeout(()=>{ window.location.href = `scheda.html?id=${R._scheda_id}`; }, 900);
+    setTimeout(()=>{ window.location.href = `scheda.html?id=${R._scheda_id}`; }, 400);
   } else {
-    setTimeout(()=>{ window.location.href = 'schede.html'; }, 900);
+    setTimeout(()=>{ window.location.href = 'schede.html'; }, 400);
   }
   return;
 }
