@@ -952,6 +952,8 @@ function mostraRighe(dati){
     ordine: dati.ordine||'', targa: dati.targa||'', telaio: dati.telaio||'',
     causale: dati.causale||'', rif_ddt_originale: dati.rif_ddt_originale||'',
     tipo_movimento: dati.tipo_movimento==='reso' ? 'reso' : 'entrata',
+    modello: dati.modello||'',
+    _emailId: dati._emailId || null,  // ← FIX: mantieni emailId per poter segnare come confermata
     righe:[]
   };
 
