@@ -384,7 +384,44 @@ textarea{resize:vertical;min-height:80px;line-height:1.6}
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <span style="font-size:11px;color:var(--text-m)" id="daDDT"></span>
-        <button class="btn btn-p btn-sm" onclick="nuovoRapportino()">+ Nuovo rapportino giornaliero</button>
+        <button class="btn btn-p btn-sm" onclick="apriPannelloRapportino()">+ Nuovo rapportino giornaliero</button>
+      </div>
+    </div>
+
+    <!-- PANNELLO INSERIMENTO RAPPORTINO INLINE -->
+    <div id="pannelloRap" style="display:none;border-bottom:2px solid var(--border);background:#FAFAF8;padding:18px 20px">
+      <div style="font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:14px">
+        Nuovo rapportino giornaliero
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px">
+        <div class="field">
+          <label>Data *</label>
+          <input type="date" id="rp-data">
+        </div>
+        <div class="field">
+          <label>Numero</label>
+          <input type="text" id="rp-numero" placeholder="26/xxxx" readonly style="color:var(--text-m)">
+        </div>
+        <div class="field">
+          <label>Note rapportino</label>
+          <input type="text" id="rp-note" placeholder="Note...">
+        </div>
+      </div>
+
+      <!-- Ore operatori -->
+      <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-m);margin-bottom:8px">Ore lavorate</div>
+      <div id="rp-ore-list"></div>
+      <button class="btn btn-s btn-sm" onclick="rpAggiungiOra()" style="margin-bottom:14px">+ Operatore</button>
+
+      <!-- Ricambi -->
+      <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-m);margin-bottom:8px">Ricambi utilizzati</div>
+      <div id="rp-ric-list"></div>
+      <button class="btn btn-s btn-sm" onclick="rpAggiungiRicambio()" style="margin-bottom:16px">+ Ricambio</button>
+
+      <div style="display:flex;gap:10px;justify-content:flex-end;border-top:1px solid var(--border);padding-top:14px">
+        <button class="btn btn-s" onclick="chiudiPannelloRapportino()">Annulla</button>
+        <button class="btn btn-p" onclick="confermaPannelloRapportino()">✓ Aggiungi alla scheda</button>
       </div>
     </div>
 
@@ -890,26 +927,160 @@ function toggleSintomo(el, testo){
 // ══════════════════════════════════════════════════════════
 let _rapId = 1;
 
-async function nuovoRapportino(){
-  // Salva prima la scheda su Supabase così al ritorno caricaScheda trova tutto
-  if(SL._dirty || !SL.id){
-    toast('Salvo la scheda prima di aprire il rapportino...','info');
-    await salvaBozzaSilente(); // salva senza navigare
-    if(!SL.id){ toast('Errore salvataggio scheda','err'); return; }
+// ══════════════════════════════════════════════════════════
+// PANNELLO RAPPORTINO INLINE
+// ══════════════════════════════════════════════════════════
+const OPERATORI = [
+  {nome:'Davide', tariffa:45},{nome:'Cristian', tariffa:45},
+  {nome:'Ivan',   tariffa:45},{nome:'Marco',    tariffa:45},
+  {nome:'Luca',   tariffa:42},{nome:'Stagista', tariffa:20}
+];
+let _rpOre = [], _rpRic = [], _rpOreId = 1, _rpRicId = 1;
+
+function apriPannelloRapportino(){
+  _rpOre = []; _rpRic = []; _rpOreId = 1; _rpRicId = 1;
+  const annoBreve = String(new Date().getFullYear()).slice(-2);
+  const prog = String(Math.floor(Math.random()*9000)+1000);
+  document.getElementById('rp-numero').value = `${annoBreve}/${prog}`;
+  document.getElementById('rp-data').value = new Date().toISOString().slice(0,10);
+  document.getElementById('rp-note').value = '';
+  document.getElementById('pannelloRap').style.display = '';
+  rpRenderOre(); rpRenderRic();
+  // Aggiungi primo operatore automaticamente
+  rpAggiungiOra();
+  document.getElementById('pannelloRap').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function chiudiPannelloRapportino(){
+  document.getElementById('pannelloRap').style.display = 'none';
+}
+
+function rpAggiungiOra(){
+  _rpOre.push({id:_rpOreId++, operatore:'', ore:0, tariffa:45});
+  rpRenderOre();
+}
+
+function rpRimuoviOra(id){
+  _rpOre = _rpOre.filter(o=>o.id!==id);
+  rpRenderOre();
+}
+
+function rpRenderOre(){
+  document.getElementById('rp-ore-list').innerHTML = _rpOre.map(o=>`
+    <div style="display:grid;grid-template-columns:180px 90px 90px 90px 36px;gap:8px;align-items:center;margin-bottom:8px">
+      <select onchange="rpUpdOra(${o.id},'operatore',this.value)" style="padding:7px;border:1px solid var(--border);border-radius:var(--rs);font-family:inherit;font-size:13px">
+        <option value="">— Operatore —</option>
+        ${OPERATORI.map(op=>`<option value="${op.nome}" data-tariffa="${op.tariffa}" ${o.operatore===op.nome?'selected':''}>${op.nome}</option>`).join('')}
+      </select>
+      <input type="number" value="${o.ore||''}" min="0" step="0.5" placeholder="Ore"
+        oninput="rpUpdOra(${o.id},'ore',this.value)"
+        style="padding:7px;border:1px solid var(--border);border-radius:var(--rs);font-size:14px;font-weight:700;text-align:right">
+      <input type="number" value="${o.tariffa||45}" min="0" step="1" placeholder="€/h"
+        oninput="rpUpdOra(${o.id},'tariffa',this.value)"
+        style="padding:7px;border:1px solid var(--border);border-radius:var(--rs);font-size:13px;text-align:right">
+      <span style="font-size:13px;font-weight:600;text-align:right">${fmt((o.ore||0)*(o.tariffa||45))}</span>
+      <button onclick="rpRimuoviOra(${o.id})" style="background:none;border:1px solid var(--border);border-radius:var(--rs);cursor:pointer;color:var(--err)">✕</button>
+    </div>
+  `).join('');
+}
+
+function rpUpdOra(id, field, val){
+  const o = _rpOre.find(o=>o.id===id);
+  if(!o) return;
+  if(field==='operatore'){
+    o.operatore = val;
+    const op = OPERATORI.find(x=>x.nome===val);
+    if(op){ o.tariffa = op.tariffa; }
+  } else {
+    o[field] = parseFloat(val)||0;
+  }
+  rpRenderOre();
+}
+
+function rpAggiungiRicambio(){
+  _rpRic.push({id:_rpRicId++, codice:'', descrizione:'', qty:1, prezzo:0});
+  rpRenderRic();
+}
+
+function rpRimuoviRic(id){
+  _rpRic = _rpRic.filter(r=>r.id!==id);
+  rpRenderRic();
+}
+
+function rpRenderRic(){
+  document.getElementById('rp-ric-list').innerHTML = _rpRic.map(r=>`
+    <div style="display:grid;grid-template-columns:120px 1fr 60px 100px 36px;gap:8px;align-items:center;margin-bottom:8px">
+      <input type="text" value="${r.codice}" placeholder="Codice"
+        oninput="rpUpdRic(${r.id},'codice',this.value)"
+        style="padding:7px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;font-family:monospace">
+      <input type="text" value="${r.descrizione}" placeholder="Descrizione *"
+        oninput="rpUpdRic(${r.id},'descrizione',this.value)"
+        style="padding:7px;border:1px solid var(--border);border-radius:var(--rs);font-size:13px">
+      <input type="number" value="${r.qty}" min="1" step="1"
+        oninput="rpUpdRic(${r.id},'qty',this.value)"
+        style="padding:7px;border:1px solid var(--border);border-radius:var(--rs);font-size:13px;text-align:right">
+      <input type="number" value="${r.prezzo||''}" min="0" step="0.01" placeholder="€ prezzo"
+        oninput="rpUpdRic(${r.id},'prezzo',this.value)"
+        style="padding:7px;border:1px solid var(--border);border-radius:var(--rs);font-size:13px;text-align:right">
+      <button onclick="rpRimuoviRic(${r.id})" style="background:none;border:1px solid var(--border);border-radius:var(--rs);cursor:pointer;color:var(--err)">✕</button>
+    </div>
+  `).join('');
+}
+
+function rpUpdRic(id, field, val){
+  const r = _rpRic.find(r=>r.id===id);
+  if(!r) return;
+  r[field] = (field==='qty'||field==='prezzo') ? parseFloat(val)||0 : val;
+  rpRenderRic();
+}
+
+function confermaPannelloRapportino(){
+  const data   = document.getElementById('rp-data').value;
+  const numero = document.getElementById('rp-numero').value;
+  const note   = document.getElementById('rp-note').value;
+
+  if(!data){ toast('Inserisci la data del rapportino','err'); return; }
+
+  // Forza lettura campi ore (per sicurezza)
+  document.querySelectorAll('[id^="rp-ore-list"] input[type=number]').forEach(inp=>{
+    // già aggiornati via oninput
+  });
+
+  const oreValide = _rpOre.filter(o=>o.ore>0 && o.operatore);
+  const ricValidi  = _rpRic.filter(r=>r.descrizione.trim());
+
+  if(!oreValide.length && !ricValidi.length){
+    toast('Inserisci almeno un\'ora o un ricambio','err'); return;
   }
 
-  const dati = {
-    _from: 'scheda',
-    scheda_id:  SL.id,
-    scheda_num: SL.numero,
-    targa:   SL.targa,
-    modello: SL.modello,
-    km:      SL.km,
-    cliente: { ...SL.cliente },
+  const rap = {
+    _id:     Date.now(),
+    numero:  numero,
+    data:    data,
+    tecnico: oreValide[0]?.operatore || SL.tecnico || '',
+    note:    note,
+    ore:     oreValide,
+    elementi:[
+      ...oreValide.map(o=>({
+        tipo:'manodopera', codice:'',
+        descrizione:`Manodopera ${o.operatore} (${fmtH(o.ore)})`,
+        qty:o.ore, prezzo:o.tariffa, iva_pct:22
+      })),
+      ...ricValidi.map(r=>({
+        tipo:'ricambio', codice:r.codice,
+        descrizione:r.descrizione, qty:r.qty,
+        prezzo:r.prezzo, iva_pct:22
+      }))
+    ]
   };
-  sessionStorage.setItem('rapportino_prefill', JSON.stringify(dati));
-  window.location.href = 'rapportino.html?from=scheda';
+
+  chiudiPannelloRapportino();
+  riceviRapportino(rap);
+  toast(`Rapportino ${numero} aggiunto ✓`, 'ok');
+  dirty();
 }
+
+function nuovoRapportino(){ apriPannelloRapportino(); } // alias compatibilità
 
 // Riceve un rapportino completato dal rapportino.html
 function riceviRapportino(rap){
@@ -1294,8 +1465,10 @@ async function caricaScheda(id){
   // Leggi rapportino in arrivo FUORI dal try-catch — deve sempre eseguire
   try {
     const rawRap = sessionStorage.getItem('rapportino_in_arrivo');
+    console.log('🔍 caricaScheda - check sessionStorage rapportino_in_arrivo:', rawRap ? 'TROVATO' : 'VUOTO');
     if(rawRap){
       const rap = JSON.parse(rawRap);
+      console.log('📦 rapportino trovato:', rap.numero, 'ore:', rap.ore?.length, 'elementi:', rap.elementi?.length);
       sessionStorage.removeItem('rapportino_in_arrivo');
       riceviRapportino(rap);
       toast(`Rapportino ${rap.numero||''} aggiunto ✓`, 'ok');
