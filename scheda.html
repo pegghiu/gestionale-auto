@@ -1095,18 +1095,18 @@ function riceviRapportino(rap){
 
 function renderRapportini(){
   const list  = document.getElementById('rapList');
-  const empty = document.getElementById('rapEmpty');
   const count = document.getElementById('rapCount');
 
+  if(!list) return;
+
   if(!SL.rapportini.length){
-    empty.style.display='';
-    list.innerHTML='';
-    list.appendChild(empty);
-    count.textContent='Nessuno';
+    list.innerHTML = `<div id="rapEmpty" style="text-align:center;padding:24px;color:var(--text-l);font-size:13px">
+      Nessun rapportino ancora — clicca "Nuovo rapportino giornaliero" per registrare le lavorazioni di oggi.
+    </div>`;
+    if(count) count.textContent='Nessuno';
     return;
   }
-  empty.style.display='none';
-  count.textContent = SL.rapportini.length + (SL.rapportini.length===1?' rapportino':' rapportini');
+  if(count) count.textContent = SL.rapportini.length + (SL.rapportini.length===1?' rapportino':' rapportini');
 
   // Ordina per data decrescente
   const sorted = [...SL.rapportini].sort((a,b)=>b.data.localeCompare(a.data));
