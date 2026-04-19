@@ -481,9 +481,11 @@ function invia(){
   if(!ok){toast('Aggiungi almeno un\'ora o un ricambio','err');return;}
 
   const payload = buildPayload();
+  console.log('📤 invia() payload ore:', payload.ore, 'elementi:', payload.elementi?.length, 'scheda_id:', R._scheda_id);
 
   // Salva in sessionStorage — la scheda lo legge dopo il caricamento
   sessionStorage.setItem('rapportino_in_arrivo', JSON.stringify(payload));
+  console.log('💾 sessionStorage impostato, navigo a:', R._scheda_id ? `scheda.html?id=${R._scheda_id}` : 'schede.html');
 
   document.getElementById('hBadge').className='badge b-inviato';
   document.getElementById('hBadge').textContent='Inviato';
