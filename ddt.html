@@ -1215,13 +1215,15 @@ async function confermaDDT(){
 
   const isReso = DR.tipo_movimento === 'reso';
 
-  // Prezzo listino mancante: avvisa ma non blocca — pre-popola con prezzo fornitore
-  const senzaListino = DR.righe.filter(r => r.tipo==='ricambio' && r.prezzo_listino<=0);
-  if(senzaListino.length > 0){
-    // Pre-popola il listino con il prezzo fornitore come base
-    senzaListino.forEach(r => { if(r.prezzo>0) r.prezzo_listino = r.prezzo; });
-    renderRighe();
-    if(!confirm(`⚠ ${senzaListino.length} ricambio${senzaListino.length>1?'i':''} senza prezzo listino.\n\nHo impostato il prezzo fornitore come base — aggiornalo prima di confermare.\n\nConfermi comunque?`)) return;
+  // ─── IDEMPOTENZA: già processato? ─────────────────────────────────
+  if(DR._emailId){
+    const {data: esistenti} = await _sb.from('movimenti')
+      .select('id').eq('ddt_id', DR._emailId).limit(1);
+    if(esistenti && esistenti.length > 0){
+      if(!confirm('⚠ Questo DDT è già stato processato in precedenza.\n\nProcederne comunque creerà movimenti duplicati. Vuoi continuare?')){
+        return;
+      }
+    }
   }
 
   // Conferma esplicita per i resi
@@ -1230,52 +1232,151 @@ async function confermaDDT(){
     if(!confirm(`📤 Stai registrando un RESO${rifTesto}.\n\nLe quantità verranno SCARICATE dal magazzino.\n\nConfermi?`)) return;
   }
 
-  const ts      = new Date().toISOString().slice(0,10);
-  const refDdt  = `${isReso?'RESO ':''}${DR.numero||'DDT'} / ${DR.fornitore}${DR.rif_ddt_originale?' (rif. '+DR.rif_ddt_originale+')':''}`;
+  const ts       = new Date().toISOString().slice(0,10);
+  const refDdt   = `${isReso?'RESO ':''}${DR.numero||'DDT'} / ${DR.fornitore}${DR.rif_ddt_originale?' (rif. '+DR.rif_ddt_originale+')':''}`;
   const segnoQta = isReso ? -1 : 1;
   const tipoMov  = isReso ? 'out' : 'in';
 
+  // ─── STEP 1: per ogni riga, check articolo esistente e upsert ────
+  // Popola anche prezzo_listino usando prezzo_vendita dell'articolo esistente
+  let articoliAggiornatiCount = 0;
+  let articoliNuoviCount = 0;
+
+  for(const r of DR.righe){
+    if(r.tipo !== 'ricambio') continue;
+    const codiceFornitore = (r.codice || '').trim();
+    if(!codiceFornitore) continue;
+
+    // Cerca articolo esistente
+    const {data: artEsistenti} = await _sb.from('articoli')
+      .select('id, codice, codice_fornitore, descrizione, qta, costo_acquisto, prezzo_vendita')
+      .or(`codice.eq.${codiceFornitore},codice_fornitore.eq.${codiceFornitore}`)
+      .limit(1);
+
+    const artEsistente = artEsistenti?.[0];
+
+    if(artEsistente){
+      // ─── Articolo esistente ────────────────────────────────────
+      // Usa prezzo_vendita se > 0 come listino vendita cliente
+      if(artEsistente.prezzo_vendita > 0 && (!r.prezzo_listino || r.prezzo_listino <= 0)){
+        r.prezzo_listino = artEsistente.prezzo_vendita;
+      }
+
+      // Check aggiornamento costo acquisto
+      const costoVecchio = artEsistente.costo_acquisto || 0;
+      const costoNuovo   = r.prezzo || 0;
+      let aggiornaCosto = false;
+
+      if(!isReso && costoNuovo > 0 && Math.abs(costoNuovo - costoVecchio) > 0.01){
+        const msg = `Ricambio ${codiceFornitore} già in magazzino\n` +
+                    `${artEsistente.descrizione}\n\n` +
+                    `Costo vecchio: €${costoVecchio.toFixed(2)}\n` +
+                    `Costo nuovo:   €${costoNuovo.toFixed(2)}\n\n` +
+                    `Aggiorno il costo di acquisto?`;
+        aggiornaCosto = confirm(msg);
+      }
+
+      // Update qta + eventualmente costo
+      const nuovaQta = Math.max(0, (artEsistente.qta||0) + (r.qty * segnoQta));
+      const updateFields = { qta: nuovaQta };
+      if(aggiornaCosto) updateFields.costo_acquisto = costoNuovo;
+
+      await _sb.from('articoli').update(updateFields).eq('id', artEsistente.id);
+      r._articolo_id = artEsistente.id;
+      articoliAggiornatiCount++;
+
+    } else if(!isReso && r.assegna === 'magazzino'){
+      // ─── Nuovo articolo (solo se destinato a magazzino) ───────
+      const {data: nuovo, error: errNuovo} = await _sb.from('articoli').insert({
+        codice:           codiceFornitore,
+        codice_fornitore: codiceFornitore,
+        descrizione:      r.descrizione,
+        tipo:             'ricambio',
+        um:               'NR',
+        qta:              r.qty,
+        soglia_minima:    1,
+        costo_acquisto:   r.prezzo || 0,
+        prezzo_vendita:   0,
+        note:             `Creato da DDT ${DR.numero||''} ${DR.fornitore}`
+      }).select().single();
+
+      if(errNuovo){
+        console.warn('Errore creazione articolo', codiceFornitore, errNuovo);
+      } else if(nuovo){
+        r._articolo_id = nuovo.id;
+        articoliNuoviCount++;
+      }
+
+    } else if(isReso && !artEsistente){
+      toast(`⚠ Articolo ${codiceFornitore} non trovato in magazzino — reso registrato comunque`, 'info');
+    }
+  }
+
+  // ─── STEP 2: insert movimenti su Supabase ────────────────────────
+  const movimenti = DR.righe
+    .filter(r => (r.codice || '').trim())
+    .map(r => ({
+      tipo:        tipoMov,
+      codice:      (r.codice || '').trim(),
+      descrizione: r.descrizione,
+      qta:         Math.abs(r.qty) * segnoQta,
+      data:        ts,
+      ddt_id:      DR._emailId || null,
+      riferimento: r.assegna === 'magazzino' ? refDdt : `${refDdt} → ${r.assegna||'scheda'}`,
+      utente:      'gestionale'
+    }));
+
+  if(movimenti.length > 0){
+    const {error: errMov} = await _sb.from('movimenti').insert(movimenti);
+    if(errMov){
+      console.error('Errore insert movimenti', errMov);
+      toast('Errore salvataggio movimenti: ' + errMov.message, 'err');
+      return;
+    }
+  }
+
+  // ─── STEP 3: aggiorna UI locale (retrocompatibilità) ─────────────
   DR.righe.forEach(r=>{
     const art = ARTICOLI.find(a => a.codice === r.codice);
-
-    if(r.assegna==='magazzino' || art){
-      if(art){
-        art.qta = Math.max(0, art.qta + (r.qty * segnoQta));
-        if(!isReso && r.prezzo>0) art.costo = r.prezzo;
-      } else if(r.assegna==='magazzino' && !isReso){
-        // Crea nuovo articolo solo per entrate
-        ARTICOLI.push({id:Date.now(),codice:r.codice||'ART-'+Date.now(),
-          descrizione:r.descrizione, um:'NR', qta:r.qty, soglia:1,
-          costo:r.prezzo, prezzo:r.prezzo*1.8, fornitore:DR.fornitore, note:''});
-      } else if(isReso && !art){
-        toast(`⚠ Articolo ${r.codice} non trovato in magazzino — reso registrato comunque`, 'info');
-      }
+    if(art){
+      art.qta = Math.max(0, art.qta + (r.qty * segnoQta));
+      if(!isReso && r.prezzo>0) art.costo = r.prezzo;
+    } else if(r.assegna === 'magazzino' && !isReso){
+      ARTICOLI.push({
+        id:          Date.now()+Math.random(),
+        codice:      r.codice || 'ART-'+Date.now(),
+        descrizione: r.descrizione,
+        um:          'NR',
+        qta:         r.qty,
+        soglia:      1,
+        costo:       r.prezzo,
+        prezzo:      r.prezzo_listino || 0,
+        fornitore:   DR.fornitore,
+        note:        ''
+      });
     }
-
-    // Registra movimento
     MOVIMENTI.unshift({
-      id: Date.now()+Math.random(), data: ts,
-      tipo: tipoMov,
+      id: Date.now()+Math.random(), data: ts, tipo: tipoMov,
       codice: r.codice||'—', descrizione: r.descrizione,
       qta: r.qty * segnoQta,
-      rif: r.assegna==='magazzino' ? refDdt : `${refDdt} → ${r.assegna}`,
+      rif: r.assegna==='magazzino' ? refDdt : `${refDdt} → ${r.assegna||'scheda'}`,
       utente: 'Tu'
     });
   });
 
-  // ─── TODO SUPABASE ─────────────────────────────────────
-  // await _sb.from('ddt').insert({fornitore:DR.fornitore,numero:DR.numero,data:DR.data,...})
-  // await _sb.from('movimenti').insert(righeMovimenti)
-  // await _sb.from('articoli').upsert(articoliAggiornati)
-  // ───────────────────────────────────────────────────────
-
   renderKpi();renderMag();renderMov();aggArticoliSelect();
+
+  // ─── Messaggio finale ────────────────────────────────────────────
+  let msgDettagli = [];
+  if(articoliNuoviCount > 0)     msgDettagli.push(`${articoliNuoviCount} nuovi`);
+  if(articoliAggiornatiCount > 0) msgDettagli.push(`${articoliAggiornatiCount} aggiornati`);
+  const dettagli = msgDettagli.length > 0 ? ` (${msgDettagli.join(', ')})` : '';
   const msg = isReso
-    ? `📤 Reso confermato — ${DR.righe.length} articoli scaricati`
-    : `✓ DDT confermata — ${DR.righe.length} articoli caricati`;
+    ? `📤 Reso confermato — ${DR.righe.length} articoli scaricati${dettagli}`
+    : `✓ DDT confermata — ${DR.righe.length} articoli caricati${dettagli}`;
   toast(msg, isReso ? 'info' : 'ok');
 
-  // Vai automaticamente alla scheda di lavoro
+  // Vai alla scheda (se entrata con targa)
   if(!isReso){
     await apriSchedaDaEmail();
   } else {
@@ -1285,14 +1386,29 @@ async function confermaDDT(){
 }
 
 async function apriSchedaDaEmail(){
-  const elementi = DR.righe.map(r=>({
-    tipo:        r.tipo||'ricambio',
-    codice:      r.codice||'',
-    descrizione: r.descrizione||'',
-    qty:         r.qty||1,
-    prezzo:      r.prezzo_listino||r.prezzo||0,
-    iva_pct:     22
-  }));
+  // Prepara elementi per la scheda; usa prezzo_vendita articolo se > 0 (listino),
+  // altrimenti prezzo_listino (impostato manualmente), altrimenti prezzo acquisto DDT.
+  const elementi = [];
+  for(const r of DR.righe){
+    let prezzo = 0;
+
+    if(r._articolo_id){
+      // articolo esistente o appena creato — rileggi prezzo_vendita aggiornato
+      const {data: art} = await _sb.from('articoli')
+        .select('prezzo_vendita').eq('id', r._articolo_id).single();
+      if(art?.prezzo_vendita > 0) prezzo = art.prezzo_vendita;
+    }
+    if(prezzo <= 0) prezzo = r.prezzo_listino || r.prezzo || 0;
+
+    elementi.push({
+      tipo:        r.tipo||'ricambio',
+      codice:      r.codice||'',
+      descrizione: r.descrizione||'',
+      qty:         r.qty||1,
+      prezzo:      prezzo,
+      iva_pct:     22
+    });
+  }
 
   // Cerca scheda aperta per questa targa
   if(DR.targa){
