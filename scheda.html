@@ -665,6 +665,50 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ══════════════════════════════════════════════════════════
+// NUMERAZIONE SEQUENZIALE (schede 26/0001, rapportini 26/R/0001)
+// ══════════════════════════════════════════════════════════
+async function prossimoNumeroScheda(){
+  const anno = String(new Date().getFullYear()).slice(-2);
+  try {
+    const {data} = await _sb.from('rapportini')
+      .select('numero')
+      .like('numero', `${anno}/%`)
+      .not('numero', 'like', `${anno}/R/%`)
+      .order('numero', {ascending: false})
+      .limit(1);
+    let next = 1;
+    if(data && data.length > 0){
+      const m = String(data[0].numero).match(/\/(\d+)$/);
+      if(m) next = parseInt(m[1]) + 1;
+    }
+    return `${anno}/${String(next).padStart(4,'0')}`;
+  } catch(e){
+    console.warn('prossimoNumeroScheda fallback:', e);
+    return `${anno}/0001`;
+  }
+}
+
+async function prossimoNumeroRapportino(){
+  const anno = String(new Date().getFullYear()).slice(-2);
+  try {
+    const {data} = await _sb.from('rapportini_giornalieri')
+      .select('numero')
+      .like('numero', `${anno}/R/%`)
+      .order('numero', {ascending: false})
+      .limit(1);
+    let next = 1;
+    if(data && data.length > 0){
+      const m = String(data[0].numero).match(/\/R\/(\d+)$/);
+      if(m) next = parseInt(m[1]) + 1;
+    }
+    return `${anno}/R/${String(next).padStart(4,'0')}`;
+  } catch(e){
+    console.warn('prossimoNumeroRapportino fallback:', e);
+    return `${anno}/R/0001`;
+  }
+}
+
+// ══════════════════════════════════════════════════════════
 // STATO
 // ══════════════════════════════════════════════════════════
 const SL = {
@@ -688,10 +732,13 @@ function init(){
   SL.data = oggi;
   document.getElementById('dataAp').value = oggi;
 
-  // Numero scheda formato: 26/0001 (anno 2 cifre / progressivo 4 cifre)
+  // Numero scheda formato: 26/0001 (sequenziale — caricato async da Supabase)
   const annoBreve = String(new Date().getFullYear()).slice(-2);
-  const prog = String(Math.floor(Math.random()*9000)+1000); // TODO: Supabase sequence
-  SL.numeroBase = `${annoBreve}/${prog}`;
+  SL.numeroBase = `${annoBreve}/0001`; // placeholder temporaneo
+  prossimoNumeroScheda().then(n => {
+    SL.numeroBase = n;
+    setTipoScheda(SL.tipo || '');
+  });
 
   // Parametri URL
   const p = new URLSearchParams(window.location.search);
@@ -941,8 +988,10 @@ let _rpOre = [], _rpRic = [], _rpOreId = 1, _rpRicId = 1;
 function apriPannelloRapportino(){
   _rpOre = []; _rpRic = []; _rpOreId = 1; _rpRicId = 1;
   const annoBreve = String(new Date().getFullYear()).slice(-2);
-  const prog = String(Math.floor(Math.random()*9000)+1000);
-  document.getElementById('rp-numero').value = `${annoBreve}/${prog}`;
+  document.getElementById('rp-numero').value = `${annoBreve}/R/0001`; // placeholder temporaneo
+  prossimoNumeroRapportino().then(n => {
+    document.getElementById('rp-numero').value = n;
+  });
   document.getElementById('rp-data').value = new Date().toISOString().slice(0,10);
   document.getElementById('rp-note').value = '';
   document.getElementById('pannelloRap').style.display = '';
@@ -1519,9 +1568,7 @@ function valida(){
 async function salvaBozzaSilente(){
   try {
     if(!SL.numeroBase){
-      const annoBreve = String(new Date().getFullYear()).slice(-2);
-      const prog = String(Math.floor(Math.random()*9000)+1000);
-      SL.numeroBase = `${annoBreve}/${prog}`;
+      SL.numeroBase = await prossimoNumeroScheda();
       setTipoScheda(SL.tipo||'');
     }
 
