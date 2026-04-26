@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DDT Orfani — Gestione</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --accent:#0F6E56;--accent-d:#085041;--accent-l:#E1F5EE;
+  --blue:#185FA5;--blue-l:#EBF0FD;
+  --amber:#854F0B;--amber-l:#FAEEDA;
+  --red:#A32D2D;--red-l:#FCEBEB;
+  --dark:#1A1A1A;--surface:#FFF;--bg:#EDEBE6;
+  --border:#DEDAD4;--border-dk:#C4C0B8;
+  --text:#1A1A1A;--text-m:#706C65;--text-l:#9A9690;
+  --ok:#1F7A35;--ok-bg:#E6F5EB;
+  --warn:#7A5000;--warn-bg:#FFF8E6;
+  --err:#B82020;--err-bg:#FDECEC;
+  --info:#1A4FAA;--info-bg:#EBF0FD;
+  --r:8px;--rs:5px;--sh:0 1px 3px rgba(0,0,0,0.07)
+}
+body{font-family:'Helvetica Neue',Arial,-apple-system,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5;min-height:100vh}
+
+/* HEADER */
+.hdr{background:var(--dark);color:#FFF;height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;position:sticky;top:0;z-index:200}
+.hdr-brand{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.45)}
+.hdr-title{font-size:15px;font-weight:600;letter-spacing:.03em}
+.hdr-r{display:flex;align-items:center;gap:10px}
+.btn-back{background:transparent;border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.7);padding:5px 12px;border-radius:var(--rs);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s}
+.btn-back:hover{background:rgba(255,255,255,.08);color:#FFF}
+
+/* PAGE */
+.page{max-width:1040px;margin:0 auto;padding:20px 16px 80px;display:flex;flex-direction:column;gap:14px}
+
+/* CARD */
+.card{background:var(--surface);border-radius:var(--r);border:1px solid var(--border);box-shadow:var(--sh);overflow:hidden}
+.ch{padding:11px 20px;border-bottom:1px solid var(--border);background:#F7F6F3;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ct{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-m)}
+.cb{padding:18px 20px}
+
+/* FORM */
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-m)}
+input[type=text],input[type=number],input[type=date],select,textarea{width:100%;padding:8px 11px;border:1px solid var(--border);border-radius:var(--rs);font-size:14px;font-family:inherit;color:var(--text);background:#FFF;outline:none;transition:border-color .15s,box-shadow .15s;-webkit-appearance:none}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(15,110,86,.12)}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--rs);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;border:1px solid transparent;transition:all .15s;white-space:nowrap}
+.btn-p{background:var(--accent);color:#FFF;border-color:var(--accent)}
+.btn-p:hover{background:var(--accent-d)}
+.btn-s{background:#FFF;color:var(--text);border-color:var(--border)}
+.btn-s:hover{background:var(--bg)}
+.btn-g{background:transparent;color:var(--text-m);border-color:transparent;padding:6px 8px}
+.btn-g:hover{background:var(--bg);color:var(--text)}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-warn{background:var(--warn-bg);color:var(--warn);border-color:#E8C97A}
+.btn-warn:hover{background:#FFF1C7}
+.btn-info{background:var(--info-bg);color:var(--info);border-color:#B6CAEB}
+.btn-info:hover{background:#DDE7F8}
+
+/* BADGE */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.b-ok{background:var(--ok-bg);color:var(--ok)}
+.b-warn{background:var(--warn-bg);color:var(--warn)}
+.b-err{background:var(--err-bg);color:var(--err)}
+.b-info{background:var(--info-bg);color:var(--info)}
+
+/* ALERT */
+.alert{padding:11px 14px;border-radius:var(--rs);font-size:13px;display:flex;align-items:flex-start;gap:9px;line-height:1.5}
+.alert-icon{font-size:15px;flex-shrink:0;margin-top:1px}
+.a-info{background:var(--info-bg);color:var(--info)}
+.a-warn{background:var(--warn-bg);color:var(--warn)}
+
+/* KPI */
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px}
+.kpi-val{font-size:22px;font-weight:700;letter-spacing:-.02em;margin-bottom:2px}
+.kpi-lbl{font-size:11px;color:var(--text-m);font-weight:500;text-transform:uppercase;letter-spacing:.06em}
+
+/* DDT ITEM */
+.orf-item{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:14px;transition:background .1s}
+.orf-item:last-child{border-bottom:none}
+.orf-item:hover{background:#FAFAF8}
+.orf-meta{flex:1;min-width:0}
+.orf-from{font-size:12px;color:var(--text-m);margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.orf-sogg{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.orf-info{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;align-items:center}
+.orf-pill{background:#F0EDE8;border-radius:3px;padding:2px 7px;font-size:11px;font-weight:600}
+.orf-targa{background:var(--dark);color:#FFF;font-family:monospace;letter-spacing:.08em;padding:3px 8px;font-size:12px;border-radius:3px;font-weight:700}
+.orf-data{color:var(--accent-d);background:var(--accent-l)}
+.orf-actions{display:flex;flex-direction:column;gap:5px;flex-shrink:0;min-width:170px}
+
+.empty{padding:60px 20px;text-align:center;color:var(--text-m)}
+.empty-icon{font-size:48px;margin-bottom:12px}
+.empty-msg{font-size:14px;font-weight:600;margin-bottom:4px}
+.empty-sub{font-size:12px;color:var(--text-l)}
+
+/* TARGA INPUT inline */
+.targa-edit{display:flex;gap:6px;align-items:center;margin-top:8px;display:none}
+.targa-edit.show{display:flex}
+.targa-edit input{font-family:monospace;font-weight:700;letter-spacing:.1em;width:110px;padding:5px 8px;font-size:13px;border:2px solid var(--warn);border-radius:4px;text-transform:uppercase;background:#FFF8E6}
+
+/* TOAST */
+.toasts{position:fixed;bottom:20px;right:20px;display:flex;flex-direction:column;gap:8px;z-index:500}
+.toast{background:var(--dark);color:#FFF;padding:10px 16px;border-radius:var(--r);font-size:13px;max-width:340px;animation:fadeUp .22s ease;transition:opacity .3s}
+.toast.ok{background:var(--ok)}
+.toast.err{background:var(--err)}
+.toast.info{background:var(--blue)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* MODAL */
+.mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;align-items:center;justify-content:center;padding:20px}
+.mo.open{display:flex}
+.modal{background:#FFF;border-radius:var(--r);width:min(560px,100%);max-height:88vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.mh{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.mt{font-size:15px;font-weight:700}
+.mb{padding:18px 20px;display:flex;flex-direction:column;gap:14px}
+.mf{padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
+.scheda-result{padding:10px 12px;border:1px solid var(--border);border-radius:var(--rs);cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.scheda-result:hover{background:var(--accent-l);border-color:var(--accent)}
+.scheda-result-meta{font-size:12px;color:var(--text-m)}
+
+/* FILTERS */
+.filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:10px 20px;background:#F7F6F3;border-bottom:1px solid var(--border)}
+.filters input,.filters select{padding:5px 9px;font-size:12px;height:30px}
+.filters label{font-size:11px;color:var(--text-m);font-weight:600}
+
+/* SPINNER */
+.loading{display:flex;align-items:center;justify-content:center;padding:40px;gap:10px;color:var(--text-m)}
+.spinner{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+@media(max-width:640px){
+  .kpis{grid-template-columns:1fr}
+  .orf-item{flex-direction:column}
+  .orf-actions{width:100%;flex-direction:row;flex-wrap:wrap;min-width:0}
+  .orf-actions .btn{flex:1;justify-content:center;min-width:120px}
+}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div style="display:flex;align-items:center;gap:20px">
+    <span class="hdr-brand">Gestione Veicoli</span>
+    <span class="hdr-title">DDT Orfani</span>
+  </div>
+  <div class="hdr-r">
+    <button class="btn-back" onclick="location.href='ddt.html'">← DDT</button>
+    <button class="btn-back" onclick="location.href='index.html'">⌂ Menu</button>
+  </div>
+</header>
+
+<div class="page">
+
+  <!-- Spiegazione -->
+  <div class="alert a-info">
+    <span class="alert-icon">ℹ</span>
+    <div>
+      <strong>DDT orfani:</strong> documenti ricevuti via email con targa valida ma <strong>senza scheda di lavoro in bozza</strong> a cui agganciarli. Da qui puoi creare la scheda al volo, collegarli a una scheda esistente, correggere la targa o marcarli come acquisto a magazzino.
+    </div>
+  </div>
+
+  <!-- KPI -->
+  <div class="kpis">
+    <div class="kpi"><div class="kpi-val" id="kTotal" style="color:var(--warn)">—</div><div class="kpi-lbl">DDT orfani totali</div></div>
+    <div class="kpi"><div class="kpi-val" id="kFornitori">—</div><div class="kpi-lbl">Fornitori distinti</div></div>
+    <div class="kpi"><div class="kpi-val" id="kTarghe">—</div><div class="kpi-lbl">Targhe distinte</div></div>
+  </div>
+
+  <!-- Lista -->
+  <div class="card">
+    <div class="ch">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="ct">DDT in attesa</span>
+        <span class="badge b-warn" id="badgeCount">0</span>
+      </div>
+      <button class="btn btn-g btn-sm" onclick="caricaOrfani()">↻ Aggiorna</button>
+    </div>
+
+    <!-- Filtri -->
+    <div class="filters">
+      <label>Filtra targa:</label>
+      <input type="text" id="fTarga" placeholder="es. AB123CD" oninput="renderLista()" maxlength="7" style="font-family:monospace;text-transform:uppercase;width:110px">
+      <label>Fornitore:</label>
+      <select id="fFornitore" onchange="renderLista()" style="min-width:160px">
+        <option value="">— tutti —</option>
+      </select>
+      <button class="btn btn-g btn-sm" onclick="resetFiltri()">✕ Reset</button>
+    </div>
+
+    <div id="lista">
+      <div class="loading"><div class="spinner"></div> Caricamento DDT orfani…</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     MODAL: collega a scheda esistente
+═══════════════════════════════════════════════════════════ -->
+<div class="mo" id="moCollega">
+  <div class="modal">
+    <div class="mh">
+      <div class="mt">Collega DDT a scheda esistente</div>
+      <button class="btn btn-g" onclick="chiudiMo('moCollega')">✕</button>
+    </div>
+    <div class="mb">
+      <div class="alert a-info">
+        <span class="alert-icon">ℹ</span>
+        <div>Il DDT verrà marcato <strong>confermato</strong> e legato alla scheda. I ricambi <strong>non</strong> verranno aggiunti alla scheda — solo i movimenti di magazzino.</div>
+      </div>
+      <div class="field">
+        <label>Cerca per numero scheda o targa</label>
+        <input type="text" id="schedaSearch" placeholder="es. 26/0015 o AB123CD" oninput="cercaSchede()">
+      </div>
+      <div id="schedaResults" style="display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto"></div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-s" onclick="chiudiMo('moCollega')">Annulla</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     MODAL: marca come magazzino
+═══════════════════════════════════════════════════════════ -->
+<div class="mo" id="moMagazzino">
+  <div class="modal">
+    <div class="mh">
+      <div class="mt">Marca DDT come acquisto magazzino</div>
+      <button class="btn btn-g" onclick="chiudiMo('moMagazzino')">✕</button>
+    </div>
+    <div class="mb">
+      <div class="alert a-warn">
+        <span class="alert-icon">⚠</span>
+        <div>I ricambi del DDT verranno caricati a <strong>magazzino generico</strong> (no scheda). Verranno creati gli articoli mancanti e i movimenti di carico.</div>
+      </div>
+      <div id="magPreview" style="font-size:13px;color:var(--text-m)"></div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-s" onclick="chiudiMo('moMagazzino')">Annulla</button>
+      <button class="btn btn-p" id="btnConfMag" onclick="eseguiMagazzino()">Conferma carico magazzino</button>
+    </div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+// ╔══════════════════════════════════════════════════════════╗
+// ║  CONFIG                                                  ║
+// ╚══════════════════════════════════════════════════════════╝
+const SUPABASE_URL = 'https://iztrrgqkzsovorcmixum.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml6dHJyZ3FrenNvdm9yY21peHVtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMDI3NzMsImV4cCI6MjA4OTc3ODc3M30.3IyUCDpFs9x_iSi5C4asodt5_O3F_cwgdb3eBkoQh3U';
+const _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  STATO                                                   ║
+// ╚══════════════════════════════════════════════════════════╝
+let ORFANI = [];          // tutti i DDT orfani caricati
+let SCHEDE_BOZZA = [];    // tutte le schede in bozza/aperta/pronta (per match)
+let _ddtCorrente = null;  // ddt selezionato per modali
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  HELPERS                                                 ║
+// ╚══════════════════════════════════════════════════════════╝
+function normTarga(t){ return (t||'').replace(/[^A-Z0-9]/gi,'').toUpperCase(); }
+function isTargaValida(t){ return /^[A-Z]{2}\d{3}[A-Z]{2}$/.test(normTarga(t)); }
+function fmtData(d){
+  if(!d) return '—';
+  try{ return new Date(d).toLocaleDateString('it-IT',{day:'2-digit',month:'short',year:'numeric'}); }
+  catch{ return d; }
+}
+function toast(msg,tipo=''){
+  const w=document.getElementById('toasts');
+  const t=document.createElement('div');
+  t.className='toast'+(tipo?' '+tipo:''); t.textContent=msg;
+  w.appendChild(t);
+  setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),350)},3500);
+}
+function apriMo(id){document.getElementById(id).classList.add('open')}
+function chiudiMo(id){document.getElementById(id).classList.remove('open')}
+
+async function prossimoNumeroScheda(){
+  const anno = String(new Date().getFullYear()).slice(-2);
+  try{
+    const {data} = await _sb.from('rapportini')
+      .select('numero')
+      .like('numero', `${anno}/%`)
+      .not('numero','like', `${anno}/R/%`)
+      .order('numero',{ascending:false})
+      .limit(1);
+    let next = 1;
+    if(data && data.length>0){
+      const m = String(data[0].numero).match(/\/(\d+)$/);
+      if(m) next = parseInt(m[1])+1;
+    }
+    return `${anno}/${String(next).padStart(4,'0')}`;
+  } catch(e){
+    console.warn('prossimoNumeroScheda fallback:', e);
+    return `${anno}/0001`;
+  }
+}
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  CARICAMENTO DATI                                        ║
+// ╚══════════════════════════════════════════════════════════╝
+async function caricaOrfani(){
+  document.getElementById('lista').innerHTML =
+    '<div class="loading"><div class="spinner"></div> Caricamento DDT orfani…</div>';
+
+  try{
+    // 1. Carica TUTTI i DDT da_confermare con targa
+    const { data: ddtRaw, error: errDdt } = await _sb
+      .from('ddt_in_arrivo')
+      .select('id,created_at,email_da,email_oggetto,email_data,ddt_estratto,stato,targa_estratta')
+      .eq('stato','da_confermare')
+      .not('targa_estratta','is',null)
+      .order('email_data',{ascending:false,nullsFirst:false});
+    if(errDdt) throw errDdt;
+
+    // 2. Carica schede in bozza/aperta/pronta per identificare orfani veri
+    const { data: schedeRaw, error: errSch } = await _sb
+      .from('rapportini')
+      .select('id,numero,targa,stato,data,modello,cliente_nome,tecnico')
+      .in('stato',['bozza','aperta','pronta','confermato'])
+      .order('created_at',{ascending:false});
+    if(errSch) throw errSch;
+
+    SCHEDE_BOZZA = schedeRaw || [];
+    const targheConBozza = new Set(
+      SCHEDE_BOZZA.filter(s => s.stato === 'bozza' && s.targa)
+                  .map(s => normTarga(s.targa))
+    );
+
+    // 3. Filtra orfani: targa valida + nessuna scheda in bozza con quella targa
+    ORFANI = (ddtRaw||[])
+      .map(d => {
+        const ddtE = d.ddt_estratto || {};
+        const targa = normTarga(d.targa_estratta || ddtE.targa || '');
+        return {
+          id: d.id,
+          email_da: d.email_da || '',
+          email_oggetto: d.email_oggetto || '',
+          email_data: d.email_data || d.created_at,
+          ddt_estratto: ddtE,
+          targa: targa,
+          targa_valida: isTargaValida(targa),
+          fornitore: ddtE.fornitore || d.email_da || '',
+          numero_ddt: ddtE.numero || '',
+          data_ddt: ddtE.data || '',
+          modello: ddtE.modello || '',
+          telaio: ddtE.telaio || '',
+          righe: Array.isArray(ddtE.righe) ? ddtE.righe : []
+        };
+      })
+      .filter(d => d.targa_valida && !targheConBozza.has(d.targa));
+
+    aggiornaKpi();
+    aggiornaFiltroFornitori();
+    renderLista();
+
+  } catch(e){
+    console.error('caricaOrfani:', e);
+    document.getElementById('lista').innerHTML =
+      `<div class="empty"><div class="empty-icon">⚠</div>
+       <div class="empty-msg">Errore caricamento</div>
+       <div class="empty-sub">${e.message||e}</div></div>`;
+    toast('Errore: '+(e.message||e),'err');
+  }
+}
+
+function aggiornaKpi(){
+  document.getElementById('kTotal').textContent = ORFANI.length;
+  document.getElementById('kFornitori').textContent =
+    new Set(ORFANI.map(o => o.fornitore).filter(Boolean)).size;
+  document.getElementById('kTarghe').textContent =
+    new Set(ORFANI.map(o => o.targa)).size;
+  document.getElementById('badgeCount').textContent = ORFANI.length;
+}
+
+function aggiornaFiltroFornitori(){
+  const sel = document.getElementById('fFornitore');
+  const valore = sel.value;
+  const fornitori = [...new Set(ORFANI.map(o => o.fornitore).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">— tutti —</option>' +
+    fornitori.map(f => `<option value="${escapeHtml(f)}">${escapeHtml(f)}</option>`).join('');
+  if(valore && fornitori.includes(valore)) sel.value = valore;
+}
+
+function resetFiltri(){
+  document.getElementById('fTarga').value = '';
+  document.getElementById('fFornitore').value = '';
+  renderLista();
+}
+
+function escapeHtml(s){
+  return String(s||'').replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+}
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  RENDER LISTA                                            ║
+// ╚══════════════════════════════════════════════════════════╝
+function renderLista(){
+  const lista = document.getElementById('lista');
+  const fT = normTarga(document.getElementById('fTarga').value);
+  const fF = document.getElementById('fFornitore').value;
+
+  let items = ORFANI.slice();
+  if(fT) items = items.filter(o => o.targa.includes(fT));
+  if(fF) items = items.filter(o => o.fornitore === fF);
+
+  // Ordina per data DDT (più recente prima); fallback email_data
+  items.sort((a,b) => {
+    const da = a.data_ddt || a.email_data || '';
+    const db = b.data_ddt || b.email_data || '';
+    return db.localeCompare(da);
+  });
+
+  if(items.length === 0){
+    lista.innerHTML = `<div class="empty">
+      <div class="empty-icon">${ORFANI.length===0 ? '✓' : '🔍'}</div>
+      <div class="empty-msg">${ORFANI.length===0 ? 'Nessun DDT orfano' : 'Nessun risultato con questi filtri'}</div>
+      <div class="empty-sub">${ORFANI.length===0 ? 'Tutti i DDT con targa hanno una scheda di lavoro associata.' : 'Prova a cambiare i filtri o premi Reset.'}</div>
+    </div>`;
+    return;
+  }
+
+  lista.innerHTML = items.map(d => {
+    const dataDdt = d.data_ddt ? fmtData(d.data_ddt) : '—';
+    const numDdt  = d.numero_ddt ? `<span class="orf-pill">DDT ${escapeHtml(d.numero_ddt)}</span>` : '';
+    const modello = d.modello ? `<span class="orf-pill" style="background:var(--accent-l);color:var(--accent-d)">${escapeHtml(d.modello)}</span>` : '';
+    const telaio  = d.telaio ? `<span class="orf-pill" style="font-family:monospace;font-size:10px">${escapeHtml(d.telaio)}</span>` : '';
+    const righe   = d.righe.length ? `<span class="orf-pill">${d.righe.length} righe</span>` : '';
+
+    return `<div class="orf-item" data-id="${d.id}">
+      <div class="orf-meta">
+        <div class="orf-from">${escapeHtml(d.email_da)} · ricevuta ${fmtData(d.email_data)}</div>
+        <div class="orf-sogg">${escapeHtml(d.email_oggetto)}</div>
+        <div class="orf-info">
+          <span class="orf-targa">${d.targa}</span>
+          <span class="orf-pill orf-data">📅 ${dataDdt}</span>
+          ${numDdt}${modello}${telaio}${righe}
+          ${d.fornitore ? `<span class="orf-pill">${escapeHtml(d.fornitore)}</span>` : ''}
+        </div>
+        <div class="targa-edit" id="te-${d.id}">
+          <input type="text" id="ti-${d.id}" value="${d.targa}" maxlength="7"
+            oninput="this.value=this.value.replace(/[^A-Z0-9]/gi,'').toUpperCase()"
+            placeholder="AB123CD">
+          <button class="btn btn-p btn-sm" onclick="confermaTarga('${d.id}')">Salva</button>
+          <button class="btn btn-g btn-sm" onclick="annullaTarga('${d.id}')">Annulla</button>
+        </div>
+      </div>
+      <div class="orf-actions">
+        <button class="btn btn-p btn-sm" onclick="creaSchedaAlVolo('${d.id}')">➕ Crea scheda</button>
+        <button class="btn btn-info btn-sm" onclick="apriCollega('${d.id}')">🔗 Collega scheda</button>
+        <button class="btn btn-warn btn-sm" onclick="modificaTarga('${d.id}')">✎ Correggi targa</button>
+        <button class="btn btn-s btn-sm" onclick="apriMagazzino('${d.id}')">🗄 Magazzino</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  AZIONE 1: CREA SCHEDA AL VOLO                           ║
+// ╚══════════════════════════════════════════════════════════╝
+async function creaSchedaAlVolo(ddtId){
+  const d = ORFANI.find(o => o.id === ddtId);
+  if(!d){ toast('DDT non trovato','err'); return; }
+
+  if(!confirm(
+    `Creare nuova scheda per la targa ${d.targa}?\n\n` +
+    `• La scheda nascerà in stato BOZZA, senza tipo/tecnico (li imposterai poi)\n` +
+    `• Il DDT (${d.numero_ddt || 'senza numero'}) verrà auto-confermato e collegato\n` +
+    `• I ricambi entreranno automaticamente nella scheda`
+  )) return;
+
+  // Disabilita pulsanti riga
+  const item = document.querySelector(`.orf-item[data-id="${ddtId}"]`);
+  if(item) item.style.opacity = '0.5';
+
+  try{
+    // 1. Genera prossimo numero
+    const numero = await prossimoNumeroScheda();
+
+    // 2. Crea scheda bozza minima
+    const oggi = new Date().toISOString().slice(0,10);
+    const record = {
+      numero:       numero,
+      numero_base:  numero,
+      tipo:         null,                 // lasciato vuoto, si imposta in scheda.html
+      stato:        'bozza',
+      data:         oggi,
+      targa:        d.targa,
+      modello:      d.modello || null,
+      km:           0,
+      tecnico:      null,
+      cliente_nome: null,
+      problema:     null,
+      note_interne: `Scheda creata automaticamente da DDT orfano #${d.numero_ddt||'-'} (${d.fornitore||''}) il ${oggi}`,
+      imponibile:   0,
+      iva:          0,
+      totale:       0
+    };
+
+    const { data: nuova, error: errIns } = await _sb
+      .from('rapportini')
+      .insert(record)
+      .select()
+      .single();
+    if(errIns) throw errIns;
+
+    toast(`✓ Scheda ${numero} creata`,'ok');
+
+    // 3. Auto-conferma il DDT chiamando l'edge function
+    //    auto-confirm-ddt vede ora la scheda bozza e lega tutto
+    try{
+      const resp = await _sb.functions.invoke('auto-confirm-ddt', {
+        body: { ddt_id: ddtId }
+      });
+      if(resp.error){
+        console.warn('auto-confirm-ddt error:', resp.error);
+        toast('Scheda creata ma auto-conferma DDT fallita: vai in DDT e confermalo a mano','info');
+      } else {
+        toast('✓ DDT auto-confermato e collegato','ok');
+      }
+    } catch(eFn){
+      console.warn('Edge function fallita:', eFn);
+      toast('Scheda creata. Auto-conferma DDT non disponibile (CORS?). Conferma manuale in DDT.','info');
+    }
+
+    // 4. Aggiorna lista
+    await caricaOrfani();
+
+    // 5. Offri di andare alla scheda
+    if(confirm(`Scheda ${numero} creata.\n\nAprirla ora per impostare tipo/tecnico/km?`)){
+      window.location.href = `scheda.html?id=${nuova.id}`;
+    }
+
+  } catch(e){
+    console.error('creaSchedaAlVolo:', e);
+    toast('Errore: '+(e.message||e),'err');
+    if(item) item.style.opacity = '1';
+  }
+}
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  AZIONE 2: COLLEGA A SCHEDA ESISTENTE                    ║
+// ╚══════════════════════════════════════════════════════════╝
+function apriCollega(ddtId){
+  _ddtCorrente = ORFANI.find(o => o.id === ddtId);
+  if(!_ddtCorrente){ toast('DDT non trovato','err'); return; }
+  document.getElementById('schedaSearch').value = _ddtCorrente.targa;
+  cercaSchede();
+  apriMo('moCollega');
+}
+
+function cercaSchede(){
+  const q = (document.getElementById('schedaSearch').value||'').trim().toUpperCase();
+  const box = document.getElementById('schedaResults');
+  if(!q){
+    box.innerHTML = '<div style="color:var(--text-m);font-size:12px;padding:8px">Digita un numero scheda (es. 26/0015) o una targa.</div>';
+    return;
+  }
+  const qNorm = normTarga(q);
+  const isNumero = /^\d{2}\/\d+$/.test(q);
+
+  const matches = SCHEDE_BOZZA.filter(s => {
+    if(isNumero) return s.numero && s.numero.toUpperCase().includes(q);
+    if(qNorm.length>=2 && s.targa) return normTarga(s.targa).includes(qNorm);
+    return false;
+  }).slice(0, 30);
+
+  if(matches.length === 0){
+    box.innerHTML = '<div style="color:var(--text-m);font-size:12px;padding:8px">Nessuna scheda trovata.</div>';
+    return;
+  }
+
+  const statoBadge = (s) => {
+    const cls = {bozza:'b-warn',aperta:'b-info',pronta:'b-info',confermato:'b-ok'}[s] || 'b-info';
+    return `<span class="badge ${cls}">${s}</span>`;
+  };
+
+  box.innerHTML = matches.map(s => `
+    <div class="scheda-result" onclick="confermaCollega('${s.id}','${escapeHtml(s.numero)}')">
+      <div>
+        <div style="font-weight:700">${escapeHtml(s.numero)} · ${escapeHtml(s.targa||'(no targa)')}</div>
+        <div class="scheda-result-meta">
+          ${escapeHtml(s.modello||'—')} · ${escapeHtml(s.cliente_nome||'')} · ${escapeHtml(s.tecnico||'')}
+          ${s.data?' · '+fmtData(s.data):''}
+        </div>
+      </div>
+      ${statoBadge(s.stato)}
+    </div>
+  `).join('');
+}
+
+async function confermaCollega(schedaId, schedaNumero){
+  if(!_ddtCorrente){ return; }
+  if(!confirm(
+    `Collegare DDT ${_ddtCorrente.numero_ddt||'(senza numero)'} alla scheda ${schedaNumero}?\n\n` +
+    `• Il DDT verrà marcato CONFERMATO\n` +
+    `• Verranno creati i movimenti di carico magazzino\n` +
+    `• I ricambi NON verranno aggiunti alla scheda (li aggiungi manualmente se serve)`
+  )) return;
+
+  chiudiMo('moCollega');
+
+  try{
+    // 1. Crea o aggiorna articoli + crea movimenti per ogni riga
+    const oggi = new Date().toISOString().slice(0,10);
+    const refDdt = `${_ddtCorrente.numero_ddt||'DDT'} / ${_ddtCorrente.fornitore||'?'} → ${schedaNumero}`;
+    const movimenti = [];
+
+    for(const r of _ddtCorrente.righe){
+      const codice = (r.codice || '').trim();
+      const qty = parseFloat(r.qty || r.qta || 1) || 1;
+      if(!codice) continue;
+
+      // Cerca articolo esistente
+      const {data: esi} = await _sb.from('articoli')
+        .select('id,qta,costo_acquisto,prezzo_vendita')
+        .or(`codice.eq.${codice},codice_fornitore.eq.${codice}`)
+        .limit(1);
+
+      if(esi && esi.length>0){
+        // Esistente: incrementa qta
+        const a = esi[0];
+        await _sb.from('articoli')
+          .update({ qta: (a.qta||0) + qty })
+          .eq('id', a.id);
+      } else {
+        // Nuovo: crealo
+        await _sb.from('articoli').insert({
+          codice:           codice,
+          codice_fornitore: codice,
+          descrizione:      r.descrizione || codice,
+          tipo:             'ricambio',
+          um:               'NR',
+          qta:              qty,
+          soglia_minima:    1,
+          costo_acquisto:   parseFloat(r.prezzo || r.prezzo_netto || 0) || 0,
+          prezzo_vendita:   0,
+          note:             `Creato da DDT orfano collegato a ${schedaNumero}`
+        });
+      }
+
+      movimenti.push({
+        tipo:        'in',
+        codice:      codice,
+        descrizione: r.descrizione || codice,
+        qta:         qty,
+        data:        oggi,
+        ddt_id:      _ddtCorrente.id,
+        rapportino_id: schedaId,
+        riferimento: refDdt,
+        utente:      'gestionale (orfani)'
+      });
+    }
+
+    if(movimenti.length>0){
+      const {error: errMov} = await _sb.from('movimenti').insert(movimenti);
+      if(errMov) throw errMov;
+    }
+
+    // 2. Aggiorna DDT
+    const {error: errDdt} = await _sb.from('ddt_in_arrivo').update({
+      stato:          'confermato',
+      rapportino_id:  schedaId,
+      confermato_at:  new Date().toISOString(),
+      confermato_da:  'orfani-collega'
+    }).eq('id', _ddtCorrente.id);
+    if(errDdt) throw errDdt;
+
+    toast(`✓ DDT collegato a ${schedaNumero} (${movimenti.length} movimenti)`,'ok');
+    _ddtCorrente = null;
+    await caricaOrfani();
+
+  } catch(e){
+    console.error('confermaCollega:', e);
+    toast('Errore: '+(e.message||e),'err');
+  }
+}
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  AZIONE 3: CORREGGI TARGA                                ║
+// ╚══════════════════════════════════════════════════════════╝
+function modificaTarga(ddtId){
+  const box = document.getElementById('te-'+ddtId);
+  if(box) box.classList.add('show');
+  const inp = document.getElementById('ti-'+ddtId);
+  if(inp){ inp.focus(); inp.select(); }
+}
+
+function annullaTarga(ddtId){
+  const box = document.getElementById('te-'+ddtId);
+  if(box) box.classList.remove('show');
+}
+
+async function confermaTarga(ddtId){
+  const inp = document.getElementById('ti-'+ddtId);
+  if(!inp) return;
+  const nuova = normTarga(inp.value);
+  if(!isTargaValida(nuova)){
+    toast('Targa non valida (formato AB123CD)','err');
+    return;
+  }
+  const d = ORFANI.find(o => o.id === ddtId);
+  if(d && d.targa === nuova){
+    toast('Targa invariata','info');
+    annullaTarga(ddtId);
+    return;
+  }
+
+  try{
+    const {error} = await _sb.from('ddt_in_arrivo')
+      .update({ targa_estratta: nuova })
+      .eq('id', ddtId);
+    if(error) throw error;
+
+    toast(`✓ Targa aggiornata a ${nuova}`,'ok');
+
+    // Prova auto-conferma se ora c'è una scheda bozza
+    const haBozza = SCHEDE_BOZZA.some(s => s.stato==='bozza' && normTarga(s.targa)===nuova);
+    if(haBozza){
+      try{
+        await _sb.functions.invoke('auto-confirm-ddt', { body:{ ddt_id: ddtId } });
+        toast('✓ Trovata scheda bozza con questa targa: DDT auto-confermato','ok');
+      } catch(eFn){
+        console.warn('auto-confirm fallback:', eFn);
+        toast('Scheda bozza trovata: vai in DDT per confermare manualmente','info');
+      }
+    }
+    await caricaOrfani();
+  } catch(e){
+    console.error('confermaTarga:', e);
+    toast('Errore: '+(e.message||e),'err');
+  }
+}
+
+// ╔══════════════════════════════════════════════════════════╗
+// ║  AZIONE 4: MARCA COME MAGAZZINO                          ║
+// ╚══════════════════════════════════════════════════════════╝
+function apriMagazzino(ddtId){
+  _ddtCorrente = ORFANI.find(o => o.id === ddtId);
+  if(!_ddtCorrente){ toast('DDT non trovato','err'); return; }
+
+  const righe = _ddtCorrente.righe;
+  document.getElementById('magPreview').innerHTML = righe.length === 0
+    ? '<em>Attenzione: questo DDT non ha righe articolo. Verrà solo marcato confermato.</em>'
+    : `<strong>${righe.length}</strong> righe da caricare a magazzino:<br>` +
+      righe.slice(0,5).map(r => `• ${escapeHtml(r.codice||'(no codice)')} — ${escapeHtml(r.descrizione||'')} × ${r.qty||r.qta||1}`).join('<br>') +
+      (righe.length>5 ? `<br>… e altre ${righe.length-5}` : '');
+
+  apriMo('moMagazzino');
+}
+
+async function eseguiMagazzino(){
+  if(!_ddtCorrente) return;
+  const btn = document.getElementById('btnConfMag');
+  btn.disabled = true; btn.textContent = 'Salvataggio…';
+
+  try{
+    const oggi = new Date().toISOString().slice(0,10);
+    const refDdt = `${_ddtCorrente.numero_ddt||'DDT'} / ${_ddtCorrente.fornitore||'?'} → MAGAZZINO`;
+    const movimenti = [];
+
+    for(const r of _ddtCorrente.righe){
+      const codice = (r.codice || '').trim();
+      const qty = parseFloat(r.qty || r.qta || 1) || 1;
+      if(!codice) continue;
+
+      const {data: esi} = await _sb.from('articoli')
+        .select('id,qta')
+        .or(`codice.eq.${codice},codice_fornitore.eq.${codice}`)
+        .limit(1);
+
+      if(esi && esi.length>0){
+        await _sb.from('articoli')
+          .update({ qta: (esi[0].qta||0) + qty })
+          .eq('id', esi[0].id);
+      } else {
+        await _sb.from('articoli').insert({
+          codice:           codice,
+          codice_fornitore: codice,
+          descrizione:      r.descrizione || codice,
+          tipo:             'ricambio',
+          um:               'NR',
+          qta:              qty,
+          soglia_minima:    1,
+          costo_acquisto:   parseFloat(r.prezzo || r.prezzo_netto || 0) || 0,
+          prezzo_vendita:   0,
+          note:             `Creato da DDT orfano (magazzino) ${_ddtCorrente.fornitore||''}`
+        });
+      }
+
+      movimenti.push({
+        tipo:        'in',
+        codice:      codice,
+        descrizione: r.descrizione || codice,
+        qta:         qty,
+        data:        oggi,
+        ddt_id:      _ddtCorrente.id,
+        rapportino_id: null,
+        riferimento: refDdt,
+        utente:      'gestionale (orfani-magazzino)'
+      });
+    }
+
+    if(movimenti.length>0){
+      const {error: errMov} = await _sb.from('movimenti').insert(movimenti);
+      if(errMov) throw errMov;
+    }
+
+    const {error: errDdt} = await _sb.from('ddt_in_arrivo').update({
+      stato:          'confermato',
+      rapportino_id:  null,
+      confermato_at:  new Date().toISOString(),
+      confermato_da:  'orfani-magazzino'
+    }).eq('id', _ddtCorrente.id);
+    if(errDdt) throw errDdt;
+
+    toast(`✓ ${movimenti.length} articoli caricati a magazzino`,'ok');
+    chiudiMo('moMagazzino');
+    _ddtCorrente = null;
+    await caricaOrfani();
+
+  } catch(e){
+    console.error('eseguiMagazzino:', e);
+    toast('Errore: '+(e.message||e),'err');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Conferma carico magazzino';
+  }
+}
+
+// ─── AVVIO ───────────────────────────────────────────────
+caricaOrfani();
+</script>
+</body>
+</html>

@@ -267,6 +267,18 @@ body{
     <span class="ddt-alert-cta">Apri DDT →</span>
   </a>
 
+  <!-- Alert DDT orfani (visibile solo se ci sono DDT con targa ma senza scheda bozza) -->
+  <a href="ddt-orfani.html" class="ddt-alert" id="orfaniAlert" style="display:none;background:var(--amber-l);border-color:var(--amber)">
+    <div class="ddt-alert-left">
+      <span class="ddt-alert-icon">🔗</span>
+      <div class="ddt-alert-text">
+        <strong id="orfaniAlertNum">0 DDT orfani</strong> con targa valida ma senza scheda di lavoro
+        <p id="orfaniAlertDetail">Clicca per creare le schede o collegarli</p>
+      </div>
+    </div>
+    <span class="ddt-alert-cta" style="color:var(--amber)">Gestisci orfani →</span>
+  </a>
+
   <!-- KPI -->
   <div class="section-head">
     <span class="section-title">Situazione attuale</span>
@@ -366,6 +378,22 @@ body{
       </div>
     </a>
 
+    <!-- DDT Orfani -->
+    <a href="ddt-orfani.html" class="mod" style="border-top:3px solid var(--amber)">
+      <div class="mod-top">
+        <div class="mod-icon" style="background:var(--amber-l);color:var(--amber);font-size:20px">🔗</div>
+        <span class="mod-badge" style="background:var(--amber-l);color:var(--amber)">Orfani</span>
+      </div>
+      <div class="mod-body">
+        <div class="mod-title">DDT Orfani</div>
+        <div class="mod-desc">DDT con targa valida ma senza scheda di lavoro. Crea scheda al volo, collega a esistente, correggi targa o carica a magazzino.</div>
+      </div>
+      <div class="mod-footer">
+        <span class="mod-stat"><strong id="mOrfani">—</strong> da gestire</span>
+        <span class="mod-cta">Apri orfani →</span>
+      </div>
+    </a>
+
     <!-- Report efficienza -->
     <a href="report.html" class="mod" style="border-top:3px solid #534AB7">
       <div class="mod-top">
@@ -435,6 +463,7 @@ function init(){
     new Date().toLocaleDateString('it-IT',{weekday:'short',day:'2-digit',month:'long'});
 
   caricaKpi();
+  caricaOrfaniCount();
   caricaAttivita();
 }
 
@@ -480,6 +509,57 @@ function renderKpi(d){
 
   document.getElementById('lastUpdate').textContent =
     'Aggiornato: ' + new Date().toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+}
+
+// ══════════════════════════════════════════════════════════
+// CONTEGGIO DDT ORFANI (targa valida ma senza scheda bozza)
+// ══════════════════════════════════════════════════════════
+async function caricaOrfaniCount(){
+  try {
+    const { data: ddts, error: e1 } = await _sb.from('ddt_in_arrivo')
+      .select('targa_estratta')
+      .eq('stato','da_confermare')
+      .not('targa_estratta','is',null);
+    if(e1) throw e1;
+
+    const { data: schede, error: e2 } = await _sb.from('rapportini')
+      .select('targa')
+      .eq('stato','bozza')
+      .not('targa','is',null);
+    if(e2) throw e2;
+
+    const norm = t => (t||'').replace(/[^A-Z0-9]/gi,'').toUpperCase();
+    const isValida = t => /^[A-Z]{2}\d{3}[A-Z]{2}$/.test(norm(t));
+    const targheBozza = new Set((schede||[]).map(s => norm(s.targa)));
+
+    const nOrfani = (ddts||[]).filter(d => {
+      const t = norm(d.targa_estratta);
+      return isValida(t) && !targheBozza.has(t);
+    }).length;
+
+    // Aggiorna UI
+    const stat = document.getElementById('mOrfani');
+    if(stat) stat.textContent = nOrfani;
+
+    const alert = document.getElementById('orfaniAlert');
+    if(alert){
+      if(nOrfani > 0){
+        alert.style.display = 'flex';
+        document.getElementById('orfaniAlertNum').textContent =
+          nOrfani + (nOrfani===1 ? ' DDT orfano' : ' DDT orfani');
+        document.getElementById('orfaniAlertDetail').textContent =
+          nOrfani === 1
+            ? '1 DDT con targa valida ma senza scheda bozza — clicca per gestirlo'
+            : `${nOrfani} DDT con targa valida ma senza scheda bozza — clicca per gestirli`;
+      } else {
+        alert.style.display = 'none';
+      }
+    }
+  } catch(e){
+    console.error('Orfani count error:', e);
+    const stat = document.getElementById('mOrfani');
+    if(stat) stat.textContent = '—';
+  }
 }
 
 // ══════════════════════════════════════════════════════════
