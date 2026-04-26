@@ -1207,6 +1207,52 @@ function assegnaGlobal(id,el){
 // ╔══════════════════════════════════════════════════════════╗
 // ║  CONFERMA DDT — carica magazzino e commesse              ║
 // ╚══════════════════════════════════════════════════════════╝
+// ══════════════════════════════════════════════════════════
+// HELPERS DEDUPLICAZIONE DDT (condivisi con scheda.html / edge auto-confirm-ddt)
+// ══════════════════════════════════════════════════════════
+
+// Estrae il numero "corto" (solo cifre, senza zeri leading) da un numero DDT canonico.
+// Es: "BL/VEN/0089433" → "89433" | "0082261" → "82261"
+function _ddtNumeroCorto(numCanonico){
+  if(!numCanonico) return null;
+  const m = String(numCanonico).match(/(\d+)\s*$/);
+  if(!m) return null;
+  const senzaZeri = m[1].replace(/^0+/, '');
+  return senzaZeri.length >= 4 ? senzaZeri : null;
+}
+
+// Verifica se esiste già un rapportini_giornalieri sulla scheda con questo numero DDT
+// nelle note. Robusto a vecchi formati legacy (Invio BL-VEN-..., Fwd: ..., DDT BL/VEN/...).
+// Restituisce { duplicato:bool, rapportino:{numero,id,note,...} } se trovato.
+async function _ddtGiaProcessato(schedaId, numCanonico){
+  if(!schedaId || !numCanonico || String(numCanonico).trim() === '') return { duplicato:false };
+
+  const { data: rs, error } = await _sb
+    .from('rapportini_giornalieri')
+    .select('id, numero, note, data, tot_ricambi, totale')
+    .eq('scheda_id', schedaId)
+    .not('note', 'is', null)
+    .neq('note', '');
+
+  if(error || !rs || rs.length === 0) return { duplicato:false };
+
+  const corto = _ddtNumeroCorto(numCanonico);
+  const reCorto = corto
+    ? new RegExp('(?:BL[-/](?:VEN|CAR)[-/]|DDT[\\s/]+|[\\s/])0*' + corto + '(?!\\w)', 'i')
+    : null;
+
+  for(const r of rs){
+    const nota = String(r.note || '');
+    if(nota.toUpperCase().includes(String(numCanonico).toUpperCase())) {
+      return { duplicato:true, rapportino:r };
+    }
+    if(reCorto && reCorto.test(nota)) {
+      return { duplicato:true, rapportino:r };
+    }
+  }
+  return { duplicato:false };
+}
+
 async function confermaDDT(){
   if(!DR.fornitore){toast('Inserisci il nome del fornitore','err');return;}
   if(DR.righe.length===0){toast('Nessuna riga da confermare','err');return;}
@@ -1216,6 +1262,7 @@ async function confermaDDT(){
   const isReso = DR.tipo_movimento === 'reso';
 
   // ─── IDEMPOTENZA: già processato? ─────────────────────────────────
+  // Check 1 (vecchio): movimenti già creati per questo ddt_id
   if(DR._emailId){
     const {data: esistenti} = await _sb.from('movimenti')
       .select('id').eq('ddt_id', DR._emailId).limit(1);
@@ -1223,6 +1270,34 @@ async function confermaDDT(){
       if(!confirm('⚠ Questo DDT è già stato processato in precedenza.\n\nProcederne comunque creerà movimenti duplicati. Vuoi continuare?')){
         return;
       }
+    }
+  }
+
+  // Check 2 (nuovo): rapportino con stesso numero DDT già sulla scheda della targa.
+  // Intercetta i casi di doppia email (originale + Fwd:) che il check 1 non vede
+  // perché i due record di ddt_in_arrivo hanno _id diversi.
+  if(!isReso && DR.numero && DR.targa){
+    try{
+      const {data: schede} = await _sb.from('rapportini')
+        .select('id, numero, stato')
+        .eq('targa', DR.targa)
+        .in('stato', ['bozza','aperta','pronta'])
+        .order('created_at', {ascending:false})
+        .limit(1);
+
+      if(schede && schede.length > 0){
+        const dup = await _ddtGiaProcessato(schede[0].id, DR.numero);
+        if(dup.duplicato){
+          const r = dup.rapportino;
+          const msg = `⚠ Il DDT ${DR.numero} risulta già caricato sulla scheda ${schede[0].numero}\n` +
+                      `→ rapportino ${r.numero} del ${r.data} (totale €${(r.totale||0).toFixed(2)})\n\n` +
+                      `Procedere comunque creerà un duplicato.\n\nContinuo?`;
+          if(!confirm(msg)) return;
+        }
+      }
+    } catch(e){
+      console.warn('Check duplicato DDT:', e);
+      // proseguo: meglio confermare con piccolo rischio che bloccare
     }
   }
 
