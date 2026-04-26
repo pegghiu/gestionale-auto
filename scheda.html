@@ -1346,20 +1346,25 @@ function aggiornaTotali(){
 
   SL.rapportini.forEach(r=>{
     // Ore: somma da r.ore[] (struttura rapportino nativo)
+    let oreRap = 0; // accumulo ore di QUESTO rapportino in euro
     (r.ore||[]).forEach(o=>{
       const h = parseFloat(o.ore)||0;
       const tariffa = parseFloat(o.tariffa)||0;
-      hTot   += h;
-      totOre += h * tariffa;
+      hTot    += h;
+      oreRap  += h * tariffa;
     });
+    totOre += oreRap;
+    // Le ore lavorate vanno SEMPRE nell'imponibile (manodopera = IVA 22%)
+    imp += oreRap;
+    i22 += oreRap * 0.22;
 
-    // Elementi: include sia manodopera (da ore) che ricambi
+    // Elementi: ricambi e/o manodopera "manuale" (rapportini legacy senza ore[])
     (r.elementi||[]).forEach(el=>{
       const s = (parseFloat(el.qty)||0) * (parseFloat(el.prezzo)||0);
       imp += s;
       if(el.tipo==='ricambio') totRic += s;
       else if(el.tipo==='manodopera'){
-        // Se non c'erano ore[], conta la manodopera dagli elementi
+        // Se non c'erano ore[], conta la manodopera dagli elementi anche in totOre
         if(!(r.ore||[]).length) totOre += s;
       }
       if((el.iva_pct||22)===22) i22 += s*.22;
