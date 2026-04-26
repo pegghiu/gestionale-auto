@@ -763,7 +763,10 @@ function init(){
   if(p.get('id')) caricaScheda(p.get('id'));
 
   // Ascolta il focus della finestra — arriva il rapportino dal tab figlio
-  window.addEventListener('focus', () => {
+  // + refresh automatico dei dati scheda dal DB
+  let _lastRefresh = 0;
+  window.addEventListener('focus', async () => {
+    // 1. Gestione rapportino in arrivo (priorità su tutto: viene da un'altra pagina del gestionale)
     const raw = sessionStorage.getItem('rapportino_in_arrivo');
     if(raw){
       try {
@@ -771,7 +774,30 @@ function init(){
         sessionStorage.removeItem('rapportino_in_arrivo');
         riceviRapportino(rap);
         toast(`Rapportino ${rap.numero||''} aggiunto ✓`, 'ok');
+        return; // niente refresh dopo: l'arrivo del rapportino è la nostra fonte di verità ora
       } catch(e){ console.error(e); }
+    }
+
+    // 2. Refresh automatico: ricarica i dati della scheda dal DB
+    //    Skipa se: niente scheda caricata, o cooldown 2s, o modifiche locali non salvate
+    if(!SL.id) return;
+    const now = Date.now();
+    if(now - _lastRefresh < 2000) return; // cooldown
+    _lastRefresh = now;
+
+    if(SL._dirty){
+      // Avvisa: ci sono modifiche locali non salvate
+      if(!confirm('Hai modifiche non salvate su questa scheda.\n\nRicaricare dal database le perderà.\n\nContinuare con il refresh?')){
+        return;
+      }
+    }
+
+    try {
+      await caricaScheda(SL.id);
+      // toast leggero solo per debug; rimuovi il commento per averlo sempre
+      // toast('🔄 Dati aggiornati', 'info');
+    } catch(e){
+      console.warn('Refresh focus fallito:', e);
     }
   });
 
