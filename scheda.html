@@ -1132,9 +1132,71 @@ function confermaPannelloRapportino(){
 
 function nuovoRapportino(){ apriPannelloRapportino(); } // alias compatibilità
 
+// ══════════════════════════════════════════════════════════
+// HELPERS DEDUPLICAZIONE DDT (condivisi con ddt.html / edge auto-confirm-ddt)
+// ══════════════════════════════════════════════════════════
+
+// Estrae il numero "corto" (solo cifre, senza zeri leading) dal numero DDT canonico.
+function _ddtNumeroCorto(numCanonico){
+  if(!numCanonico) return null;
+  const m = String(numCanonico).match(/(\d+)\s*$/);
+  if(!m) return null;
+  const senzaZeri = m[1].replace(/^0+/, '');
+  return senzaZeri.length >= 4 ? senzaZeri : null;
+}
+
+// Estrae il numero DDT da una stringa (tipicamente la nota di un rapportino o il
+// campo .numero del payload). Cerca i pattern comuni:
+//   - "BL/VEN/0089433"  → "BL/VEN/0089433"
+//   - "BL-VEN-89433"    → "BL-VEN-89433"
+//   - "DDT 89433"       → "89433" (fallback solo se non c'è prefisso)
+function _estraiNumeroDdt(testo){
+  if(!testo) return null;
+  const s = String(testo);
+  // Pattern 1: BL/{tipo}/{cifre} o BL-{tipo}-{cifre}
+  let m = s.match(/BL[-/](?:VEN|CAR|BAN|RCL|RCN|STD)[-/]\d+/i);
+  if(m) return m[0];
+  // Pattern 2: XC-{cifre} (corriere)
+  m = s.match(/XC[-/](?:STD|[A-Z]+)?[-/]?\d{5,}/i);
+  if(m) return m[0];
+  return null;
+}
+
+// Verifica match tra un numero DDT (quello in arrivo) e una nota esistente.
+function _ddtMatchaNota(numCanonico, nota){
+  if(!numCanonico || !nota) return false;
+  const num = String(numCanonico).toUpperCase();
+  if(String(nota).toUpperCase().includes(num)) return true;
+  const corto = _ddtNumeroCorto(numCanonico);
+  if(!corto) return false;
+  const re = new RegExp('(?:BL[-/](?:VEN|CAR|BAN|RCL|RCN|STD)[-/]|XC[-/](?:STD[-/])?|DDT[\\s/]+|[\\s/])0*' + corto + '(?!\\w)', 'i');
+  return re.test(String(nota));
+}
+
 // Riceve un rapportino completato dal rapportino.html
 function riceviRapportino(rap){
-  // Cerca se esiste già (aggiornamento) o aggiungi nuovo
+  // ─── DEDUP DDT: se questo rapportino arriva da un DDT (note "Ricambi da DDT ..."
+  // oppure numero "DDT BL/...") e c'è già un rapportino sulla scheda con lo stesso
+  // numero DDT, sostituisci invece di aggiungere. Evita doppi caricamenti.
+  const numDdtIncoming = _estraiNumeroDdt(rap.numero) || _estraiNumeroDdt(rap.note);
+  if(numDdtIncoming){
+    const idxDup = SL.rapportini.findIndex(r =>
+      _ddtMatchaNota(numDdtIncoming, r.note) ||
+      (r.numero && _ddtMatchaNota(numDdtIncoming, r.numero))
+    );
+    if(idxDup >= 0){
+      // Mantieni l'_id del vecchio (è un id locale per il rendering)
+      const idVecchio = SL.rapportini[idxDup]._id;
+      SL.rapportini[idxDup] = { ...rap, _id: idVecchio };
+      renderRapportini();
+      aggiornaTotali();
+      dirty();
+      toast(`Rapportino ricambi DDT ${numDdtIncoming} aggiornato (era già presente)`, 'info');
+      return;
+    }
+  }
+
+  // Comportamento standard: cerca per _id (aggiornamento) o aggiungi nuovo
   const idx = SL.rapportini.findIndex(r=>r._id===rap._id);
   if(idx>=0) SL.rapportini[idx] = rap;
   else SL.rapportini.push({ ...rap, _id: _rapId++ });
