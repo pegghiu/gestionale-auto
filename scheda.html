@@ -153,6 +153,22 @@ textarea{resize:vertical;min-height:80px;line-height:1.6}
 .mb{padding:18px 20px;display:flex;flex-direction:column;gap:14px}
 .mf{padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px}
 
+/* ── PREZZI DA CONFERMARE ───────────────────────────────── */
+.banner-conferma{background:var(--warn-bg);border:1px solid #E5C36C;border-left:4px solid var(--warn);border-radius:var(--rs);padding:10px 14px;display:flex;align-items:center;gap:10px;font-size:13px;color:var(--warn);margin-bottom:12px}
+.banner-conferma .ico{font-size:16px}
+.banner-conferma .txt{flex:1;line-height:1.4}
+.banner-conferma strong{color:#5A3A00;font-weight:700}
+tr.row-da-confermare{background:#FFF8E6 !important}
+tr.row-da-confermare td{position:relative}
+.warn-pill{display:inline-flex;align-items:center;gap:4px;background:var(--warn-bg);color:var(--warn);font-size:10px;font-weight:700;letter-spacing:.04em;padding:2px 7px;border-radius:10px;border:1px solid #E5C36C;margin-left:6px;vertical-align:middle;cursor:help}
+.warn-pill .dot{width:5px;height:5px;border-radius:50%;background:var(--warn)}
+.btn-conferma-prezzo{background:var(--warn);color:#FFF;border:1px solid var(--warn);padding:3px 9px;font-size:11px;font-weight:600;border-radius:10px;cursor:pointer;font-family:inherit;letter-spacing:.02em;transition:all .12s;white-space:nowrap}
+.btn-conferma-prezzo:hover{background:#5A3A00;border-color:#5A3A00}
+button.btn-blocked{opacity:.55;cursor:not-allowed;position:relative}
+button.btn-blocked:hover{background:var(--ok)}
+.fbar-warn{background:var(--warn-bg);color:var(--warn);font-size:11px;font-weight:600;padding:4px 10px;border-radius:10px;border:1px solid #E5C36C;display:none;align-items:center;gap:5px;letter-spacing:.02em}
+.fbar-warn.show{display:inline-flex}
+
 /* ── PRINT DOC ───────────────────────────────────────────── */
 #printDoc{display:none}
 @media print{#printDoc{display:block}}
@@ -425,6 +441,16 @@ textarea{resize:vertical;min-height:80px;line-height:1.6}
       </div>
     </div>
 
+    <!-- Banner prezzi da confermare -->
+    <div id="bannerConferma" class="banner-conferma" style="display:none;margin:14px 16px 0">
+      <span class="ico">⚠️</span>
+      <div class="txt">
+        <strong>Attenzione:</strong> ci sono <strong id="bcCount">0</strong> prezzi da rivedere
+        (importati dal DDT senza listino o con prezzo derivato dal costo fornitore).
+        Rivedili e conferma prima di chiudere la scheda.
+      </div>
+    </div>
+
     <!-- Lista rapportini -->
     <div id="rapList" style="padding:14px 16px">
       <div id="rapEmpty" style="text-align:center;padding:24px;color:var(--text-l);font-size:13px">
@@ -652,9 +678,10 @@ textarea{resize:vertical;min-height:80px;line-height:1.6}
 <div class="fbar no-print">
   <div class="fbar-stato" id="fStato">Bozza non salvata</div>
   <div class="fbar-actions">
+    <span id="fbarWarn" class="fbar-warn"><span>⚠️</span><span id="fbarWarnText">prezzi da confermare</span></span>
     <button class="btn btn-s" onclick="salvaBozza()">Salva</button>
     <button class="btn btn-s" onclick="stampa()">🖨 Stampa PDF</button>
-    <button class="btn btn-ok btn-lg" onclick="chiudiScheda()">✓ Chiudi &amp; Fattura →</button>
+    <button id="btnChiudiFattura" class="btn btn-ok btn-lg" onclick="chiudiScheda()">✓ Chiudi &amp; Fattura →</button>
   </div>
 </div>
 
@@ -1258,41 +1285,55 @@ function renderRapportini(){
     const nEl = nOre + nRic;
     const fmtD = d=>d?new Date(d).toLocaleDateString('it-IT',{weekday:'short',day:'2-digit',month:'short'}):d;
 
+    // Helper: una riga ore è sospetta se la tariffa è 0/vuota
+    const oreSospetta = o => !(parseFloat(o.tariffa) > 0);
+    // Una riga ricambio è sospetta se il flag è acceso, oppure il prezzo è 0/vuoto
+    const ricSospetto = el => !!el.prezzo_da_confermare || !(parseFloat(el.prezzo) > 0);
+
     // Sezione ore
-    const righeOre = (r.ore||[]).filter(o=>o.ore>0).map(o=>`
-      <tr style="background:#F7F6F3">
+    const righeOre = (r.ore||[]).filter(o=>o.ore>0).map((o, oIdx)=>{
+      const susp = oreSospetta(o);
+      const cls = susp ? 'row-da-confermare' : '';
+      const bg  = susp ? '' : 'style="background:#F7F6F3"';
+      return `
+      <tr class="${cls}" ${bg}>
         <td style="font-size:11px;color:var(--text-m)">manodopera</td>
         <td style="font-size:11px;font-family:monospace">—</td>
-        <td style="font-size:12px;font-weight:600">${o.operatore}</td>
+        <td style="font-size:12px;font-weight:600">${o.operatore}${susp?` <span class="warn-pill" title="Tariffa mancante o a zero — verifica prima di chiudere"><span class="dot"></span>tariffa?</span>`:''}</td>
         <td style="text-align:right;font-size:12px">${fmtH(o.ore)}</td>
-        <td style="text-align:right;font-size:12px">€\u00a0${o.tariffa}/h</td>
-        <td style="text-align:right;font-size:12px;font-weight:600">${fmt(o.ore*o.tariffa)}</td>
-        <td></td>
-      </tr>
-    `).join('');
+        <td style="text-align:right;font-size:12px">€\u00a0${o.tariffa||0}/h</td>
+        <td style="text-align:right;font-size:12px;font-weight:600">${fmt(o.ore*(parseFloat(o.tariffa)||0))}</td>
+        <td style="text-align:center">${susp?`<button class="btn-conferma-prezzo" title="Apri il pannello rapportino per impostare la tariffa corretta" onclick="event.stopPropagation();confermaPrezzoOra('${r.numero||r._id||''}',${oIdx})">✓ Conferma</button>`:''}</td>
+      </tr>`;
+    }).join('');
 
     // Sezione ricambi (solo tipo ricambio dagli elementi)
-    const righeRic = (r.elementi||[]).filter(el=>el.tipo==='ricambio').map((el,elIdx)=>`
-      <tr>
+    const righeRic = (r.elementi||[]).filter(el=>el.tipo==='ricambio').map((el,elIdx)=>{
+      const susp = ricSospetto(el);
+      const cls = susp ? 'row-da-confermare' : '';
+      return `
+      <tr class="${cls}">
         <td style="font-size:11px;color:var(--text-m)">${el.tipo}</td>
         <td style="font-size:11px;font-family:monospace">${el.codice||'—'}</td>
-        <td style="font-size:12px">${el.descrizione}</td>
+        <td style="font-size:12px">${el.descrizione}${susp?` <span class="warn-pill" title="Prezzo importato senza listino del fornitore — verifica prima di chiudere"><span class="dot"></span>prezzo?</span>`:''}</td>
         <td style="text-align:right;font-size:12px">${el.qty}</td>
-        <td style="text-align:right;font-size:12px">${fmt(el.prezzo)}</td>
-        <td style="text-align:right;font-size:12px;font-weight:600">${fmt(el.qty*el.prezzo)}</td>
-        <td style="text-align:center">${el.tipo==='ricambio'?
-          `<button class="btn btn-g btn-sm" title="Segna per reso"
-            style="color:var(--err);font-size:13px"
-            data-rap="${(r.numero||'').replace(/"/g,'')}"
-            data-data="${r.data||''}"
-            data-codice="${(el.codice||'').replace(/"/g,'')}"
-            data-desc="${(el.descrizione||'').replace(/"/g,'&quot;')}"
-            data-qty="${el.qty||1}"
-            data-prezzo="${el.prezzo||0}"
-            onclick="segnalaResoScheda(this)">↩</button>`:''}
+        <td style="text-align:right;font-size:12px">${fmt(el.prezzo||0)}</td>
+        <td style="text-align:right;font-size:12px;font-weight:600">${fmt((el.qty||0)*(el.prezzo||0))}</td>
+        <td style="text-align:center;white-space:nowrap">
+          ${susp?`<button class="btn-conferma-prezzo" title="Conferma il prezzo come corretto" onclick="event.stopPropagation();confermaPrezzoRicambio('${r.numero||r._id||''}',${elIdx})">✓ Conferma</button>`:''}
+          ${el.tipo==='ricambio'?
+            `<button class="btn btn-g btn-sm" title="Segna per reso"
+              style="color:var(--err);font-size:13px;margin-left:2px"
+              data-rap="${(r.numero||'').replace(/"/g,'')}"
+              data-data="${r.data||''}"
+              data-codice="${(el.codice||'').replace(/"/g,'')}"
+              data-desc="${(el.descrizione||'').replace(/"/g,'&quot;')}"
+              data-qty="${el.qty||1}"
+              data-prezzo="${el.prezzo||0}"
+              onclick="event.stopPropagation();segnalaResoScheda(this)">↩</button>`:''}
         </td>
-      </tr>
-    `).join('');
+      </tr>`;
+    }).join('');
 
     const righe = righeOre + righeRic;
 
@@ -1367,6 +1408,72 @@ function segnalaResoScheda(btn){
   toast(`↩ ${descrizione||codice} — segnalato per reso (apri DDT per convalidare)`, 'info');
 }
 
+// ─── CONFERMA PREZZO RICAMBIO ────────────────────────────────────
+// Il ricambio è stato importato dal DDT senza listino (prezzo da netto fornitore)
+// oppure ha prezzo 0/vuoto. L'operatore conferma che il prezzo va bene così.
+async function confermaPrezzoRicambio(rapKey, elIdx){
+  const rap = SL.rapportini.find(r => (r.numero||r._id||'') == rapKey);
+  if (!rap) { toast('Rapportino non trovato', 'err'); return; }
+  const ricambi = (rap.elementi||[]).filter(e=>e.tipo==='ricambio');
+  const el = ricambi[elIdx];
+  if (!el) { toast('Riga ricambio non trovata', 'err'); return; }
+
+  // Se prezzo è 0/vuoto, chiedi un prezzo da inserire
+  if (!(parseFloat(el.prezzo) > 0)) {
+    const nuovo = prompt(
+      `Inserisci il prezzo di vendita per:\n${el.descrizione || el.codice || '(senza descrizione)'}\n\nQuantità: ${el.qty}\nPrezzo attuale: € ${fmt(el.prezzo||0)}`,
+      ''
+    );
+    if (nuovo === null) return;
+    const p = parseFloat(String(nuovo).replace(',','.'));
+    if (!(p > 0)) { toast('Prezzo non valido', 'err'); return; }
+    el.prezzo = p;
+  } else {
+    if (!confirm(
+      `Confermi il prezzo di € ${fmt(el.prezzo)} per:\n${el.descrizione || el.codice || ''} (qty ${el.qty})?\n\nIl flag "prezzo da confermare" verrà rimosso.`
+    )) return;
+  }
+
+  // Rimuovi il flag
+  delete el.prezzo_da_confermare;
+  delete el._fonte_prezzo;
+
+  SL._dirty = true;
+  renderRapportini();
+  aggiornaTotali();
+  // Salva in background (silenzioso) per persistere subito
+  if (typeof salvaBozzaSilente === 'function') {
+    try { await salvaBozzaSilente(); toast('✓ Prezzo confermato e salvato', 'ok'); }
+    catch(e){ toast('Prezzo confermato (salva manualmente)', 'info'); }
+  }
+}
+
+// ─── CONFERMA TARIFFA ORE (manodopera con tariffa 0/vuota) ───────
+async function confermaPrezzoOra(rapKey, oIdx){
+  const rap = SL.rapportini.find(r => (r.numero||r._id||'') == rapKey);
+  if (!rap) { toast('Rapportino non trovato', 'err'); return; }
+  const ore = (rap.ore||[]).filter(o => parseFloat(o.ore) > 0);
+  const o = ore[oIdx];
+  if (!o) { toast('Riga ore non trovata', 'err'); return; }
+
+  const nuova = prompt(
+    `Inserisci la tariffa oraria (€/h) per:\n${o.operatore}\n\nOre lavorate: ${fmtH(o.ore)}\nTariffa attuale: € ${o.tariffa||0}/h`,
+    String(o.tariffa || 45)
+  );
+  if (nuova === null) return;
+  const t = parseFloat(String(nuova).replace(',','.'));
+  if (!(t > 0)) { toast('Tariffa non valida', 'err'); return; }
+  o.tariffa = t;
+
+  SL._dirty = true;
+  renderRapportini();
+  aggiornaTotali();
+  if (typeof salvaBozzaSilente === 'function') {
+    try { await salvaBozzaSilente(); toast('✓ Tariffa salvata', 'ok'); }
+    catch(e){ toast('Tariffa aggiornata (salva manualmente)', 'info'); }
+  }
+}
+
 function aggiornaTotali(){
   let imp=0, i22=0, i10=0, hTot=0, totOre=0, totRic=0;
 
@@ -1417,6 +1524,51 @@ function aggiornaTotali(){
 
   SL._imp=imp; SL._iva=i22+i10; SL._tot=tot;
   SL._hDichiarate=hTot; SL._totOre=totOre; SL._totRic=totRic;
+
+  // ── Conteggio prezzi/tariffe da confermare ───────────────────────
+  let nDaConfermare = 0;
+  SL.rapportini.forEach(r=>{
+    (r.ore||[]).forEach(o=>{
+      if (parseFloat(o.ore)>0 && !(parseFloat(o.tariffa)>0)) nDaConfermare++;
+    });
+    (r.elementi||[]).forEach(el=>{
+      if (el.tipo==='ricambio' && (el.prezzo_da_confermare || !(parseFloat(el.prezzo)>0))) nDaConfermare++;
+    });
+  });
+  SL._nDaConfermare = nDaConfermare;
+
+  // Banner sopra la lista rapportini
+  const banner   = document.getElementById('bannerConferma');
+  const bcCount  = document.getElementById('bcCount');
+  if (banner && bcCount) {
+    if (nDaConfermare > 0) {
+      bcCount.textContent = nDaConfermare;
+      banner.style.display = 'flex';
+    } else {
+      banner.style.display = 'none';
+    }
+  }
+  // Warn nel footer + bottone Chiudi disabilitato
+  const fbarWarn = document.getElementById('fbarWarn');
+  const fbarTxt  = document.getElementById('fbarWarnText');
+  const btnChi   = document.getElementById('btnChiudiFattura');
+  if (fbarWarn && fbarTxt) {
+    if (nDaConfermare > 0) {
+      fbarTxt.textContent = `${nDaConfermare} prezz${nDaConfermare===1?'o':'i'} da confermare`;
+      fbarWarn.classList.add('show');
+    } else {
+      fbarWarn.classList.remove('show');
+    }
+  }
+  if (btnChi) {
+    if (nDaConfermare > 0) {
+      btnChi.classList.add('btn-blocked');
+      btnChi.title = `Conferma prima i ${nDaConfermare} prezzi sospetti per chiudere la scheda`;
+    } else {
+      btnChi.classList.remove('btn-blocked');
+      btnChi.title = '';
+    }
+  }
 
   // Aggiorna campo ore dichiarate nella rettifica
   const odEl = document.getElementById('oreDichiarate');
@@ -1655,6 +1807,23 @@ function valida(){
   return true;
 }
 
+// Validazione più stringente, usata SOLO al click di "Chiudi & Fattura":
+// blocca se esistono ancora prezzi/tariffe da confermare.
+function validaPerChiusura(){
+  if(!valida()) return false;
+  const n = SL._nDaConfermare || 0;
+  if (n > 0) {
+    toast(`Conferma prima i ${n} prezzi/tariffe sospetti (banner giallo) per chiudere la scheda`, 'err');
+    // Scrolla al banner se esiste
+    const banner = document.getElementById('bannerConferma');
+    if (banner && banner.style.display !== 'none') {
+      banner.scrollIntoView({ behavior:'smooth', block:'center' });
+    }
+    return false;
+  }
+  return true;
+}
+
 // ══════════════════════════════════════════════════════════
 // SALVA
 // ══════════════════════════════════════════════════════════
@@ -1815,7 +1984,7 @@ async function salvaBozza(){
 }
 
 async function chiudiScheda(){
-  if(!valida()) return;
+  if(!validaPerChiusura()) return;
   if(!confirm('Chiudere la scheda e passare alla fattura?')) return;
   await salvaBozza();
   setStato('pronta', document.getElementById('step3'));
