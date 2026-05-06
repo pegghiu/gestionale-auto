@@ -1718,7 +1718,41 @@ async function caricaScheda(id){
     SL.cliente     = { id: s.cliente_id, nome: s.cliente_nome||'', tel: s.cliente_tel||'' };
     SL.ore_riconosciute    = s.ore_riconosciute || 0;
     SL.motivazione_rettifica = s.motivazione_rettifica || '';
-    SL.rapportini  = s.rapportini_giornalieri || [];
+
+    // Carica i rapportini DIRETTAMENTE dalla tabella `rapportini_giornalieri`
+    // invece che dal mirror JSONB sulla scheda. Il mirror può essere stale
+    // (es. dopo update fatti dal cleanup-prezzi.html o da edit diretti),
+    // mentre la tabella è sempre la fonte di verità.
+    // Fallback al mirror se la query fallisce, per compatibilità.
+    let rapsReali = null;
+    try {
+      const { data: rr, error: errR } = await _sb.from('rapportini_giornalieri')
+        .select('id, numero, data, tecnico, note, ore, elementi, h_totali, tot_ore, tot_ricambi, totale, created_at')
+        .eq('scheda_id', s.id)
+        .order('data', { ascending: true })
+        .order('created_at', { ascending: true });
+      if (!errR && Array.isArray(rr)) rapsReali = rr;
+    } catch(_){}
+
+    if (rapsReali && rapsReali.length > 0) {
+      SL.rapportini = rapsReali.map(r => ({
+        _id:       r.id || Date.parse(r.created_at) || _rapId++,
+        _dbId:     r.id,    // id originale di rapportini_giornalieri (per future modifiche)
+        numero:    r.numero,
+        data:      r.data,
+        tecnico:   r.tecnico || '',
+        note:      r.note || '',
+        ore:       r.ore || [],
+        elementi:  r.elementi || [],
+        h_totali:  r.h_totali  || 0,
+        tot_ore:   r.tot_ore   || 0,
+        tot_ricambi: r.tot_ricambi || 0,
+        totale:    r.totale    || 0
+      }));
+    } else {
+      // Fallback: usa il mirror JSONB
+      SL.rapportini = s.rapportini_giornalieri || [];
+    }
 
     setTipoScheda(s.tipo || '');
 
