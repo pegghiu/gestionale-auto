@@ -1434,29 +1434,40 @@ async function confermaPrezzoRicambio(rapKey, elIdx){
   delete el.prezzo_da_confermare;
   delete el._fonte_prezzo;
 
-  // ─── PER I LIQUIDI: salva il prezzo in tabella `articoli` per riuso futuro ───
-  // Codici LIQ_OLIO_5W30, LIQ_ANTIGELO_G12, ecc. vengono dall'Edge Function
-  // process-ore-commesse. Salvarli in articoli evita di dover riconfermare il
-  // prezzo ogni volta che lo stesso tipo di olio viene registrato dal Form.
-  // Per cambi di prezzo futuri (fornitore aumenta listino), modifica manualmente
-  // la tabella articoli — l'upsert qui NON sovrascrive prezzi già esistenti.
+  // ─── AUTO-POPOLAMENTO LISTINO: salva il prezzo confermato in `articoli` ───
+  // Si applica a:
+  //   - Liquidi (LIQ_OLIO_5W30, LIQ_ANTIGELO_G12, ecc.) creati da process-ore-commesse
+  //   - Ricambi inseriti via Form con marker "RIC: codice xN" (parser process-ore-commesse)
+  // NON si applica a:
+  //   - Codici DDT importati con codice molto lungo o descrizione che contiene
+  //     numero DDT (probabili codici fornitore monouso → solo confusione nel listino)
+  //   - Codici vuoti
+  // L'upsert NON sovrascrive prezzi esistenti (rispetta il listino manuale).
+  // Per cambi prezzo futuri, modifica manualmente la tabella articoli.
   let savedArticolo = false;
-  if (el.codice && el.codice.startsWith('LIQ_') && el.prezzo > 0) {
+  const codice = (el.codice || '').trim();
+  const isLiquido = codice.startsWith('LIQ_');
+  // Euristica per evitare di salvare codici DDT one-shot:
+  //  - se la descrizione contiene "DDT", "Ricambio DDT", o numero DDT → skip
+  const descLower = String(el.descrizione || '').toLowerCase();
+  const sembraCodiceDdt = /\bddt\b/.test(descLower) || /BL[-/]/i.test(codice);
+
+  if (codice && el.prezzo > 0 && !sembraCodiceDdt) {
     try {
       // Verifico se esiste già l'articolo: se sì, NON sovrascrivo (rispetta il
       // listino privato che l'utente potrebbe aver corretto manualmente)
       const { data: artEsistente } = await _sb.from('articoli')
         .select('codice, prezzo_vendita')
-        .eq('codice', el.codice)
+        .or(`codice.eq.${codice},codice_fornitore.eq.${codice}`)
         .limit(1);
 
       if (!artEsistente || artEsistente.length === 0) {
         // Non esiste → inserisco nuovo articolo nel listino
         const { error: errIns } = await _sb.from('articoli').insert({
-          codice:         el.codice,
-          descrizione:    el.descrizione || el.codice,
+          codice:         codice,
+          descrizione:    el.descrizione || codice,
           tipo:           'ricambio',
-          um:             el.um || 'lt',
+          um:             el.um || (isLiquido ? 'lt' : 'NR'),
           qta:            0,
           soglia_minima:  1,
           costo_acquisto: 0,
