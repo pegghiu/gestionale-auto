@@ -806,18 +806,14 @@ function init(){
     }
 
     // 2. Refresh automatico: ricarica i dati della scheda dal DB
-    //    Skipa se: niente scheda caricata, o cooldown 2s, o modifiche locali non salvate
+    //    Skipa se: niente scheda caricata, cooldown 2s, o modifiche locali non salvate.
+    //    Niente popup invasivo: se ci sono modifiche locali, NON refreshe (così non
+    //    le perdi). L'utente vedrà i dati nuovi al prossimo Salva o ricarica manuale.
     if(!SL.id) return;
+    if(SL._dirty) return;  // modifiche locali → no refresh, no popup
     const now = Date.now();
     if(now - _lastRefresh < 2000) return; // cooldown
     _lastRefresh = now;
-
-    if(SL._dirty){
-      // Avvisa: ci sono modifiche locali non salvate
-      if(!confirm('Hai modifiche non salvate su questa scheda.\n\nRicaricare dal database le perderà.\n\nContinuare con il refresh?')){
-        return;
-      }
-    }
 
     try {
       await caricaScheda(SL.id);
