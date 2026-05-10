@@ -1438,13 +1438,57 @@ async function confermaPrezzoRicambio(rapKey, elIdx){
   delete el.prezzo_da_confermare;
   delete el._fonte_prezzo;
 
+  // ─── PER I LIQUIDI: salva il prezzo in tabella `articoli` per riuso futuro ───
+  // Codici LIQ_OLIO_5W30, LIQ_ANTIGELO_G12, ecc. vengono dall'Edge Function
+  // process-ore-commesse. Salvarli in articoli evita di dover riconfermare il
+  // prezzo ogni volta che lo stesso tipo di olio viene registrato dal Form.
+  // Per cambi di prezzo futuri (fornitore aumenta listino), modifica manualmente
+  // la tabella articoli — l'upsert qui NON sovrascrive prezzi già esistenti.
+  let savedArticolo = false;
+  if (el.codice && el.codice.startsWith('LIQ_') && el.prezzo > 0) {
+    try {
+      // Verifico se esiste già l'articolo: se sì, NON sovrascrivo (rispetta il
+      // listino privato che l'utente potrebbe aver corretto manualmente)
+      const { data: artEsistente } = await _sb.from('articoli')
+        .select('codice, prezzo_vendita')
+        .eq('codice', el.codice)
+        .limit(1);
+
+      if (!artEsistente || artEsistente.length === 0) {
+        // Non esiste → inserisco nuovo articolo nel listino
+        const { error: errIns } = await _sb.from('articoli').insert({
+          codice:         el.codice,
+          descrizione:    el.descrizione || el.codice,
+          tipo:           'ricambio',
+          um:             el.um || 'lt',
+          qta:            0,
+          soglia_minima:  1,
+          costo_acquisto: 0,
+          prezzo_vendita: el.prezzo,
+          note:           `Aggiunto automaticamente da scheda ${SL.numero || ''} il ${new Date().toISOString().slice(0,10)}`
+        });
+        if (!errIns) savedArticolo = true;
+        else console.warn('upsert articolo fallito:', errIns);
+      }
+      // Se esiste già: lascio invariato (l'utente gestisce il listino a mano)
+    } catch (e) {
+      console.warn('upsert articolo eccezione:', e);
+    }
+  }
+
   SL._dirty = true;
   renderRapportini();
   aggiornaTotali();
   // Salva in background (silenzioso) per persistere subito
   if (typeof salvaBozzaSilente === 'function') {
-    try { await salvaBozzaSilente(); toast('✓ Prezzo confermato e salvato', 'ok'); }
-    catch(e){ toast('Prezzo confermato (salva manualmente)', 'info'); }
+    try {
+      await salvaBozzaSilente();
+      toast(savedArticolo
+        ? '✓ Prezzo confermato e aggiunto al listino'
+        : '✓ Prezzo confermato e salvato', 'ok');
+    } catch(e) {
+      toast('Prezzo confermato (salva manualmente)', 'info');
+    }
   }
 }
 
