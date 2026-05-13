@@ -1807,7 +1807,7 @@ function eliminaRicambio(rapKey, elIdx){
 
 function rilevaOlioDuplicato(){
   const dalForm = []; // righe LIQ_OLIO_* (dal Form ORE COMMESSE)
-  const dalDdt  = []; // righe olio da DDT (descrizione contiene "olio", codice non LIQ_OLIO)
+  const dalDdt  = []; // righe olio MOTORE da DDT (NON filtri olio!)
   let litriForm = 0;
   let litriDdt  = 0;
 
@@ -1821,7 +1821,15 @@ function rilevaOlioDuplicato(){
       if (cod.startsWith('LIQ_OLIO')) {
         dalForm.push({rapNumero:r.numero, el, qty});
         litriForm += qty;
-      } else if (/\bolio\b|\bolii\b/.test(dsc) && !cod.startsWith('LIQ_')) {
+      } else if (
+        // Olio MOTORE dal DDT: descrizione contiene "olio", codice non LIQ_*.
+        // Esclude componenti correlati (filtro/coppa/sensore/...) e oli
+        // diversi dal motore (cambio/idraulico/freni/servosterzo/trasmissione).
+        /\bolio\b|\bolii\b/.test(dsc) &&
+        !cod.startsWith('LIQ_') &&
+        !/filtr|coppa|tappo|sensore|spia|pressione|guarnizione|paraolio|para[- ]?olio|pompa\s+olio|astina|livello/.test(dsc) &&
+        !/\b(cambio|automatic|idraulic|fren|servo|trasmission|differenzial|atf|cvt|dsg|dct|riduttor|catena)/.test(dsc)
+      ) {
         dalDdt.push({rapNumero:r.numero, el, qty});
         litriDdt += qty;
       }
@@ -2001,14 +2009,14 @@ function generaRiepilogoDaRapportini(){
 let _NETTI_CACHE = {};       // { codiceUPPER: prezzoNettoNumero }
 let _NETTI_LOADED = false;   // true dopo il primo caricamento
 
-// Carica i prezzi netti dai DDT confermati per la targa di questa scheda
+// Carica i prezzi netti dai DDT (qualsiasi stato) per la targa di questa scheda.
+// I netti sono informativi e non dipendono dalla conferma del DDT.
 async function caricaNettiDaDdt(){
   if (!SL.targa) { _NETTI_LOADED = true; return; }
   try {
     const { data, error } = await _sb.from('ddt_in_arrivo')
       .select('ddt_estratto, email_data')
       .eq('targa_estratta', SL.targa)
-      .eq('stato', 'confermato')
       .order('email_data', { ascending: true }); // più recenti per ultimi → sovrascrivono i vecchi
 
     if (error) { console.warn('caricaNettiDaDdt:', error); _NETTI_LOADED = true; return; }
