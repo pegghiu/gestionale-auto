@@ -488,6 +488,38 @@ button.btn-blocked:hover{background:var(--ok)}
     </div>
   </div>
 
+  <!-- RIEPILOGO MATERIALI (aggregato per categoria, editabile, indipendente dai rapportini) -->
+  <div class="card">
+    <div class="ch">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="ct">Riepilogo materiali e manodopera</span>
+        <span style="font-size:11px;color:var(--text-m)">modificabile · indipendente dai rapportini</span>
+      </div>
+      <button class="btn btn-s btn-sm" onclick="resetRiepilogo()" title="Cancella le modifiche manuali e ripopola dai rapportini attuali">
+        🔄 Reset dai rapportini
+      </button>
+    </div>
+    <div class="cb" style="padding:0">
+      <div style="overflow-x:auto">
+        <table class="tbl" id="tblRiepilogo" style="min-width:560px">
+          <thead><tr>
+            <th style="width:110px">Categoria</th>
+            <th>Descrizione</th>
+            <th class="r" style="width:70px">Qtà</th>
+            <th class="r" style="width:90px">Prezzo</th>
+            <th class="r" style="width:90px">Subtot.</th>
+            <th style="width:36px"></th>
+          </tr></thead>
+          <tbody id="bodyRiepilogo"></tbody>
+        </table>
+      </div>
+      <div style="padding:10px 16px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+        <button class="btn btn-s btn-sm" onclick="aggiungiRigaRiepilogo()">+ Aggiungi materiale</button>
+        <div style="font-size:11px;color:var(--text-m)" id="riepInfoOverride"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- RETTIFICA ORE FINALI -->
   <div class="card" style="border-left:4px solid var(--accent)">
     <div class="ch">
@@ -1714,6 +1746,276 @@ function eliminaOra(rapKey, oIdx){
   salvaDebounced('✓ Riga eliminata');
 }
 
+// ══════════════════════════════════════════════════════════
+// RIEPILOGO MATERIALI E MANODOPERA
+// Vista aggregata e indipendente dai rapportini, salvata in
+// SL.riepilogo_override (campo JSONB su rapportini.riepilogo_override).
+//
+// Comportamento:
+//   - Se SL.riepilogo_override è null/vuoto → auto-popola dai rapportini
+//     e SALVA, così la prossima apertura usa quello (indipendente).
+//   - Se popolato → carica e mostra. Le modifiche restano lì.
+//   - Reset → svuota e ripopola dai rapportini attuali.
+// ══════════════════════════════════════════════════════════
+
+// Ordine fisso categorie nel riepilogo
+const RIEP_CATEGORIE = ['olio','filtri','dischi','pastiglie','liquidi','altro'];
+const RIEP_CAT_LABEL = {
+  olio:'Olio', filtri:'Filtri', dischi:'Dischi',
+  pastiglie:'Pastiglie', liquidi:'Liquidi', altro:'Altro'
+};
+
+// Classifica un ricambio nelle categorie sopra
+function categoriaRicambio(descrizione, codice){
+  const d = String(descrizione||'').toLowerCase();
+  const c = String(codice||'').toUpperCase();
+  if (c.startsWith('LIQ_OLIO') || /\bolio\b|\bolii\b/.test(d)) return 'olio';
+  if (/filtr/.test(d)) return 'filtri';
+  if (/disch|disco/.test(d)) return 'dischi';
+  if (/pastigli/.test(d)) return 'pastiglie';
+  if (c.startsWith('LIQ_')) return 'liquidi';
+  return 'altro';
+}
+
+// Genera il riepilogo dai rapportini attuali (aggregato per codice)
+function generaRiepilogoDaRapportini(){
+  // Aggrega ricambi per codice (fallback su descrizione se codice vuoto)
+  const mappa = {}; // chiave → { categoria, descrizione, qty, prezzo, codice }
+  let mdOreTotali = 0;
+  let mdEuroTotali = 0;
+
+  SL.rapportini.forEach(r=>{
+    // Manodopera
+    (r.ore||[]).forEach(o=>{
+      const h = parseFloat(o.ore)||0;
+      const t = parseFloat(o.tariffa)||0;
+      mdOreTotali += h;
+      mdEuroTotali += h * t;
+    });
+    // Ricambi
+    (r.elementi||[]).filter(el=>el.tipo==='ricambio').forEach(el=>{
+      const codice = (el.codice||'').trim();
+      const desc   = (el.descrizione||'').trim();
+      const qty    = parseFloat(el.qty)||0;
+      const prezzo = parseFloat(el.prezzo)||0;
+      if (qty <= 0) return; // salta righe vuote
+
+      const chiave = codice || ('desc:'+desc.toLowerCase());
+      if (mappa[chiave]) {
+        mappa[chiave].qty += qty;
+        // Prezzo: tieni il più alto (di solito il listino corretto)
+        if (prezzo > mappa[chiave].prezzo) mappa[chiave].prezzo = prezzo;
+      } else {
+        mappa[chiave] = {
+          codice: codice,
+          descrizione: desc,
+          qty: qty,
+          prezzo: prezzo,
+          categoria: categoriaRicambio(desc, codice)
+        };
+      }
+    });
+  });
+
+  // Ordina per categoria (secondo RIEP_CATEGORIE) poi alfabetico
+  const ricambi = Object.values(mappa).sort((a,b)=>{
+    const ia = RIEP_CATEGORIE.indexOf(a.categoria);
+    const ib = RIEP_CATEGORIE.indexOf(b.categoria);
+    if (ia !== ib) return ia - ib;
+    return a.descrizione.localeCompare(b.descrizione,'it');
+  });
+
+  return {
+    ricambi: ricambi,
+    manodopera_totale: Math.round(mdEuroTotali*100)/100,
+    manodopera_ore: Math.round(mdOreTotali*100)/100,
+    generato_at: new Date().toISOString()
+  };
+}
+
+// Renderizza la tabella riepilogo (chiamato da aggiornaTotali)
+function renderRiepilogo(){
+  const body = document.getElementById('bodyRiepilogo');
+  const info = document.getElementById('riepInfoOverride');
+  if (!body) return;
+
+  // Inizializza se mancante
+  if (!SL.riepilogo_override || !SL.riepilogo_override.ricambi) {
+    SL.riepilogo_override = generaRiepilogoDaRapportini();
+    SL._dirty = true;
+    // Salva subito per persistere la prima generazione
+    salvaDebounced();
+  }
+
+  const rip = SL.riepilogo_override;
+  const ricambi = rip.ricambi || [];
+
+  // Raggruppa per categoria mantenendo l'ordine RIEP_CATEGORIE
+  const perCat = {};
+  RIEP_CATEGORIE.forEach(c=>perCat[c]=[]);
+  ricambi.forEach((el,idx)=>{
+    const cat = perCat[el.categoria] ? el.categoria : 'altro';
+    perCat[cat].push({...el, _idx:idx});
+  });
+
+  // Costruisci righe HTML
+  let html = '';
+  let totRic = 0;
+  RIEP_CATEGORIE.forEach(cat=>{
+    const righe = perCat[cat];
+    if (!righe.length) return;
+    righe.forEach(el=>{
+      const sub = (parseFloat(el.qty)||0) * (parseFloat(el.prezzo)||0);
+      totRic += sub;
+      html += `
+        <tr>
+          <td>
+            <select onchange="modRiepilogo(${el._idx},'categoria',this.value)"
+              style="font-size:11px;padding:3px 6px;width:100%">
+              ${RIEP_CATEGORIE.map(c=>
+                `<option value="${c}" ${c===el.categoria?'selected':''}>${RIEP_CAT_LABEL[c]}</option>`
+              ).join('')}
+            </select>
+          </td>
+          <td>
+            <input type="text" value="${(el.descrizione||'').replace(/"/g,'&quot;')}"
+              onchange="modRiepilogo(${el._idx},'descrizione',this.value)"
+              style="width:100%;font-size:12px;padding:4px 6px">
+          </td>
+          <td style="text-align:right">
+            <input type="number" step="0.01" min="0" value="${el.qty||0}"
+              onchange="modRiepilogo(${el._idx},'qty',this.value)"
+              style="width:60px;font-size:12px;padding:4px 6px;text-align:right">
+          </td>
+          <td style="text-align:right">
+            <input type="number" step="0.01" min="0" value="${el.prezzo||0}"
+              onchange="modRiepilogo(${el._idx},'prezzo',this.value)"
+              style="width:80px;font-size:12px;padding:4px 6px;text-align:right">
+          </td>
+          <td style="text-align:right;font-size:12px;font-weight:600">${fmt(sub)}</td>
+          <td style="text-align:center">
+            <button class="btn btn-g btn-sm" title="Elimina riga"
+              style="color:var(--err);font-size:13px"
+              onclick="eliminaRigaRiepilogo(${el._idx})">🗑</button>
+          </td>
+        </tr>`;
+    });
+  });
+
+  if (!ricambi.length) {
+    html = '<tr><td colspan="6" style="text-align:center;color:var(--text-l);padding:14px">Nessun materiale</td></tr>';
+  }
+
+  // Riga manodopera totale (somma fissa, modificabile)
+  const md = parseFloat(rip.manodopera_totale)||0;
+  const mdOre = parseFloat(rip.manodopera_ore)||0;
+  html += `
+    <tr style="background:#F7F6F3;border-top:2px solid var(--border)">
+      <td style="font-size:11px;color:var(--text-m);font-weight:700">MANODOPERA</td>
+      <td>
+        <span style="font-size:12px;font-weight:600">Manodopera totale</span>
+        <span style="font-size:11px;color:var(--text-m);margin-left:6px">(${fmtH(mdOre)})</span>
+      </td>
+      <td style="text-align:right">
+        <input type="number" step="0.5" min="0" value="${mdOre||0}"
+          onchange="modRiepilogo('md','ore',this.value)"
+          style="width:60px;font-size:12px;padding:4px 6px;text-align:right" title="Ore totali">
+      </td>
+      <td style="text-align:right;font-size:11px;color:var(--text-m)">—</td>
+      <td style="text-align:right">
+        <input type="number" step="0.01" min="0" value="${md||0}"
+          onchange="modRiepilogo('md','totale',this.value)"
+          style="width:80px;font-size:12px;padding:4px 6px;text-align:right;font-weight:700"
+          title="Totale manodopera in euro">
+      </td>
+      <td></td>
+    </tr>
+    <tr style="background:var(--dark);color:#FFF">
+      <td colspan="4" style="color:rgba(255,255,255,.7);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Totale materiali + manodopera</td>
+      <td style="text-align:right;font-size:14px;font-weight:800;color:#FFF">${fmt(totRic+md)}</td>
+      <td style="background:var(--dark)"></td>
+    </tr>`;
+
+  body.innerHTML = html;
+
+  // Info testuale sotto la tabella
+  if (info && rip.generato_at) {
+    const d = new Date(rip.generato_at);
+    info.textContent = `Generato ${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}`;
+  }
+}
+
+// Modifica una riga del riepilogo (idx numerico per ricambi, 'md' per manodopera)
+function modRiepilogo(idx, campo, valore){
+  if (!SL.riepilogo_override) SL.riepilogo_override = generaRiepilogoDaRapportini();
+
+  if (idx === 'md') {
+    if (campo === 'ore') {
+      const v = parseFloat(String(valore).replace(',','.'));
+      SL.riepilogo_override.manodopera_ore = isNaN(v) ? 0 : Math.max(0, v);
+    } else if (campo === 'totale') {
+      const v = parseFloat(String(valore).replace(',','.'));
+      SL.riepilogo_override.manodopera_totale = isNaN(v) ? 0 : Math.max(0, v);
+    }
+  } else {
+    const el = SL.riepilogo_override.ricambi[idx];
+    if (!el) return;
+    if (campo === 'categoria') {
+      el.categoria = String(valore||'altro');
+    } else if (campo === 'descrizione') {
+      el.descrizione = String(valore||'').trim();
+    } else if (campo === 'qty') {
+      const v = parseFloat(String(valore).replace(',','.'));
+      el.qty = isNaN(v) ? 0 : Math.max(0, v);
+    } else if (campo === 'prezzo') {
+      const v = parseFloat(String(valore).replace(',','.'));
+      el.prezzo = isNaN(v) ? 0 : Math.max(0, v);
+    }
+  }
+
+  SL._dirty = true;
+  // Re-render riepilogo + totali
+  renderRiepilogo();
+  aggiornaTotali();
+  salvaDebounced('✓ Salvato');
+}
+
+// Aggiungi una riga vuota al riepilogo
+function aggiungiRigaRiepilogo(){
+  if (!SL.riepilogo_override) SL.riepilogo_override = generaRiepilogoDaRapportini();
+  if (!SL.riepilogo_override.ricambi) SL.riepilogo_override.ricambi = [];
+  SL.riepilogo_override.ricambi.push({
+    codice: '', descrizione: '', qty: 1, prezzo: 0, categoria: 'altro'
+  });
+  SL._dirty = true;
+  renderRiepilogo();
+  aggiornaTotali();
+  salvaDebounced();
+}
+
+// Elimina una riga dal riepilogo
+function eliminaRigaRiepilogo(idx){
+  if (!SL.riepilogo_override || !SL.riepilogo_override.ricambi) return;
+  const el = SL.riepilogo_override.ricambi[idx];
+  if (!el) return;
+  if (!confirm(`Eliminare "${el.descrizione || '(senza descrizione)'}" dal riepilogo?`)) return;
+  SL.riepilogo_override.ricambi.splice(idx, 1);
+  SL._dirty = true;
+  renderRiepilogo();
+  aggiornaTotali();
+  salvaDebounced('✓ Riga eliminata');
+}
+
+// Reset: butta le override e ripopola dai rapportini attuali
+function resetRiepilogo(){
+  if (!confirm('Cancellare tutte le modifiche manuali al riepilogo e ricalcolarlo dai rapportini attuali?\n\nQuesta operazione non si può annullare.')) return;
+  SL.riepilogo_override = generaRiepilogoDaRapportini();
+  SL._dirty = true;
+  renderRiepilogo();
+  aggiornaTotali();
+  salvaDebounced('✓ Riepilogo rigenerato');
+}
+
 function aggiornaTotali(){
   let imp=0, i22=0, i10=0, hTot=0, totOre=0, totRic=0;
 
@@ -1747,23 +2049,44 @@ function aggiornaTotali(){
 
   const tot = imp+i22+i10;
 
-  // Totali IVA
-  document.getElementById('tImp').textContent = fmt(imp);
-  document.getElementById('t22').textContent  = fmt(i22);
-  if(i10>0){ document.getElementById('t10').textContent=fmt(i10); document.getElementById('r10').style.display=''; }
-  else document.getElementById('r10').style.display='none';
-  document.getElementById('tTot').textContent = fmt(tot);
+  // ─── OVERRIDE DAI TOTALI DEL RIEPILOGO ─────────────────────
+  // Se esiste un riepilogo_override (sempre, dopo la prima apertura),
+  // i totali della scheda usano QUELLO invece dei rapportini.
+  // I valori derivati dai rapportini (hTot, totOre, totRic, riepilogo
+  // ore-in-alto) restano per il banner e la rettifica.
+  let impFinale = imp, i22Finale = i22, i10Finale = i10, totFinale = tot;
+  let totRicFinale = totRic, totOreFinale = totOre;
+  if (SL.riepilogo_override && SL.riepilogo_override.ricambi) {
+    const rip = SL.riepilogo_override;
+    const ricRip = (rip.ricambi||[]).reduce((s,el)=>
+      s + (parseFloat(el.qty)||0) * (parseFloat(el.prezzo)||0), 0);
+    const mdRip = parseFloat(rip.manodopera_totale)||0;
+    impFinale = ricRip + mdRip;
+    // IVA 22% su tutto (la scheda non gestisce IVA agevolata sui ricambi nel riepilogo)
+    i22Finale = impFinale * 0.22;
+    i10Finale = 0;
+    totFinale = impFinale + i22Finale;
+    totRicFinale = ricRip;
+    totOreFinale = mdRip;
+  }
 
-  // Riepilogo ore + ricambi
+  // Totali IVA (usa i valori finali, eventualmente da riepilogo)
+  document.getElementById('tImp').textContent = fmt(impFinale);
+  document.getElementById('t22').textContent  = fmt(i22Finale);
+  if(i10Finale>0){ document.getElementById('t10').textContent=fmt(i10Finale); document.getElementById('r10').style.display=''; }
+  else document.getElementById('r10').style.display='none';
+  document.getElementById('tTot').textContent = fmt(totFinale);
+
+  // Riepilogo ore + ricambi (in alto): mostra valori coerenti col riepilogo
   const riepoOre = document.getElementById('riepoOre');
   const riepoRic = document.getElementById('riepoRic');
   const riepoTot = document.getElementById('riepoTot');
-  if(riepoOre) riepoOre.textContent = fmtH(hTot) + ' · ' + fmt(totOre);
-  if(riepoRic) riepoRic.textContent = fmt(totRic);
-  if(riepoTot) riepoTot.textContent = fmt(tot);
+  if(riepoOre) riepoOre.textContent = fmtH(hTot) + ' · ' + fmt(totOreFinale);
+  if(riepoRic) riepoRic.textContent = fmt(totRicFinale);
+  if(riepoTot) riepoTot.textContent = fmt(totFinale);
 
-  SL._imp=imp; SL._iva=i22+i10; SL._tot=tot;
-  SL._hDichiarate=hTot; SL._totOre=totOre; SL._totRic=totRic;
+  SL._imp=impFinale; SL._iva=i22Finale+i10Finale; SL._tot=totFinale;
+  SL._hDichiarate=hTot; SL._totOre=totOreFinale; SL._totRic=totRicFinale;
 
   // ── Conteggio prezzi/tariffe da confermare ───────────────────────
   let nDaConfermare = 0;
@@ -1815,6 +2138,9 @@ function aggiornaTotali(){
   if(odEl) odEl.value = fmtH(hTot);
 
   aggiornaRettifica();
+
+  // Renderizza il riepilogo (auto-popola se assente)
+  if (typeof renderRiepilogo === 'function') renderRiepilogo();
 }
 
 function aggiornaRettifica(){
@@ -1994,6 +2320,10 @@ async function caricaScheda(id){
       SL.rapportini = s.rapportini_giornalieri || [];
     }
 
+    // Carica il riepilogo materiali (indipendente dai rapportini)
+    // Se null/assente, verrà auto-popolato da renderRiepilogo al primo render.
+    SL.riepilogo_override = s.riepilogo_override || null;
+
     setTipoScheda(s.tipo || '');
 
     // Popola i campi form — optional chaining per evitare crash su elementi mancanti
@@ -2132,7 +2462,8 @@ async function salvaBozzaSilente(){
       ore_delta:      SL._deltaH||0,
       efficienza_pct: SL._eff||null,
       motivazione_rettifica: SL.motivazione_rettifica||'',
-      rapportini_giornalieri: SL.rapportini
+      rapportini_giornalieri: SL.rapportini,
+      riepilogo_override: SL.riepilogo_override||null
     };
 
     let error, data;
@@ -2227,7 +2558,8 @@ async function salvaBozza(){
       ore_delta:      SL._deltaH||0,
       efficienza_pct: SL._eff||null,
       motivazione_rettifica: SL.motivazione_rettifica||'',
-      rapportini_giornalieri: SL.rapportini
+      rapportini_giornalieri: SL.rapportini,
+      riepilogo_override: SL.riepilogo_override||null
     };
 
     let error, data;
