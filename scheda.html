@@ -229,6 +229,11 @@ button.btn-blocked:hover{background:var(--ok)}
 .ac-results{position:absolute;top:100%;left:0;right:0;background:#FFF;border:1px solid var(--border);border-radius:var(--rs);box-shadow:0 4px 12px rgba(0,0,0,.1);max-height:280px;overflow-y:auto;z-index:50}
 .ac-row:hover{background:var(--accent-l)}
 .ac-row:last-child{border-bottom:none !important}
+
+/* ── BOTTONE SCORPORO IVA ────────────────────────────────── */
+.btn-iva{background:#F7F6F3;color:var(--text-m);border:1px solid var(--border);border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.02em;padding:3px 6px;cursor:pointer;font-family:inherit;white-space:nowrap;line-height:1;transition:all .12s}
+.btn-iva:hover{background:var(--accent-l);color:var(--accent-d);border-color:var(--accent)}
+.btn-iva:active{transform:scale(0.95)}
 .rap-note{padding:8px 14px;font-size:12px;color:var(--text-m);background:#FAFAF8;border-bottom:1px solid #F0EDE8}
 
 @media(max-width:640px){.g2,.g3,.g4{grid-template-columns:1fr}.sp2,.sp3{grid-column:auto}}
@@ -1171,7 +1176,7 @@ function rpRimuoviRic(id){
 
 function rpRenderRic(){
   document.getElementById('rp-ric-list').innerHTML = _rpRic.map(r=>`
-    <div style="display:grid;grid-template-columns:120px 1fr 60px 100px 36px;gap:8px;align-items:center;margin-bottom:8px">
+    <div style="display:grid;grid-template-columns:120px 1fr 60px 160px 36px;gap:8px;align-items:center;margin-bottom:8px">
       <input type="text" value="${r.codice}" placeholder="Codice"
         oninput="rpUpdRic(${r.id},'codice',this.value)"
         style="padding:7px;border:1px solid var(--border);border-radius:var(--rs);font-size:12px;font-family:monospace">
@@ -1181,9 +1186,13 @@ function rpRenderRic(){
       <input type="number" value="${r.qty}" min="1" step="1"
         oninput="rpUpdRic(${r.id},'qty',this.value)"
         style="padding:7px;border:1px solid var(--border);border-radius:var(--rs);font-size:13px;text-align:right">
-      <input type="number" value="${r.prezzo||''}" min="0" step="0.01" placeholder="€ prezzo"
-        oninput="rpUpdRic(${r.id},'prezzo',this.value)"
-        style="padding:7px;border:1px solid var(--border);border-radius:var(--rs);font-size:13px;text-align:right">
+      <div style="display:flex;align-items:center;gap:4px">
+        <input type="number" value="${r.prezzo||''}" min="0" step="0.01" placeholder="€ prezzo"
+          oninput="rpUpdRic(${r.id},'prezzo',this.value)"
+          style="padding:7px;border:1px solid var(--border);border-radius:var(--rs);font-size:13px;text-align:right;flex:1;min-width:0">
+        <button type="button" class="btn-iva" title="Scorpora IVA 22% (prezzo / 1.22)"
+          onclick="scorporaIvaPannello(${r.id})">−IVA</button>
+      </div>
       <button onclick="rpRimuoviRic(${r.id})" style="background:none;border:1px solid var(--border);border-radius:var(--rs);cursor:pointer;color:var(--err)">✕</button>
     </div>
   `).join('');
@@ -1412,10 +1421,14 @@ function renderRapportini(){
             style="width:60px;font-size:12px;padding:4px 6px;text-align:right">
         </td>
         <td style="text-align:right">
-          <input type="number" step="0.01" min="0" value="${el.prezzo||0}"
-            onclick="event.stopPropagation()"
-            onchange="modRicambio('${rapKey}',${elIdx},'prezzo',this.value)"
-            style="width:80px;font-size:12px;padding:4px 6px;text-align:right">
+          <div style="display:inline-flex;align-items:center;gap:2px">
+            <input type="number" step="0.01" min="0" value="${el.prezzo||0}"
+              onclick="event.stopPropagation()"
+              onchange="modRicambio('${rapKey}',${elIdx},'prezzo',this.value)"
+              style="width:70px;font-size:12px;padding:4px 6px;text-align:right">
+            <button type="button" class="btn-iva" title="Scorpora IVA 22% (prezzo / 1.22)"
+              onclick="event.stopPropagation();scorporaIvaRicambio('${rapKey}',${elIdx})">−IVA</button>
+          </div>
         </td>
         <td style="text-align:right;font-size:12px;font-weight:600">${fmt((el.qty||0)*(el.prezzo||0))}</td>
         <td style="text-align:center;white-space:nowrap">
@@ -1702,6 +1715,64 @@ function salvaDebounced(msg){
 // Trova il rapportino per chiave (numero o _id)
 function _trovaRap(rapKey){
   return SL.rapportini.find(r => (r.numero||r._id||'') == rapKey);
+}
+
+// ══════════════════════════════════════════════════════════
+// SCORPORO IVA (22%) — pulsanti −IVA accanto agli input prezzo
+// Logica: prezzo_netto = prezzo_iva_inclusa / 1.22, 2 decimali
+// ══════════════════════════════════════════════════════════
+function _scorpora22(v){
+  const p = parseFloat(String(v||0).replace(',','.'));
+  if (!(p > 0)) return 0;
+  return Math.round((p / 1.22) * 100) / 100;
+}
+
+// Scorporo IVA su una riga ricambio del rapportino (vista espansa)
+function scorporaIvaRicambio(rapKey, elIdx){
+  const rap = _trovaRap(rapKey);
+  if (!rap) { toast('Rapportino non trovato','err'); return; }
+  const ricambi = (rap.elementi||[]).filter(el=>el.tipo==='ricambio');
+  const el = ricambi[elIdx];
+  if (!el) return;
+  const prima = parseFloat(el.prezzo)||0;
+  const dopo = _scorpora22(prima);
+  if (dopo === prima) return;
+  el.prezzo = dopo;
+  if (dopo > 0) {
+    delete el.prezzo_da_confermare;
+    delete el._fonte_prezzo;
+  }
+  SL._dirty = true;
+  renderRapportini();
+  aggiornaTotali();
+  salvaDebounced(`✓ IVA scorporata: € ${fmt(prima)} → € ${fmt(dopo)}`);
+}
+
+// Scorporo IVA su una riga del riepilogo materiali
+function scorporaIvaRiepilogo(idx){
+  if (!SL.riepilogo_override || !SL.riepilogo_override.ricambi) return;
+  const el = SL.riepilogo_override.ricambi[idx];
+  if (!el) return;
+  const prima = parseFloat(el.prezzo)||0;
+  const dopo = _scorpora22(prima);
+  if (dopo === prima) return;
+  el.prezzo = dopo;
+  SL._dirty = true;
+  renderRiepilogo();
+  aggiornaTotali();
+  salvaDebounced(`✓ IVA scorporata: € ${fmt(prima)} → € ${fmt(dopo)}`);
+}
+
+// Scorporo IVA nel pannello "+ Nuovo rapportino giornaliero"
+function scorporaIvaPannello(id){
+  const r = _rpRic.find(r=>r.id===id);
+  if (!r) return;
+  const prima = parseFloat(r.prezzo)||0;
+  const dopo = _scorpora22(prima);
+  if (dopo === prima) return;
+  r.prezzo = dopo;
+  rpRenderRic();
+  toast(`✓ IVA scorporata: € ${fmt(prima)} → € ${fmt(dopo)}`, 'ok');
 }
 
 // Aggiorna riga ore inline (campo: 'operatore' | 'ore' | 'tariffa')
@@ -2197,9 +2268,13 @@ function renderRiepilogo(){
               style="width:60px;font-size:12px;padding:4px 6px;text-align:right">
           </td>
           <td style="text-align:right">
-            <input type="number" step="0.01" min="0" value="${el.prezzo||0}"
-              onchange="modRiepilogo(${el._idx},'prezzo',this.value)"
-              style="width:80px;font-size:12px;padding:4px 6px;text-align:right">
+            <div style="display:inline-flex;align-items:center;gap:2px">
+              <input type="number" step="0.01" min="0" value="${el.prezzo||0}"
+                onchange="modRiepilogo(${el._idx},'prezzo',this.value)"
+                style="width:70px;font-size:12px;padding:4px 6px;text-align:right">
+              <button type="button" class="btn-iva" title="Scorpora IVA 22% (prezzo / 1.22)"
+                onclick="scorporaIvaRiepilogo(${el._idx})">−IVA</button>
+            </div>
           </td>
           ${cellaNetto}
           ${cellaRicarico}
