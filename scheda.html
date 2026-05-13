@@ -216,7 +216,7 @@ button.btn-blocked:hover{background:var(--ok)}
 .rap-stats{display:flex;gap:12px;align-items:center}
 .rap-tot{font-size:13px;font-weight:700;color:var(--accent)}
 .rap-body{border-top:1px solid var(--border);overflow:hidden;transition:max-height .25s;max-height:0}
-.rap-body.open{max-height:600px}
+.rap-body.open{max-height:2000px}
 .rap-note{padding:8px 14px;font-size:12px;color:var(--text-m);background:#FAFAF8;border-bottom:1px solid #F0EDE8}
 
 @media(max-width:640px){.g2,.g3,.g4{grid-template-columns:1fr}.sp2,.sp3{grid-column:auto}}
@@ -232,7 +232,7 @@ button.btn-blocked:hover{background:var(--ok)}
   </div>
   <div style="display:flex;align-items:center;gap:10px">
     <span class="badge b-bozza" id="hBadge">Bozza</span>
-    <button class="btn-back" onclick="location.href='index.html'">← Menu</button>
+    <button class="btn-back" onclick="location.href='schede.html'">← Schede</button>
   </div>
 </header>
 
@@ -1286,7 +1286,10 @@ function renderRapportini(){
     // Una riga ricambio è sospetta se il flag è acceso, oppure il prezzo è 0/vuoto
     const ricSospetto = el => !!el.prezzo_da_confermare || !(parseFloat(el.prezzo) > 0);
 
-    // Sezione ore
+    // Identificativo stabile del rapportino per le funzioni inline
+    const rapKey = (r.numero||r._id||'').replace(/'/g,"\\'");
+
+    // Sezione ore — TUTTO EDITABILE INLINE (operatore, ore, tariffa)
     const righeOre = (r.ore||[]).filter(o=>o.ore>0).map((o, oIdx)=>{
       const susp = oreSospetta(o);
       const cls = susp ? 'row-da-confermare' : '';
@@ -1295,15 +1298,36 @@ function renderRapportini(){
       <tr class="${cls}" ${bg}>
         <td style="font-size:11px;color:var(--text-m)">manodopera</td>
         <td style="font-size:11px;font-family:monospace">—</td>
-        <td style="font-size:12px;font-weight:600">${o.operatore}${susp?` <span class="warn-pill" title="Tariffa mancante o a zero — verifica prima di chiudere"><span class="dot"></span>tariffa?</span>`:''}</td>
-        <td style="text-align:right;font-size:12px">${fmtH(o.ore)}</td>
-        <td style="text-align:right;font-size:12px">€\u00a0${o.tariffa||0}/h</td>
-        <td style="text-align:right;font-size:12px;font-weight:600">${fmt(o.ore*(parseFloat(o.tariffa)||0))}</td>
-        <td style="text-align:center">${susp?`<button class="btn-conferma-prezzo" title="Apri il pannello rapportino per impostare la tariffa corretta" onclick="event.stopPropagation();confermaPrezzoOra('${r.numero||r._id||''}',${oIdx})">✓ Conferma</button>`:''}</td>
+        <td>
+          <input type="text" value="${(o.operatore||'').replace(/"/g,'&quot;')}"
+            onclick="event.stopPropagation()"
+            onchange="modOra('${rapKey}',${oIdx},'operatore',this.value)"
+            style="width:100%;font-size:12px;font-weight:600;padding:4px 6px">
+          ${susp?` <span class="warn-pill" title="Tariffa mancante o a zero — modifica il valore qui sotto"><span class="dot"></span>tariffa?</span>`:''}
+        </td>
+        <td style="text-align:right">
+          <input type="number" step="0.25" min="0" value="${o.ore||0}"
+            onclick="event.stopPropagation()"
+            onchange="modOra('${rapKey}',${oIdx},'ore',this.value)"
+            style="width:64px;font-size:12px;padding:4px 6px;text-align:right">
+        </td>
+        <td style="text-align:right">
+          <input type="number" step="0.5" min="0" value="${o.tariffa||0}"
+            onclick="event.stopPropagation()"
+            onchange="modOra('${rapKey}',${oIdx},'tariffa',this.value)"
+            style="width:70px;font-size:12px;padding:4px 6px;text-align:right"
+            title="€/h">
+        </td>
+        <td style="text-align:right;font-size:12px;font-weight:600">${fmt((parseFloat(o.ore)||0)*(parseFloat(o.tariffa)||0))}</td>
+        <td style="text-align:center">
+          <button class="btn btn-g btn-sm" title="Elimina riga ore"
+            style="color:var(--err);font-size:13px"
+            onclick="event.stopPropagation();eliminaOra('${rapKey}',${oIdx})">🗑</button>
+        </td>
       </tr>`;
     }).join('');
 
-    // Sezione ricambi (solo tipo ricambio dagli elementi)
+    // Sezione ricambi — TUTTO EDITABILE INLINE (descrizione, qty, prezzo)
     const righeRic = (r.elementi||[]).filter(el=>el.tipo==='ricambio').map((el,elIdx)=>{
       const susp = ricSospetto(el);
       const cls = susp ? 'row-da-confermare' : '';
@@ -1311,22 +1335,40 @@ function renderRapportini(){
       <tr class="${cls}">
         <td style="font-size:11px;color:var(--text-m)">${el.tipo}</td>
         <td style="font-size:11px;font-family:monospace">${el.codice||'—'}</td>
-        <td style="font-size:12px">${el.descrizione}${susp?` <span class="warn-pill" title="Prezzo importato senza listino del fornitore — verifica prima di chiudere"><span class="dot"></span>prezzo?</span>`:''}</td>
-        <td style="text-align:right;font-size:12px">${el.qty}</td>
-        <td style="text-align:right;font-size:12px">${fmt(el.prezzo||0)}</td>
+        <td>
+          <input type="text" value="${(el.descrizione||'').replace(/"/g,'&quot;')}"
+            onclick="event.stopPropagation()"
+            onchange="modRicambio('${rapKey}',${elIdx},'descrizione',this.value)"
+            style="width:100%;font-size:12px;padding:4px 6px">
+          ${susp?` <span class="warn-pill" title="Prezzo importato senza listino del fornitore — modifica il valore qui sotto"><span class="dot"></span>prezzo?</span>`:''}
+        </td>
+        <td style="text-align:right">
+          <input type="number" step="0.01" min="0" value="${el.qty||0}"
+            onclick="event.stopPropagation()"
+            onchange="modRicambio('${rapKey}',${elIdx},'qty',this.value)"
+            style="width:60px;font-size:12px;padding:4px 6px;text-align:right">
+        </td>
+        <td style="text-align:right">
+          <input type="number" step="0.01" min="0" value="${el.prezzo||0}"
+            onclick="event.stopPropagation()"
+            onchange="modRicambio('${rapKey}',${elIdx},'prezzo',this.value)"
+            style="width:80px;font-size:12px;padding:4px 6px;text-align:right">
+        </td>
         <td style="text-align:right;font-size:12px;font-weight:600">${fmt((el.qty||0)*(el.prezzo||0))}</td>
         <td style="text-align:center;white-space:nowrap">
-          ${susp?`<button class="btn-conferma-prezzo" title="Conferma il prezzo come corretto" onclick="event.stopPropagation();confermaPrezzoRicambio('${r.numero||r._id||''}',${elIdx})">✓ Conferma</button>`:''}
-          ${el.tipo==='ricambio'?
-            `<button class="btn btn-g btn-sm" title="Segna per reso"
-              style="color:var(--err);font-size:13px;margin-left:2px"
+          ${(()=>{ 
+            const inReso = _isInResi(r.numero||'', el.codice||'', el.descrizione||'', el.qty||1);
+            return `<button class="btn btn-g btn-sm"
+              title="${inReso?'Annulla segnalazione reso':'Segna per reso'}"
+              style="color:${inReso?'var(--ok)':'var(--err)'};font-size:13px"
               data-rap="${(r.numero||'').replace(/"/g,'')}"
               data-data="${r.data||''}"
               data-codice="${(el.codice||'').replace(/"/g,'')}"
               data-desc="${(el.descrizione||'').replace(/"/g,'&quot;')}"
               data-qty="${el.qty||1}"
               data-prezzo="${el.prezzo||0}"
-              onclick="event.stopPropagation();segnalaResoScheda(this)">↩</button>`:''}
+              onclick="event.stopPropagation();toggleResoScheda(this)">${inReso?'↺':'↩'}</button>`;
+          })()}
         </td>
       </tr>`;
     }).join('');
@@ -1374,35 +1416,76 @@ function toggleRap(head){
 }
 
 // ── Reso da scheda: apre ddt.html con i dati in sessionStorage ──
-function segnalaResoScheda(btn){
-  const rapNumero = btn.dataset.rap   || '';
-  const rapData   = btn.dataset.data  || '';
-  const codice    = btn.dataset.codice|| '';
-  const descrizione = btn.dataset.desc|| '';
-  const qty       = parseFloat(btn.dataset.qty)   || 1;
-  const prezzo    = parseFloat(btn.dataset.prezzo) || 0;
+// Chiave univoca riga: include codice + descrizione + qty + rapNumero
+// così righe duplicate dello stesso codice nello stesso rapportino
+// (caso raro ma possibile) sono tracciate separatamente.
+function _chiaveReso(rapNumero, codice, descrizione, qty){
+  return [rapNumero||'', codice||'', descrizione||'', qty||0].join('§');
+}
+
+// True se la riga è già segnalata per reso (presente in sessionStorage)
+function _isInResi(rapNumero, codice, descrizione, qty){
+  try {
+    const existing = JSON.parse(sessionStorage.getItem('resi_da_scheda')||'[]');
+    const k = _chiaveReso(rapNumero, codice, descrizione, qty);
+    return existing.some(r => _chiaveReso(r.ddt_num, r.codice, r.descrizione, r.qty) === k);
+  } catch(e){ return false; }
+}
+
+// Toggle reso: se non segnalato → segnala (↩ → ↺ verde)
+//              se già segnalato → annulla (↺ verde → ↩ rosso)
+function toggleResoScheda(btn){
+  const rapNumero   = btn.dataset.rap   || '';
+  const rapData     = btn.dataset.data  || '';
+  const codice      = btn.dataset.codice|| '';
+  const descrizione = btn.dataset.desc  || '';
+  const qty         = parseFloat(btn.dataset.qty)    || 1;
+  const prezzo      = parseFloat(btn.dataset.prezzo) || 0;
 
   const KEY = 'resi_da_scheda';
-  const existing = JSON.parse(sessionStorage.getItem(KEY)||'[]');
-  const giaSegnalato = existing.find(r=>r.codice===codice && r.ddt_num===rapNumero);
-  if(giaSegnalato){ toast('Articolo già segnalato per reso','info'); return; }
+  let existing = [];
+  try { existing = JSON.parse(sessionStorage.getItem(KEY)||'[]'); } catch(e){ existing = []; }
 
-  existing.push({
-    id: Date.now()+'_'+Math.random(),
-    codice, descrizione, qty, prezzo_netto: prezzo,
-    ddt_num:  rapNumero,
-    ddt_data: rapData,
-    fornitore: '',
-    note: '',
-    convalidato: false,
-    segnalato_at: new Date().toISOString()
-  });
-  sessionStorage.setItem(KEY, JSON.stringify(existing));
-  btn.textContent = '✓';
-  btn.style.color = 'var(--ok)';
-  btn.disabled = true;
-  toast(`↩ ${descrizione||codice} — segnalato per reso (apri DDT per convalidare)`, 'info');
+  const chiave = _chiaveReso(rapNumero, codice, descrizione, qty);
+  const idx = existing.findIndex(r => _chiaveReso(r.ddt_num, r.codice, r.descrizione, r.qty) === chiave);
+
+  if (idx >= 0) {
+    // ── ANNULLA RESO ──
+    const reso = existing[idx];
+    // Se è già stato convalidato (l'utente ha aperto ddt.html e processato il reso),
+    // non lasciamoglielo annullare dalla scheda senza preavviso
+    if (reso.convalidato){
+      if (!confirm(`Questo reso è già stato convalidato su DDT.\n\nVuoi comunque rimuoverlo dalla lista resi?`)) return;
+    }
+    existing.splice(idx, 1);
+    sessionStorage.setItem(KEY, JSON.stringify(existing));
+    btn.textContent = '↩';
+    btn.style.color = 'var(--err)';
+    btn.title = 'Segna per reso';
+    toast(`↺ ${descrizione||codice} — reso annullato`, 'info');
+  } else {
+    // ── SEGNALA RESO ──
+    existing.push({
+      id: Date.now()+'_'+Math.random(),
+      codice, descrizione, qty, prezzo_netto: prezzo,
+      ddt_num:  rapNumero,
+      ddt_data: rapData,
+      fornitore: '',
+      note: '',
+      convalidato: false,
+      segnalato_at: new Date().toISOString()
+    });
+    sessionStorage.setItem(KEY, JSON.stringify(existing));
+    btn.textContent = '↺';
+    btn.style.color = 'var(--ok)';
+    btn.title = 'Annulla segnalazione reso';
+    toast(`↩ ${descrizione||codice} — segnalato per reso (apri DDT per convalidare)`, 'info');
+  }
 }
+
+// Manteniamo segnalaResoScheda come alias per retrocompatibilità
+// (nel caso ci siano altre chiamate sparse nel codice)
+function segnalaResoScheda(btn){ toggleResoScheda(btn); }
 
 // ─── CONFERMA PREZZO RICAMBIO ────────────────────────────────────
 // Il ricambio è stato importato dal DDT senza listino (prezzo da netto fornitore)
@@ -1523,6 +1606,112 @@ async function confermaPrezzoOra(rapKey, oIdx){
     try { await salvaBozzaSilente(); toast('✓ Tariffa salvata', 'ok'); }
     catch(e){ toast('Tariffa aggiornata (salva manualmente)', 'info'); }
   }
+}
+
+// ══════════════════════════════════════════════════════════
+// MODIFICA INLINE DI ORE E RICAMBI NEI RAPPORTINI
+// I prezzi/tariffe/qty/descrizioni delle righe dei rapportini sono
+// sempre modificabili dalla scheda (anche dopo conferma) — i DDT
+// vengono auto-aggiunti ma i valori possono essere corretti qui.
+// Salva solo in rapportini_giornalieri.elementi (JSONB), NON tocca
+// articoli.prezzo_vendita.
+// ══════════════════════════════════════════════════════════
+
+// Debounce del salvataggio: evita di chiamare Supabase ad ogni keystroke
+let _salvaTimer = null;
+function salvaDebounced(msg){
+  clearTimeout(_salvaTimer);
+  _salvaTimer = setTimeout(async ()=>{
+    if (typeof salvaBozzaSilente !== 'function') return;
+    try {
+      await salvaBozzaSilente();
+      if (msg) toast(msg, 'ok');
+    } catch(e){
+      console.warn('salvaDebounced:', e);
+    }
+  }, 800);
+}
+
+// Trova il rapportino per chiave (numero o _id)
+function _trovaRap(rapKey){
+  return SL.rapportini.find(r => (r.numero||r._id||'') == rapKey);
+}
+
+// Aggiorna riga ore inline (campo: 'operatore' | 'ore' | 'tariffa')
+function modOra(rapKey, oIdx, campo, valore){
+  const rap = _trovaRap(rapKey);
+  if (!rap) { toast('Rapportino non trovato', 'err'); return; }
+  // Indicizzazione: il rendering filtra (o=>o.ore>0), quindi devo
+  // ricostruire l'indice reale nell'array completo
+  const oreFiltrate = (rap.ore||[]).filter(o=>o.ore>0);
+  const o = oreFiltrate[oIdx];
+  if (!o) { toast('Riga ore non trovata', 'err'); return; }
+
+  if (campo === 'operatore') {
+    o.operatore = String(valore||'').trim();
+  } else if (campo === 'ore') {
+    const v = parseFloat(String(valore).replace(',','.'));
+    o.ore = isNaN(v) ? 0 : Math.max(0, v);
+  } else if (campo === 'tariffa') {
+    const v = parseFloat(String(valore).replace(',','.'));
+    o.tariffa = isNaN(v) ? 0 : Math.max(0, v);
+  }
+
+  SL._dirty = true;
+  // Aggiorna i totali in tempo reale (anche subtotale riga + banner warning)
+  renderRapportini();
+  aggiornaTotali();
+  salvaDebounced('✓ Salvato');
+}
+
+// Aggiorna riga ricambio inline (campo: 'descrizione' | 'qty' | 'prezzo')
+function modRicambio(rapKey, elIdx, campo, valore){
+  const rap = _trovaRap(rapKey);
+  if (!rap) { toast('Rapportino non trovato', 'err'); return; }
+  // Stesso problema dell'indice: il rendering filtra (el.tipo==='ricambio')
+  const ricambi = (rap.elementi||[]).filter(el=>el.tipo==='ricambio');
+  const el = ricambi[elIdx];
+  if (!el) { toast('Riga ricambio non trovata', 'err'); return; }
+
+  if (campo === 'descrizione') {
+    el.descrizione = String(valore||'').trim();
+  } else if (campo === 'qty') {
+    const v = parseFloat(String(valore).replace(',','.'));
+    el.qty = isNaN(v) ? 0 : Math.max(0, v);
+  } else if (campo === 'prezzo') {
+    const v = parseFloat(String(valore).replace(',','.'));
+    el.prezzo = isNaN(v) ? 0 : Math.max(0, v);
+    // Se il prezzo diventa valido, rimuovi il flag "da confermare"
+    if (el.prezzo > 0) {
+      delete el.prezzo_da_confermare;
+      delete el._fonte_prezzo;
+    }
+  }
+
+  SL._dirty = true;
+  renderRapportini();
+  aggiornaTotali();
+  salvaDebounced('✓ Salvato');
+}
+
+// Elimina una riga ore (utile per correggere errori del Form)
+function eliminaOra(rapKey, oIdx){
+  const rap = _trovaRap(rapKey);
+  if (!rap) { toast('Rapportino non trovato', 'err'); return; }
+  const oreFiltrate = (rap.ore||[]).filter(o=>o.ore>0);
+  const o = oreFiltrate[oIdx];
+  if (!o) return;
+
+  if (!confirm(`Eliminare la riga ore di ${o.operatore||'(senza nome)'} (${fmtH(o.ore)} × €${o.tariffa||0}/h)?`)) return;
+
+  // Trova l'indice reale nell'array completo e rimuovilo
+  const idxReale = (rap.ore||[]).indexOf(o);
+  if (idxReale >= 0) rap.ore.splice(idxReale, 1);
+
+  SL._dirty = true;
+  renderRapportini();
+  aggiornaTotali();
+  salvaDebounced('✓ Riga eliminata');
 }
 
 function aggiornaTotali(){
