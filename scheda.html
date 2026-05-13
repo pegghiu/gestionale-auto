@@ -8,20 +8,27 @@
 
 <!-- ═══ PRINT STYLES ════════════════════════════════════════ -->
 <style id="printCSS">
+@page {
+  size: A4 portrait;
+  margin: 12mm 15mm;  /* alto/basso 12mm, sinistra/destra 15mm — simmetrici */
+}
 @media print {
   body * { visibility: hidden !important; }
   #printDoc, #printDoc * { visibility: visible !important; }
   #printDoc {
-    position: fixed !important;
-    top: 0 !important; left: 0 !important;
-    width: 210mm !important;
-    margin: 0 !important; padding: 12mm 14mm !important;
+    position: absolute !important;  /* non più fixed: rispetta @page */
+    top: 0 !important; left: 0 !important; right: 0 !important;
+    width: auto !important;          /* riempie l'area dentro @page margins */
+    margin: 0 !important;
+    padding: 0 !important;           /* margini gestiti da @page */
     font-family: 'Helvetica Neue', Arial, sans-serif !important;
     font-size: 9.5pt !important;
     background: #FFF !important; color: #111 !important;
   }
   .no-print { display: none !important; }
   .print-break { page-break-before: always; }
+  /* Evita doppio scroll bar/elementi flottanti che spostano la stampa */
+  html, body { margin: 0 !important; padding: 0 !important; }
 }
 </style>
 
@@ -1930,14 +1937,24 @@ const RIEP_CAT_LABEL = {
   pastiglie:'Pastiglie', liquidi:'Liquidi', altro:'Altro'
 };
 
-// Classifica un ricambio nelle categorie sopra
+// Classifica un ricambio nelle categorie sopra.
+// IMPORTANTE: i filtri olio devono essere classificati come "filtri",
+// non come "olio". L'ordine dei check conta!
 function categoriaRicambio(descrizione, codice){
   const d = String(descrizione||'').toLowerCase();
   const c = String(codice||'').toUpperCase();
-  if (c.startsWith('LIQ_OLIO') || /\bolio\b|\bolii\b/.test(d)) return 'olio';
+  // 1. Filtri (anche "filtro olio") prima di tutto
   if (/filtr/.test(d)) return 'filtri';
+  // 2. Dischi e pastiglie freni
   if (/disch|disco/.test(d)) return 'dischi';
   if (/pastigli/.test(d)) return 'pastiglie';
+  // 3. Olio MOTORE liquido (non filtri/coppe/sensori, non altri tipi di olio)
+  const eOlioMotore =
+    (c.startsWith('LIQ_OLIO') || /\bolio\b|\bolii\b/.test(d)) &&
+    !/coppa|tappo|sensore|spia|pressione|guarnizione|paraolio|para[- ]?olio|pompa\s+olio|astina|livello/.test(d) &&
+    !/\b(cambio|automatic|idraulic|fren|servo|trasmission|differenzial|atf|cvt|dsg|dct|riduttor|catena)/.test(d);
+  if (eOlioMotore) return 'olio';
+  // 4. Altri liquidi (antigelo, freni, ecc.)
   if (c.startsWith('LIQ_')) return 'liquidi';
   return 'altro';
 }
