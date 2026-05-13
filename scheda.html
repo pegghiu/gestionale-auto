@@ -217,6 +217,11 @@ button.btn-blocked:hover{background:var(--ok)}
 .rap-tot{font-size:13px;font-weight:700;color:var(--accent)}
 .rap-body{border-top:1px solid var(--border);overflow:hidden;transition:max-height .25s;max-height:0}
 .rap-body.open{max-height:2000px}
+
+/* ── AUTOCOMPLETE DROPDOWN ───────────────────────────────── */
+.ac-results{position:absolute;top:100%;left:0;right:0;background:#FFF;border:1px solid var(--border);border-radius:var(--rs);box-shadow:0 4px 12px rgba(0,0,0,.1);max-height:280px;overflow-y:auto;z-index:50}
+.ac-row:hover{background:var(--accent-l)}
+.ac-row:last-child{border-bottom:none !important}
 .rap-note{padding:8px 14px;font-size:12px;color:var(--text-m);background:#FAFAF8;border-bottom:1px solid #F0EDE8}
 
 @media(max-width:640px){.g2,.g3,.g4{grid-template-columns:1fr}.sp2,.sp3{grid-column:auto}}
@@ -451,6 +456,18 @@ button.btn-blocked:hover{background:var(--ok)}
       </div>
     </div>
 
+    <!-- Banner olio duplicato (form + DDT) -->
+    <div id="bannerOlio" class="banner-conferma" style="display:none;margin:14px 16px 0;background:var(--info-bg);border-color:#9DB4DD;border-left-color:var(--info);color:var(--info)">
+      <span class="ico">🛢️</span>
+      <div class="txt" id="bannerOlioTxt">
+        <strong>Olio duplicato:</strong> ho trovato sia olio dal form ORE COMMESSE sia olio nei ricambi DDT.
+        Probabilmente l'olio è stato preso specifico e va tenuto quello del DDT.
+      </div>
+      <button class="btn btn-p btn-sm" onclick="rimuoviOlioDalForm()" style="white-space:nowrap">
+        Rimuovi olio dal form
+      </button>
+    </div>
+
     <!-- Lista rapportini -->
     <div id="rapList" style="padding:14px 16px">
       <div id="rapEmpty" style="text-align:center;padding:24px;color:var(--text-l);font-size:13px">
@@ -495,19 +512,26 @@ button.btn-blocked:hover{background:var(--ok)}
         <span class="ct">Riepilogo materiali e manodopera</span>
         <span style="font-size:11px;color:var(--text-m)">modificabile · indipendente dai rapportini</span>
       </div>
-      <button class="btn btn-s btn-sm" onclick="resetRiepilogo()" title="Cancella le modifiche manuali e ripopola dai rapportini attuali">
-        🔄 Reset dai rapportini
-      </button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-s btn-sm" id="btnToggleNetti" onclick="toggleNetti()"
+          title="Mostra/nascondi prezzi netti dai DDT e percentuale ricarico">
+          👁 Mostra netti
+        </button>
+        <button class="btn btn-s btn-sm" onclick="resetRiepilogo()" title="Cancella le modifiche manuali e ripopola dai rapportini attuali">
+          🔄 Reset dai rapportini
+        </button>
+      </div>
     </div>
     <div class="cb" style="padding:0">
       <div style="overflow-x:auto">
-        <table class="tbl" id="tblRiepilogo" style="min-width:560px">
+        <table class="tbl" id="tblRiepilogo" style="min-width:680px">
           <thead><tr>
-            <th style="width:110px">Categoria</th>
+            <th style="width:100px">Categoria</th>
+            <th style="width:110px">Codice</th>
             <th>Descrizione</th>
-            <th class="r" style="width:70px">Qtà</th>
-            <th class="r" style="width:90px">Prezzo</th>
-            <th class="r" style="width:90px">Subtot.</th>
+            <th class="r" style="width:60px">Qtà</th>
+            <th class="r" style="width:80px">Prezzo</th>
+            <th class="r" style="width:80px">Subtot.</th>
             <th style="width:36px"></th>
           </tr></thead>
           <tbody id="bodyRiepilogo"></tbody>
@@ -1352,9 +1376,9 @@ function renderRapportini(){
         </td>
         <td style="text-align:right;font-size:12px;font-weight:600">${fmt((parseFloat(o.ore)||0)*(parseFloat(o.tariffa)||0))}</td>
         <td style="text-align:center">
-          <button class="btn btn-g btn-sm" title="Elimina riga ore"
+          <button class="btn btn-g btn-sm btn-del-conferma" title="Elimina riga ore (clicca due volte)"
             style="color:var(--err);font-size:13px"
-            onclick="event.stopPropagation();eliminaOra('${rapKey}',${oIdx})">🗑</button>
+            onclick="event.stopPropagation();eliminaConferma(this,()=>eliminaOra('${rapKey}',${oIdx}))">🗑</button>
         </td>
       </tr>`;
     }).join('');
@@ -1401,6 +1425,10 @@ function renderRapportini(){
               data-prezzo="${el.prezzo||0}"
               onclick="event.stopPropagation();toggleResoScheda(this)">${inReso?'↺':'↩'}</button>`;
           })()}
+          <button class="btn btn-g btn-sm btn-del-conferma"
+            title="Elimina riga (clicca due volte)"
+            style="color:var(--err);font-size:13px;margin-left:2px"
+            onclick="event.stopPropagation();eliminaConferma(this,()=>eliminaRicambio('${rapKey}',${elIdx}))">🗑</button>
         </td>
       </tr>`;
     }).join('');
@@ -1726,15 +1754,13 @@ function modRicambio(rapKey, elIdx, campo, valore){
   salvaDebounced('✓ Salvato');
 }
 
-// Elimina una riga ore (utile per correggere errori del Form)
+// Elimina una riga ore (la doppia conferma è gestita dal bottone via eliminaConferma)
 function eliminaOra(rapKey, oIdx){
   const rap = _trovaRap(rapKey);
   if (!rap) { toast('Rapportino non trovato', 'err'); return; }
   const oreFiltrate = (rap.ore||[]).filter(o=>o.ore>0);
   const o = oreFiltrate[oIdx];
   if (!o) return;
-
-  if (!confirm(`Eliminare la riga ore di ${o.operatore||'(senza nome)'} (${fmtH(o.ore)} × €${o.tariffa||0}/h)?`)) return;
 
   // Trova l'indice reale nell'array completo e rimuovilo
   const idxReale = (rap.ore||[]).indexOf(o);
@@ -1744,6 +1770,137 @@ function eliminaOra(rapKey, oIdx){
   renderRapportini();
   aggiornaTotali();
   salvaDebounced('✓ Riga eliminata');
+}
+
+// Elimina una riga ricambio (la doppia conferma è gestita dal bottone)
+function eliminaRicambio(rapKey, elIdx){
+  const rap = _trovaRap(rapKey);
+  if (!rap) { toast('Rapportino non trovato', 'err'); return; }
+  // Indicizzazione: il rendering filtra (el.tipo==='ricambio'),
+  // quindi devo ricostruire l'indice reale nell'array completo
+  const ricambi = (rap.elementi||[]).filter(el=>el.tipo==='ricambio');
+  const el = ricambi[elIdx];
+  if (!el) return;
+  const idxReale = (rap.elementi||[]).indexOf(el);
+  if (idxReale >= 0) rap.elementi.splice(idxReale, 1);
+
+  SL._dirty = true;
+  renderRapportini();
+  aggiornaTotali();
+  salvaDebounced('✓ Riga eliminata');
+}
+
+// ── DOPPIA CONFERMA click-to-confirm su bottoni cestino ──
+// Primo click: il bottone si trasforma in "Sei sicuro?" per 3 secondi.
+// Secondo click entro 3s: esegue la callback (l'eliminazione vera).
+// Se passa il timeout, il bottone torna 🗑 normale.
+// ══════════════════════════════════════════════════════════
+// ALERT OLIO DUPLICATO (form + DDT)
+// Scenario: il dipendente nel Form ORE COMMESSE seleziona "olio"
+// e l'edge function crea una riga LIQ_OLIO_*. Ma a volte l'olio
+// era stato preso specifico e arriva poi come ricambio dal DDT.
+// Risultato: olio duplicato nella scheda.
+//
+// Rilevamento: cerco righe LIQ_OLIO_* (dal form) + righe olio non
+// LIQ_OLIO_* (dal DDT). Se entrambe presenti → banner.
+// ══════════════════════════════════════════════════════════
+
+function rilevaOlioDuplicato(){
+  const dalForm = []; // righe LIQ_OLIO_* (dal Form ORE COMMESSE)
+  const dalDdt  = []; // righe olio da DDT (descrizione contiene "olio", codice non LIQ_OLIO)
+  let litriForm = 0;
+  let litriDdt  = 0;
+
+  SL.rapportini.forEach(r=>{
+    (r.elementi||[]).filter(el=>el.tipo==='ricambio').forEach(el=>{
+      const cod = String(el.codice||'').toUpperCase();
+      const dsc = String(el.descrizione||'').toLowerCase();
+      const qty = parseFloat(el.qty)||0;
+      if (qty <= 0) return;
+
+      if (cod.startsWith('LIQ_OLIO')) {
+        dalForm.push({rapNumero:r.numero, el, qty});
+        litriForm += qty;
+      } else if (/\bolio\b|\bolii\b/.test(dsc) && !cod.startsWith('LIQ_')) {
+        dalDdt.push({rapNumero:r.numero, el, qty});
+        litriDdt += qty;
+      }
+    });
+  });
+
+  return {
+    duplicato: dalForm.length > 0 && dalDdt.length > 0,
+    dalForm, dalDdt, litriForm, litriDdt
+  };
+}
+
+function aggiornaBannerOlio(){
+  const banner = document.getElementById('bannerOlio');
+  const txt    = document.getElementById('bannerOlioTxt');
+  if (!banner || !txt) return;
+
+  const r = rilevaOlioDuplicato();
+  if (!r.duplicato) {
+    banner.style.display = 'none';
+    return;
+  }
+
+  // Messaggio dinamico con avviso litri non coincidenti
+  const fmtL = n => Number.isInteger(n) ? n+'L' : n.toFixed(1).replace('.',',')+'L';
+  let msg = `<strong>Olio duplicato:</strong> ho trovato olio dal form (${fmtL(r.litriForm)}) e olio nei ricambi DDT (${fmtL(r.litriDdt)}). `;
+  if (Math.abs(r.litriForm - r.litriDdt) > 0.01) {
+    msg += `<strong style="color:var(--err)">⚠ Litri non coincidenti</strong> (differenza ${fmtL(Math.abs(r.litriForm-r.litriDdt))}). `;
+  }
+  msg += `Probabilmente l'olio è stato preso specifico e va tenuto quello del DDT.`;
+  txt.innerHTML = msg;
+  banner.style.display = 'flex';
+}
+
+// Rimuove tutte le righe LIQ_OLIO_* (dal form) lasciando l'olio del DDT
+async function rimuoviOlioDalForm(){
+  const r = rilevaOlioDuplicato();
+  if (!r.dalForm.length) { toast('Nessun olio dal form da rimuovere', 'info'); return; }
+
+  const n = r.dalForm.length;
+  if (!confirm(`Rimuovere ${n} riga${n>1?'he':''} di olio dal form (codici LIQ_OLIO_*)?\n\nVerrà mantenuto solo l'olio importato dal DDT.\n\nQuesta operazione non si può annullare.`)) return;
+
+  // Rimuovi le righe LIQ_OLIO_* da tutti i rapportini
+  SL.rapportini.forEach(rap=>{
+    if (!rap.elementi) return;
+    rap.elementi = rap.elementi.filter(el=>{
+      const cod = String(el.codice||'').toUpperCase();
+      return !(el.tipo==='ricambio' && cod.startsWith('LIQ_OLIO'));
+    });
+  });
+
+  SL._dirty = true;
+  renderRapportini();
+  aggiornaTotali();
+  salvaDebounced(`✓ ${n} riga${n>1?'he':''} olio rimossa${n>1?'e':''}`);
+}
+
+function eliminaConferma(btn, callback){
+  if (btn._confermaArmato) {
+    // SECONDO CLICK → esegui
+    clearTimeout(btn._confermaTimer);
+    btn._confermaArmato = false;
+    try { callback(); } catch(e){ console.error('eliminaConferma:', e); toast('Errore eliminazione','err'); }
+    return;
+  }
+  // PRIMO CLICK → arma il bottone
+  btn._confermaArmato = true;
+  btn._origHTML  = btn.innerHTML;
+  btn._origStyle = btn.style.cssText;
+  btn._origTitle = btn.title;
+  btn.innerHTML = 'Sei sicuro?';
+  btn.style.cssText = 'background:var(--err);color:#FFF;border-color:var(--err);font-size:11px;font-weight:700;padding:3px 8px';
+  btn.title = 'Clicca di nuovo per confermare';
+  btn._confermaTimer = setTimeout(()=>{
+    btn._confermaArmato = false;
+    btn.innerHTML = btn._origHTML || '🗑';
+    btn.style.cssText = btn._origStyle || 'color:var(--err);font-size:13px';
+    btn.title = btn._origTitle || 'Elimina';
+  }, 3000);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1833,6 +1990,89 @@ function generaRiepilogoDaRapportini(){
   };
 }
 
+// ══════════════════════════════════════════════════════════
+// TOGGLE PREZZI NETTI E % RICARICO
+// Mostra/nasconde due colonne extra nel riepilogo (netto + %)
+// I netti sono cercati per codice in ddt_in_arrivo (DDT confermati
+// per la targa di questa scheda). Cache locale per evitare query
+// ripetute. % ricarico modificabile → ricalcola prezzo vendita.
+// ══════════════════════════════════════════════════════════
+
+let _NETTI_CACHE = {};       // { codiceUPPER: prezzoNettoNumero }
+let _NETTI_LOADED = false;   // true dopo il primo caricamento
+
+// Carica i prezzi netti dai DDT confermati per la targa di questa scheda
+async function caricaNettiDaDdt(){
+  if (!SL.targa) { _NETTI_LOADED = true; return; }
+  try {
+    const { data, error } = await _sb.from('ddt_in_arrivo')
+      .select('ddt_estratto, email_data')
+      .eq('targa_estratta', SL.targa)
+      .eq('stato', 'confermato')
+      .order('email_data', { ascending: true }); // più recenti per ultimi → sovrascrivono i vecchi
+
+    if (error) { console.warn('caricaNettiDaDdt:', error); _NETTI_LOADED = true; return; }
+    if (!data) { _NETTI_LOADED = true; return; }
+
+    _NETTI_CACHE = {};
+    data.forEach(ddt=>{
+      const righe = (ddt.ddt_estratto && ddt.ddt_estratto.righe) || [];
+      righe.forEach(rig=>{
+        const cod = String(rig.codice||'').toUpperCase().trim();
+        if (!cod) return;
+        // Prezzo netto: usa prezzo_netto dal DDT, fallback su prezzo_listino
+        const netto = parseFloat(rig.prezzo_netto) || parseFloat(rig.prezzo_listino) || 0;
+        if (netto > 0) _NETTI_CACHE[cod] = netto; // più recente sovrascrive
+      });
+    });
+    _NETTI_LOADED = true;
+  } catch(e){
+    console.error('caricaNettiDaDdt:', e);
+    _NETTI_LOADED = true;
+  }
+}
+
+async function toggleNetti(){
+  const attivo = sessionStorage.getItem('riep_mostra_netti') === '1';
+  if (attivo) {
+    // Stava ON → spegni
+    sessionStorage.setItem('riep_mostra_netti', '0');
+  } else {
+    // Sta per attivare → carica i netti se non ancora fatti
+    if (!_NETTI_LOADED) {
+      toast('Carico prezzi netti dai DDT…', 'info');
+      await caricaNettiDaDdt();
+    }
+    sessionStorage.setItem('riep_mostra_netti', '1');
+  }
+  renderRiepilogo();
+}
+
+function aggiornaBottoneNetti(mostra){
+  const btn = document.getElementById('btnToggleNetti');
+  if (!btn) return;
+  btn.innerHTML = mostra ? '👁‍🗨 Nascondi netti' : '👁 Mostra netti';
+}
+
+function aggiornaHeaderRiepilogo(mostra){
+  const thead = document.querySelector('#tblRiepilogo thead tr');
+  if (!thead) return;
+  // Costruisci sempre l'header da zero per coerenza
+  thead.innerHTML = `
+    <th style="width:100px">Categoria</th>
+    <th style="width:110px">Codice</th>
+    <th>Descrizione</th>
+    <th class="r" style="width:60px">Qtà</th>
+    <th class="r" style="width:80px">Prezzo</th>
+    ${mostra ? '<th class="r" style="width:75px;background:#FAFAF8" title="Prezzo netto dal DDT più recente">Netto</th>' : ''}
+    ${mostra ? '<th class="r" style="width:65px;background:#FAFAF8" title="Percentuale ricarico: (prezzo − netto) / netto × 100. Modifica per ricalcolare il prezzo.">% Ric.</th>' : ''}
+    <th class="r" style="width:80px">Subtot.</th>
+    <th style="width:36px"></th>`;
+  // Allarga tabella se attive le colonne extra
+  const tbl = document.getElementById('tblRiepilogo');
+  if (tbl) tbl.style.minWidth = mostra ? '820px' : '680px';
+}
+
 // Renderizza la tabella riepilogo (chiamato da aggiornaTotali)
 function renderRiepilogo(){
   const body = document.getElementById('bodyRiepilogo');
@@ -1849,6 +2089,13 @@ function renderRiepilogo(){
 
   const rip = SL.riepilogo_override;
   const ricambi = rip.ricambi || [];
+
+  // Stato toggle "mostra netti": persiste nel sessionStorage
+  const mostraNetti = sessionStorage.getItem('riep_mostra_netti') === '1';
+
+  // Aggiorna header tabella (aggiunge/rimuove colonne netto+%) e bottone toggle
+  aggiornaHeaderRiepilogo(mostraNetti);
+  aggiornaBottoneNetti(mostraNetti);
 
   // Raggruppa per categoria mantenendo l'ordine RIEP_CATEGORIE
   const perCat = {};
@@ -1867,6 +2114,32 @@ function renderRiepilogo(){
     righe.forEach(el=>{
       const sub = (parseFloat(el.qty)||0) * (parseFloat(el.prezzo)||0);
       totRic += sub;
+      // Colonne extra: netto + % ricarico
+      let cellaNetto = '';
+      let cellaRicarico = '';
+      if (mostraNetti) {
+        const netto = _NETTI_CACHE[String(el.codice||'').toUpperCase()] || 0;
+        const prezzo = parseFloat(el.prezzo)||0;
+        const ric = (netto > 0 && prezzo > 0) ? ((prezzo - netto) / netto * 100) : null;
+        // Color-code: <20% rosso, 20-40% giallo, >40% verde
+        const ricColor = ric===null ? 'var(--text-l)' :
+                         ric < 20  ? 'var(--err)' :
+                         ric < 40  ? 'var(--warn)' :
+                                     'var(--ok)';
+        cellaNetto = `
+          <td style="text-align:right;font-size:11px;color:var(--text-m);background:#FAFAF8" title="Prezzo netto dal DDT più recente">
+            ${netto > 0 ? fmt(netto) : '<span style="color:var(--text-l)">—</span>'}
+          </td>`;
+        cellaRicarico = `
+          <td style="text-align:right;background:#FAFAF8">
+            ${netto > 0 ? `
+              <input type="number" step="0.5" min="0" value="${ric!==null?ric.toFixed(1):0}"
+                onchange="modRiepilogo(${el._idx},'ricarico',this.value)"
+                style="width:60px;font-size:11px;padding:3px 6px;text-align:right;color:${ricColor};font-weight:700"
+                title="${ric!==null?ric.toFixed(1)+'%':'—'} ricarico — modifica per ricalcolare il prezzo">
+            ` : '<span style="font-size:11px;color:var(--text-l)">—</span>'}
+          </td>`;
+      }
       html += `
         <tr>
           <td>
@@ -1876,6 +2149,17 @@ function renderRiepilogo(){
                 `<option value="${c}" ${c===el.categoria?'selected':''}>${RIEP_CAT_LABEL[c]}</option>`
               ).join('')}
             </select>
+          </td>
+          <td style="position:relative">
+            <input type="text" value="${(el.codice||'').replace(/"/g,'&quot;')}"
+              placeholder="cerca codice..."
+              autocomplete="off"
+              oninput="autocompleteCodice(this,${el._idx})"
+              onblur="setTimeout(()=>chiudiAutocomplete(this),200)"
+              onchange="modRiepilogo(${el._idx},'codice',this.value)"
+              style="width:100%;font-size:11px;font-family:monospace;padding:4px 6px"
+              class="ac-input">
+            <div class="ac-results" style="display:none"></div>
           </td>
           <td>
             <input type="text" value="${(el.descrizione||'').replace(/"/g,'&quot;')}"
@@ -1892,26 +2176,35 @@ function renderRiepilogo(){
               onchange="modRiepilogo(${el._idx},'prezzo',this.value)"
               style="width:80px;font-size:12px;padding:4px 6px;text-align:right">
           </td>
+          ${cellaNetto}
+          ${cellaRicarico}
           <td style="text-align:right;font-size:12px;font-weight:600">${fmt(sub)}</td>
           <td style="text-align:center">
-            <button class="btn btn-g btn-sm" title="Elimina riga"
+            <button class="btn btn-g btn-sm btn-del-conferma" title="Elimina riga (clicca due volte)"
               style="color:var(--err);font-size:13px"
-              onclick="eliminaRigaRiepilogo(${el._idx})">🗑</button>
+              onclick="eliminaConferma(this,()=>eliminaRigaRiepilogo(${el._idx}))">🗑</button>
           </td>
         </tr>`;
     });
   });
 
+  // Numero colonne totali per i colspan
+  const nCol = mostraNetti ? 9 : 7;
+
   if (!ricambi.length) {
-    html = '<tr><td colspan="6" style="text-align:center;color:var(--text-l);padding:14px">Nessun materiale</td></tr>';
+    html = `<tr><td colspan="${nCol}" style="text-align:center;color:var(--text-l);padding:14px">Nessun materiale</td></tr>`;
   }
 
   // Riga manodopera totale (somma fissa, modificabile)
   const md = parseFloat(rip.manodopera_totale)||0;
   const mdOre = parseFloat(rip.manodopera_ore)||0;
+  // Celle vuote per le colonne netto/% (manodopera non ha netto)
+  const mdCellaNetto = mostraNetti ? `<td style="background:#FAFAF8"></td>` : '';
+  const mdCellaRicarico = mostraNetti ? `<td style="background:#FAFAF8"></td>` : '';
   html += `
     <tr style="background:#F7F6F3;border-top:2px solid var(--border)">
       <td style="font-size:11px;color:var(--text-m);font-weight:700">MANODOPERA</td>
+      <td style="font-size:11px;color:var(--text-l)">—</td>
       <td>
         <span style="font-size:12px;font-weight:600">Manodopera totale</span>
         <span style="font-size:11px;color:var(--text-m);margin-left:6px">(${fmtH(mdOre)})</span>
@@ -1928,10 +2221,12 @@ function renderRiepilogo(){
           style="width:80px;font-size:12px;padding:4px 6px;text-align:right;font-weight:700"
           title="Totale manodopera in euro">
       </td>
+      ${mdCellaNetto}
+      ${mdCellaRicarico}
       <td></td>
     </tr>
     <tr style="background:var(--dark);color:#FFF">
-      <td colspan="4" style="color:rgba(255,255,255,.7);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Totale materiali + manodopera</td>
+      <td colspan="${nCol-2}" style="color:rgba(255,255,255,.7);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase">Totale materiali + manodopera</td>
       <td style="text-align:right;font-size:14px;font-weight:800;color:#FFF">${fmt(totRic+md)}</td>
       <td style="background:var(--dark)"></td>
     </tr>`;
@@ -1942,6 +2237,146 @@ function renderRiepilogo(){
   if (info && rip.generato_at) {
     const d = new Date(rip.generato_at);
     info.textContent = `Generato ${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}`;
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// AUTOCOMPLETE CODICE da tabella `articoli`
+// Cerca per codice (e codice_fornitore) mentre digito,
+// mostra dropdown coi suggerimenti, click → compila la riga.
+// ══════════════════════════════════════════════════════════
+
+let _acTimer = null;
+let _acCache = null; // cache dell'ultima query per evitare richieste duplicate
+
+async function autocompleteCodice(input, idx){
+  const q = String(input.value||'').trim();
+  const box = input.parentElement.querySelector('.ac-results');
+  if (!box) return;
+
+  // Chiudi dropdown se query troppo corta
+  if (q.length < 2) {
+    box.style.display = 'none';
+    box.innerHTML = '';
+    return;
+  }
+
+  // Debounce: aspetta 200ms di idle prima di chiamare Supabase
+  clearTimeout(_acTimer);
+  _acTimer = setTimeout(async ()=>{
+    try {
+      // Cerca su codice O codice_fornitore (case insensitive)
+      const { data, error } = await _sb.from('articoli')
+        .select('codice, codice_fornitore, descrizione, prezzo_vendita, tipo, um')
+        .or(`codice.ilike.%${q}%,codice_fornitore.ilike.%${q}%`)
+        .order('codice', { ascending: true })
+        .limit(10);
+
+      if (error) { console.warn('autocomplete:', error); return; }
+      if (!data || !data.length) {
+        box.innerHTML = `<div style="padding:8px 10px;font-size:11px;color:var(--text-l);font-style:italic">Nessun codice trovato — verrà aggiunto al listino quando salvi</div>`;
+        box.style.display = 'block';
+        return;
+      }
+
+      // Render dropdown
+      box.innerHTML = data.map(a=>{
+        const codDisplay = a.codice || a.codice_fornitore || '?';
+        const codSec = (a.codice && a.codice_fornitore && a.codice !== a.codice_fornitore)
+          ? `<span style="font-size:10px;color:var(--text-l);margin-left:6px">${a.codice_fornitore}</span>` : '';
+        const prezzo = (parseFloat(a.prezzo_vendita)||0) > 0
+          ? `<span style="font-size:11px;color:var(--accent);font-weight:600;margin-left:auto;white-space:nowrap">${fmt(a.prezzo_vendita)}</span>` : '';
+        return `<div class="ac-row"
+          data-cod="${(a.codice||'').replace(/"/g,'&quot;')}"
+          data-desc="${(a.descrizione||'').replace(/"/g,'&quot;')}"
+          data-prezzo="${a.prezzo_vendita||0}"
+          onmousedown="selezionaArticolo(this, ${idx})"
+          style="padding:7px 10px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid #F0EDE8">
+          <div style="flex:1;min-width:0">
+            <div style="font-family:monospace;font-size:11px;font-weight:700;color:var(--dark)">${codDisplay}${codSec}</div>
+            <div style="font-size:11px;color:var(--text-m);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.descrizione||''}</div>
+          </div>
+          ${prezzo}
+        </div>`;
+      }).join('');
+      box.style.display = 'block';
+    } catch(e){
+      console.error('autocomplete eccezione:', e);
+    }
+  }, 200);
+}
+
+function chiudiAutocomplete(input){
+  const box = input.parentElement.querySelector('.ac-results');
+  if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+}
+
+// Click su un suggerimento → compila codice, descrizione, prezzo della riga
+function selezionaArticolo(row, idx){
+  const cod    = row.dataset.cod || '';
+  const desc   = row.dataset.desc || '';
+  const prezzo = parseFloat(row.dataset.prezzo) || 0;
+
+  if (!SL.riepilogo_override || !SL.riepilogo_override.ricambi) return;
+  const el = SL.riepilogo_override.ricambi[idx];
+  if (!el) return;
+
+  el.codice      = cod;
+  el.descrizione = desc;
+  if (prezzo > 0) el.prezzo = prezzo;
+  // Ri-categorizza in base alla nuova descrizione
+  el.categoria = categoriaRicambio(desc, cod);
+
+  SL._dirty = true;
+  renderRiepilogo();
+  aggiornaTotali();
+  salvaDebounced('✓ Articolo selezionato');
+}
+
+// Salva un articolo nel listino se NON esiste già.
+// Stessa euristica usata in confermaPrezzoRicambio per evitare di
+// salvare codici DDT one-shot (numero DDT, "Ricambio DDT", ecc).
+async function salvaArticoloSeNuovo(el){
+  const codice = String(el.codice||'').trim();
+  const desc   = String(el.descrizione||'').trim();
+  const prezzo = parseFloat(el.prezzo) || 0;
+  if (!codice || !desc || prezzo <= 0) return false;
+
+  // Euristica anti-codici-DDT-monouso
+  const descLower = desc.toLowerCase();
+  const sembraCodiceDdt = /\bddt\b/.test(descLower) || /BL[-/]/i.test(codice);
+  if (sembraCodiceDdt) return false;
+
+  try {
+    // Verifico se esiste già: cerco per codice OR codice_fornitore
+    const { data: esistenti } = await _sb.from('articoli')
+      .select('codice, prezzo_vendita')
+      .or(`codice.eq.${codice},codice_fornitore.eq.${codice}`)
+      .limit(1);
+
+    if (esistenti && esistenti.length > 0) {
+      // Esiste → non sovrascrivo (rispetto il listino manuale)
+      return false;
+    }
+
+    // Inserisci nuovo articolo
+    const isLiquido = codice.toUpperCase().startsWith('LIQ_');
+    const { error } = await _sb.from('articoli').insert({
+      codice:         codice,
+      descrizione:    desc,
+      tipo:           'ricambio',
+      um:             isLiquido ? 'lt' : 'NR',
+      qta:            0,
+      soglia_minima:  1,
+      costo_acquisto: 0,
+      prezzo_vendita: prezzo,
+      note:           `Aggiunto da scheda ${SL.numero||''} il ${new Date().toISOString().slice(0,10)}`
+    });
+    if (error) { console.warn('insert articolo:', error); return false; }
+    return true;
+  } catch(e){
+    console.warn('salvaArticoloSeNuovo:', e);
+    return false;
   }
 }
 
@@ -1962,6 +2397,13 @@ function modRiepilogo(idx, campo, valore){
     if (!el) return;
     if (campo === 'categoria') {
       el.categoria = String(valore||'altro');
+    } else if (campo === 'codice') {
+      el.codice = String(valore||'').trim();
+      // Se il codice diventa valido, prova a salvare l'articolo nel listino
+      // (solo se ha anche descrizione e prezzo > 0, e non è un codice DDT one-shot)
+      if (el.codice && el.descrizione && (parseFloat(el.prezzo)||0) > 0) {
+        salvaArticoloSeNuovo(el).catch(e=>console.warn('salvaArticoloSeNuovo:', e));
+      }
     } else if (campo === 'descrizione') {
       el.descrizione = String(valore||'').trim();
     } else if (campo === 'qty') {
@@ -1970,6 +2412,18 @@ function modRiepilogo(idx, campo, valore){
     } else if (campo === 'prezzo') {
       const v = parseFloat(String(valore).replace(',','.'));
       el.prezzo = isNaN(v) ? 0 : Math.max(0, v);
+      // Anche qui: se ora ho tutto, salva nel listino
+      if (el.codice && el.descrizione && el.prezzo > 0) {
+        salvaArticoloSeNuovo(el).catch(e=>console.warn('salvaArticoloSeNuovo:', e));
+      }
+    } else if (campo === 'ricarico') {
+      // Modifica % ricarico → ricalcola prezzo vendita = netto × (1 + %/100)
+      const v = parseFloat(String(valore).replace(',','.'));
+      const ricPct = isNaN(v) ? 0 : Math.max(0, v);
+      const netto = _NETTI_CACHE[String(el.codice||'').toUpperCase()] || 0;
+      if (netto > 0) {
+        el.prezzo = Math.round(netto * (1 + ricPct/100) * 100) / 100;
+      }
     }
   }
 
@@ -1993,12 +2447,11 @@ function aggiungiRigaRiepilogo(){
   salvaDebounced();
 }
 
-// Elimina una riga dal riepilogo
+// Elimina una riga dal riepilogo (doppia conferma gestita dal bottone)
 function eliminaRigaRiepilogo(idx){
   if (!SL.riepilogo_override || !SL.riepilogo_override.ricambi) return;
   const el = SL.riepilogo_override.ricambi[idx];
   if (!el) return;
-  if (!confirm(`Eliminare "${el.descrizione || '(senza descrizione)'}" dal riepilogo?`)) return;
   SL.riepilogo_override.ricambi.splice(idx, 1);
   SL._dirty = true;
   renderRiepilogo();
@@ -2138,6 +2591,9 @@ function aggiornaTotali(){
   if(odEl) odEl.value = fmtH(hTot);
 
   aggiornaRettifica();
+
+  // Banner olio duplicato (form + DDT)
+  if (typeof aggiornaBannerOlio === 'function') aggiornaBannerOlio();
 
   // Renderizza il riepilogo (auto-popola se assente)
   if (typeof renderRiepilogo === 'function') renderRiepilogo();
