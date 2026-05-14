@@ -228,39 +228,62 @@ async function caricaDaSupabase(){
       note:    s.problema||''
     }));
 
-    // ─── Calcolo data ultimo rapportino/DDT per ogni scheda ───
-    // 1° tentativo: max(data) da rapportini_giornalieri
+    // ─── Calcolo data ultima attività per ogni scheda ───
+    // Uso TIMESTAMP completi (non solo date) per ordinare al minuto:
+    // se più schede sono nello stesso giorno, l'ora determina chi viene prima.
+    // 1° tentativo: max(created_at) da rapportini_giornalieri
     try {
       const { data: rg } = await _sb.from('rapportini_giornalieri')
-        .select('scheda_id, data');
-      const dtRap = {}; // scheda_id → max data rapportino
+        .select('scheda_id, data, created_at');
+      const dtRap = {};   // scheda_id → timestamp ISO completo (per ordinamento)
+      const dtRapVis = {}; // scheda_id → data "AAAA-MM-GG" (per visualizzazione)
       (rg||[]).forEach(r=>{
-        if (!r.scheda_id || !r.data) return;
-        if (!dtRap[r.scheda_id] || r.data > dtRap[r.scheda_id]) dtRap[r.scheda_id] = r.data;
+        if (!r.scheda_id) return;
+        // Per ORDINAMENTO: created_at è ISO con ora; fallback su data
+        const ts = r.created_at || r.data || '';
+        if (!ts) return;
+        if (!dtRap[r.scheda_id] || ts > dtRap[r.scheda_id]) {
+          dtRap[r.scheda_id] = ts;
+          dtRapVis[r.scheda_id] = r.data || String(ts).slice(0,10);
+        }
       });
       TUTTE.forEach(s=>{
-        if (dtRap[s.id]) { s.dataAttivita = dtRap[s.id]; s.dataFonte = 'rapportino'; }
+        if (dtRap[s.id]) {
+          s.dataAttivitaTs = dtRap[s.id];        // timestamp completo (ordinamento)
+          s.dataAttivita   = dtRapVis[s.id];     // solo data (visualizzazione)
+          s.dataFonte      = 'rapportino';
+        }
       });
 
-      // 2° tentativo (solo per schede ancora senza dataAttivita aggiornata): DDT per targa
+      // 2° tentativo (solo per schede senza rapportini): DDT per targa
       const targheSenzaData = TUTTE.filter(s=>!s.dataFonte && s.targa).map(s=>s.targa);
       if (targheSenzaData.length) {
         const { data: ddt } = await _sb.from('ddt_in_arrivo')
           .select('targa_estratta, email_data')
           .in('targa_estratta', [...new Set(targheSenzaData)]);
-        const dtDdt = {}; // targa → max email_data
+        const dtDdt = {};
+        const dtDdtVis = {};
         (ddt||[]).forEach(d=>{
           if (!d.targa_estratta || !d.email_data) return;
-          const dataSolo = String(d.email_data).slice(0,10); // ISO → "AAAA-MM-GG"
-          if (!dtDdt[d.targa_estratta] || dataSolo > dtDdt[d.targa_estratta]) dtDdt[d.targa_estratta] = dataSolo;
+          const ts = d.email_data; // già timestamp completo
+          if (!dtDdt[d.targa_estratta] || ts > dtDdt[d.targa_estratta]) {
+            dtDdt[d.targa_estratta] = ts;
+            dtDdtVis[d.targa_estratta] = String(ts).slice(0,10);
+          }
         });
         TUTTE.forEach(s=>{
           if (!s.dataFonte && s.targa && dtDdt[s.targa]) {
-            s.dataAttivita = dtDdt[s.targa];
-            s.dataFonte = 'ddt';
+            s.dataAttivitaTs = dtDdt[s.targa];
+            s.dataAttivita   = dtDdtVis[s.targa];
+            s.dataFonte      = 'ddt';
           }
         });
       }
+
+      // Fallback: per schede ancora senza nulla, uso data manuale come ts
+      TUTTE.forEach(s=>{
+        if (!s.dataAttivitaTs) s.dataAttivitaTs = s.data || '';
+      });
     } catch(e2){
       console.warn('Calcolo data attività fallito (non critico):', e2);
     }
@@ -328,9 +351,10 @@ function renderKpi(){
 }
 
 function renderLista(){
-  // Ordino per data ULTIMA ATTIVITÀ (rapportino o DDT più recente), non per data scheda.
-  // Fallback su s.data se non c'è attività.
-  const keyOrdine = s => String(s.dataAttivita || s.data || '');
+  // Ordino per TIMESTAMP completo dell'ultima attività (data + ora).
+  // Così schede dello stesso giorno sono ordinate per orario inserimento,
+  // non alfabeticamente per targa o altro.
+  const keyOrdine = s => String(s.dataAttivitaTs || s.data || '');
   const schede     = _filtrate.filter(s=>s.tipo!=='S').sort((a,b)=>keyOrdine(b).localeCompare(keyOrdine(a)));
   const preventivi = _filtrate.filter(s=>s.tipo==='S').sort((a,b)=>keyOrdine(b).localeCompare(keyOrdine(a)));
 
