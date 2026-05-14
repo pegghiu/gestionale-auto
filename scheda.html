@@ -2896,7 +2896,7 @@ async function caricaScheda(id){
     let rapsReali = null;
     try {
       const { data: rr, error: errR } = await _sb.from('rapportini_giornalieri')
-        .select('id, numero, data, tecnico, note, ore, elementi, h_totali, tot_ore, tot_ricambi, totale, created_at')
+        .select('id, numero, data, tecnico, note, ore, elementi, h_totali, tot_ore, tot_ricambi, totale, created_at, submitted_at')
         .eq('scheda_id', s.id)
         .order('data', { ascending: true })
         .order('created_at', { ascending: true });
@@ -2906,7 +2906,7 @@ async function caricaScheda(id){
     if (rapsReali && rapsReali.length > 0) {
       SL.rapportini = rapsReali.map(r => ({
         _id:       r.id || Date.parse(r.created_at) || _rapId++,
-        _dbId:     r.id,    // id originale di rapportini_giornalieri (per future modifiche)
+        _dbId:     r.id,
         numero:    r.numero,
         data:      r.data,
         tecnico:   r.tecnico || '',
@@ -2916,10 +2916,10 @@ async function caricaScheda(id){
         h_totali:  r.h_totali  || 0,
         tot_ore:   r.tot_ore   || 0,
         tot_ricambi: r.tot_ricambi || 0,
-        totale:    r.totale    || 0
+        totale:    r.totale    || 0,
+        submitted_at: r.submitted_at  // preserva l'orario di submit Form originale
       }));
     } else {
-      // Fallback: usa il mirror JSONB
       SL.rapportini = s.rapportini_giornalieri || [];
     }
 
@@ -3097,27 +3097,43 @@ async function salvaBozzaSilente(){
 async function salvaRapportiniSeparati(schedaId){
   if(!schedaId || !SL.rapportini.length) return;
   try {
+    // PRESERVAZIONE submitted_at: prima di cancellare i rapportini esistenti
+    // leggo i loro submitted_at indicizzati per numero, così posso reiniettarli
+    // nei nuovi record. Questo evita che il delete+insert riazzeri l'ordinamento.
+    const { data: esistenti } = await _sb.from('rapportini_giornalieri')
+      .select('numero, submitted_at')
+      .eq('scheda_id', schedaId);
+    const subMap = {}; // numero → submitted_at
+    (esistenti||[]).forEach(r=>{
+      if (r.numero && r.submitted_at) subMap[r.numero] = r.submitted_at;
+    });
+
     // Cancella quelli esistenti e reinserisce (upsert semplice)
     await _sb.from('rapportini_giornalieri').delete().eq('scheda_id', schedaId);
     if(SL.rapportini.length === 0) return;
 
+    const oraISO = new Date().toISOString();
     const righe = SL.rapportini.map(r=>{
       const hTot  = (r.ore||[]).reduce((s,o)=>s+(parseFloat(o.ore)||0),0);
       const tOre  = (r.ore||[]).reduce((s,o)=>s+(parseFloat(o.ore)||0)*(parseFloat(o.tariffa)||0),0);
       const tRic  = (r.elementi||[]).filter(el=>el.tipo==='ricambio')
                       .reduce((s,el)=>s+(el.qty||0)*(el.prezzo||0),0);
+      // submitted_at: preserva l'originale se esiste, altrimenti usa ora corrente
+      // (caso: rapportino creato manualmente da scheda, non da Form)
+      const submitted = subMap[r.numero] || r.submitted_at || oraISO;
       return {
-        scheda_id:   schedaId,
-        numero:      r.numero||'',
-        data:        r.data || new Date().toISOString().slice(0,10),
-        tecnico:     r.tecnico||SL.tecnico||'',
-        note:        r.note||'',
-        ore:         r.ore||[],
-        elementi:    r.elementi||[],
-        h_totali:    hTot,
-        tot_ore:     tOre,
-        tot_ricambi: tRic,
-        totale:      tOre+tRic
+        scheda_id:    schedaId,
+        numero:       r.numero||'',
+        data:         r.data || oraISO.slice(0,10),
+        tecnico:      r.tecnico||SL.tecnico||'',
+        note:         r.note||'',
+        ore:          r.ore||[],
+        elementi:     r.elementi||[],
+        h_totali:     hTot,
+        tot_ore:      tOre,
+        tot_ricambi:  tRic,
+        totale:       tOre+tRic,
+        submitted_at: submitted
       };
     });
 
