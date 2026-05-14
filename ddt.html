@@ -235,6 +235,45 @@ textarea{resize:vertical;min-height:70px;line-height:1.6}
     <div id="emailQueueList" style="display:flex;flex-direction:column;gap:0"></div>
   </div>
 
+  <!-- ── DDT ORFANI (targa valida ma nessuna scheda bozza) ─── -->
+  <div class="card" id="cardOrfani" style="display:none">
+    <div class="ch">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="ct">🚨 DDT orfani</span>
+        <span class="badge" id="orfaniCount" style="background:#FFE8DC;color:#A04A1A">0</span>
+        <span style="font-size:11px;color:var(--text-m)">Targa valida ma nessuna scheda bozza esistente</span>
+      </div>
+      <button class="btn btn-g btn-sm" onclick="caricaOrfani()">↻ Aggiorna</button>
+    </div>
+    <div id="orfaniList" style="display:flex;flex-direction:column;gap:0"></div>
+  </div>
+
+  <!-- ── DDT SENZA TARGA (ricambi di scorta o targa non parsata) ── -->
+  <div class="card" id="cardSenzaTarga" style="display:none">
+    <div class="ch">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="ct">📦 DDT senza targa</span>
+        <span class="badge" id="senzaTargaCount" style="background:#E8E8DC;color:#5A5A40">0</span>
+        <span style="font-size:11px;color:var(--text-m)">Ricambi di scorta o targa non riconosciuta dal parser</span>
+      </div>
+      <button class="btn btn-g btn-sm" onclick="caricaSenzaTarga()">↻ Aggiorna</button>
+    </div>
+    <div id="senzaTargaList" style="display:flex;flex-direction:column;gap:0"></div>
+  </div>
+
+  <!-- ── DDT RESO DA ABBINARE (BL-RCL-* dal fornitore) ─── -->
+  <div class="card" id="cardDdtReso" style="display:none">
+    <div class="ch">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="ct">↩ DDT reso da abbinare</span>
+        <span class="badge" id="ddtResoCount" style="background:#FFDCDC;color:#A02020">0</span>
+        <span style="font-size:11px;color:var(--text-m)">Conferme di reso dal fornitore — abbinale ai resi segnati nelle schede</span>
+      </div>
+      <button class="btn btn-g btn-sm" onclick="caricaDdtReso()">↻ Aggiorna</button>
+    </div>
+    <div id="ddtResoList" style="display:flex;flex-direction:column;gap:0"></div>
+  </div>
+
   <!-- ZONA UPLOAD AI -->
   <div class="card">
     <div class="ch">
@@ -1775,8 +1814,16 @@ let _pollTimer = null;
 
 function startEmailPolling(){
   pollEmailQueue();
-  // Polling ogni 45 secondi
-  _pollTimer = setInterval(pollEmailQueue, 45000);
+  caricaOrfani();
+  caricaSenzaTarga();
+  caricaDdtReso();
+  // Polling ogni 45 secondi (queue email + orfani + senza targa + ddt reso)
+  _pollTimer = setInterval(()=>{
+    pollEmailQueue();
+    caricaOrfani();
+    caricaSenzaTarga();
+    caricaDdtReso();
+  }, 45000);
 }
 
 async function pollEmailQueue(){
@@ -1915,6 +1962,758 @@ function caricaDDTEmailConTarga(id){
     }
   }
   caricaDDTEmail(id);
+}
+
+// ══════════════════════════════════════════════════════════
+// DDT ORFANI
+// DDT con targa valida ma senza scheda bozza esistente.
+// Spesso accade quando il DDT arriva PRIMA che venga creata la scheda,
+// oppure quando la targa nel DDT è scritta in modo non standard.
+// ══════════════════════════════════════════════════════════
+let ORFANI_CACHE = [];
+
+async function caricaOrfani(){
+  try {
+    // 1. Carico tutti i DDT da_confermare con targa
+    const { data: pendenti } = await _sb.from('ddt_in_arrivo')
+      .select('id, email_oggetto, email_da, email_data, targa_estratta, ddt_estratto, stato')
+      .eq('stato','da_confermare')
+      .not('targa_estratta','is',null)
+      .order('email_data',{ascending:false})
+      .limit(200);
+
+    if (!pendenti || !pendenti.length) {
+      ORFANI_CACHE = [];
+      renderOrfani();
+      return;
+    }
+
+    // 2. Targhe candidate (uppercase, trim)
+    const targhe = [...new Set(pendenti
+      .map(d => String(d.targa_estratta||'').toUpperCase().trim())
+      .filter(t => t.length >= 4))];
+
+    // 3. Carico le schede BOZZA per quelle targhe (in batch)
+    const { data: schede } = await _sb.from('rapportini')
+      .select('id, numero, targa, stato, data')
+      .in('targa', targhe)
+      .eq('stato','bozza');
+    const targheConBozza = new Set((schede||[]).map(s => String(s.targa||'').toUpperCase()));
+
+    // 4. Filtro: orfani = pendenti con targa MA senza scheda bozza per quella targa
+    const orfani = pendenti.filter(d => {
+      const t = String(d.targa_estratta||'').toUpperCase().trim();
+      if (t.length < 4) return false;
+      // tipo_movimento reso → non è orfano, è da gestire manualmente
+      if (d.ddt_estratto?.tipo_movimento === 'reso') return false;
+      return !targheConBozza.has(t);
+    });
+
+    ORFANI_CACHE = orfani;
+    renderOrfani();
+  } catch(e){
+    console.error('caricaOrfani:', e);
+    toast('Errore caricamento DDT orfani','err');
+  }
+}
+
+function renderOrfani(){
+  const card  = document.getElementById('cardOrfani');
+  const list  = document.getElementById('orfaniList');
+  const count = document.getElementById('orfaniCount');
+  if (!card || !list) return;
+
+  if (!ORFANI_CACHE.length) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = '';
+  count.textContent = ORFANI_CACHE.length;
+
+  list.innerHTML = ORFANI_CACHE.map(d => {
+    const targa = String(d.targa_estratta||'').toUpperCase().trim();
+    const ts = d.email_data
+      ? new Date(d.email_data).toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'2-digit'})
+      : '';
+    const telaio = d.ddt_estratto?.telaio || '';
+    const modello = d.ddt_estratto?.modello || '';
+    const numDdt = d.ddt_estratto?.numero || '';
+    const fornitore = d.ddt_estratto?.fornitore || '';
+    const nRighe = (d.ddt_estratto?.righe||[]).length;
+    const totRighe = (d.ddt_estratto?.righe||[]).reduce((s,r)=>s+((+r.qta||1)*(+r.prezzo_netto||0)),0);
+
+    return `<div class="eq-item">
+      <div class="eq-meta">
+        <div class="eq-from">${ts} · ${fornitore || '—'}</div>
+        <div class="eq-sogg">${d.email_oggetto || ''}</div>
+        <div class="eq-info">
+          <span class="eq-pill eq-targa">${targa}</span>
+          ${modello ? `<span class="eq-pill" style="background:var(--accent-l);color:var(--accent-d);font-size:11px">${modello}</span>` : ''}
+          ${telaio ? `<span class="eq-pill" style="font-family:monospace;font-size:10px">${telaio}</span>` : ''}
+          ${numDdt ? `<span class="eq-pill">DDT ${numDdt}</span>` : ''}
+          ${nRighe ? `<span class="eq-pill">${nRighe} righe · €${totRighe.toFixed(2)}</span>` : ''}
+        </div>
+      </div>
+      <div class="eq-actions" style="gap:6px">
+        <button class="btn btn-p btn-sm" title="Crea una nuova scheda bozza con questa targa e collega il DDT"
+          onclick="orfanoCreaScheda('${d.id}')">➕ Crea scheda</button>
+        <button class="btn btn-s btn-sm" title="Collega manualmente a una scheda esistente (anche con targa diversa)"
+          onclick="orfanoCollegaScheda('${d.id}')">🔗 Collega...</button>
+        <button class="btn btn-g btn-sm" title="Ignora questo DDT (lo marca come confermato senza creare scheda)"
+          onclick="orfanoIgnora('${d.id}', this)">🗑 Ignora</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function orfanoCreaScheda(ddtId){
+  const ddt = ORFANI_CACHE.find(d => d.id === ddtId);
+  if (!ddt) return;
+  const targa = String(ddt.targa_estratta||'').toUpperCase().trim();
+  if (!targa) { toast('Targa mancante','err'); return; }
+
+  if (!confirm(`Creare una nuova scheda bozza per la targa ${targa}?\n\nIl DDT verrà collegato automaticamente dal prossimo run di auto-confirm-ddt (o subito se invochi tu).`)) return;
+
+  try {
+    // Genero prossimo numero scheda
+    const anno = String(new Date().getFullYear()).slice(-2);
+    const { data: tops } = await _sb.from('rapportini')
+      .select('numero_base')
+      .like('numero_base', `${anno}/%`)
+      .not('numero_base','like',`${anno}/R/%`)
+      .order('numero_base',{ascending:false}).limit(1);
+    let next = 1;
+    if (tops && tops.length) {
+      const m = String(tops[0].numero_base).match(/\/(\d+)/);
+      if (m) next = parseInt(m[1]) + 1;
+    }
+    const nuovoNumero = `${anno}/${String(next).padStart(4,'0')}`;
+    const modello = ddt.ddt_estratto?.modello || '';
+
+    // Inserisci nuova scheda bozza
+    const { data: nuova, error: errIns } = await _sb.from('rapportini').insert({
+      numero:      nuovoNumero,
+      numero_base: nuovoNumero,
+      tipo:        '',
+      stato:       'bozza',
+      data:        new Date().toISOString().slice(0,10),
+      targa:       targa,
+      modello:     modello,
+      problema:    `Auto-creata da DDT orfano ${ddt.email_oggetto||''}`,
+      imponibile:  0,
+      iva:         0,
+      totale:      0,
+      rapportini_giornalieri: []
+    }).select().single();
+
+    if (errIns) throw errIns;
+
+    toast(`✓ Scheda ${nuovoNumero} creata per ${targa}. Aggiorna in qualche secondo per vedere il DDT collegato.`, 'ok', 5000);
+
+    // Invocazione auto-confirm-ddt (best effort, può fallire per CORS)
+    try {
+      await _sb.functions.invoke('auto-confirm-ddt', { body: {} });
+    } catch(_){}
+
+    // Ricarica lista orfani
+    setTimeout(caricaOrfani, 2000);
+  } catch(e){
+    console.error('orfanoCreaScheda:', e);
+    toast('Errore creazione scheda: ' + (e.message||e), 'err');
+  }
+}
+
+async function orfanoCollegaScheda(ddtId){
+  const ddt = ORFANI_CACHE.find(d => d.id === ddtId);
+  if (!ddt) return;
+  const targaOrig = String(ddt.targa_estratta||'').toUpperCase().trim();
+
+  // Carico schede bozza (e aperta, per casi in cui si lavora ancora)
+  const { data: schede } = await _sb.from('rapportini')
+    .select('id, numero, targa, modello, stato, data')
+    .in('stato',['bozza','aperta'])
+    .order('numero',{ascending:false}).limit(100);
+
+  if (!schede || !schede.length) {
+    toast('Nessuna scheda bozza/aperta disponibile','info');
+    return;
+  }
+
+  // Costruisci dialog di scelta semplice via prompt-list
+  const opzioni = schede.map((s,i)=>`${i+1}. ${s.numero} - ${s.targa||'(no targa)'} ${s.modello||''}`).join('\n');
+  const scelta = prompt(`DDT orfano: ${targaOrig}\n\nA quale scheda lo collego? (inserisci il numero a sinistra)\n\n${opzioni}\n\n0 = annulla`);
+  if (!scelta || scelta === '0') return;
+
+  const idx = parseInt(scelta) - 1;
+  if (!schede[idx]) { toast('Scelta non valida','err'); return; }
+
+  const schedaTarget = schede[idx];
+  if (!confirm(`Collegare il DDT (targa ${targaOrig}) alla scheda ${schedaTarget.numero} (targa ${schedaTarget.targa})?`)) return;
+
+  try {
+    // Aggiorno il DDT con la targa della scheda target, così auto-confirm-ddt lo aggancia
+    const { error } = await _sb.from('ddt_in_arrivo')
+      .update({ targa_estratta: schedaTarget.targa })
+      .eq('id', ddtId);
+    if (error) throw error;
+
+    toast(`✓ DDT rietichettato come ${schedaTarget.targa}. Verrà collegato a ${schedaTarget.numero} al prossimo run di auto-confirm-ddt.`, 'ok', 5000);
+
+    try { await _sb.functions.invoke('auto-confirm-ddt', { body: {} }); } catch(_){}
+    setTimeout(caricaOrfani, 2000);
+  } catch(e){
+    console.error('orfanoCollegaScheda:', e);
+    toast('Errore: ' + (e.message||e), 'err');
+  }
+}
+
+async function orfanoIgnora(ddtId, btn){
+  // Conferma con doppio click pattern (per evitare elimina accidentale)
+  if (!btn._armato) {
+    btn._armato = true;
+    btn._origText = btn.textContent;
+    btn.textContent = 'Sicuro?';
+    btn.style.background = 'var(--err)';
+    btn.style.color = '#FFF';
+    setTimeout(()=>{
+      btn._armato = false;
+      btn.textContent = btn._origText;
+      btn.style.background = '';
+      btn.style.color = '';
+    }, 3000);
+    return;
+  }
+  try {
+    const { error } = await _sb.from('ddt_in_arrivo')
+      .update({
+        stato: 'confermato',
+        confermato_at: new Date().toISOString(),
+        confermato_da: 'orfano-ignorato'
+      })
+      .eq('id', ddtId);
+    if (error) throw error;
+    toast('DDT ignorato','ok');
+    caricaOrfani();
+  } catch(e){
+    console.error('orfanoIgnora:', e);
+    toast('Errore: ' + (e.message||e), 'err');
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// DDT SENZA TARGA
+// Ricambi di scorta (BL-BAN-*: oli, lampadine, bombole gas) o DDT
+// dove il parser non ha estratto la targa anche se il documento ce l'ha.
+// Tre azioni: assegna targa manualmente, carica in magazzino, scarta.
+// ══════════════════════════════════════════════════════════
+let SENZA_TARGA_CACHE = [];
+
+async function caricaSenzaTarga(){
+  try {
+    const { data } = await _sb.from('ddt_in_arrivo')
+      .select('id, email_oggetto, email_da, email_data, targa_estratta, ddt_estratto, stato')
+      .eq('stato','da_confermare')
+      .order('email_data',{ascending:false})
+      .limit(200);
+
+    // Filtro: senza targa valida E non reso
+    const senzaTarga = (data||[]).filter(d => {
+      const t = String(d.targa_estratta||'').toUpperCase().trim();
+      const targaValida = t.length >= 4;
+      if (targaValida) return false;
+      if (d.ddt_estratto?.tipo_movimento === 'reso') return false;
+      return true;
+    });
+
+    SENZA_TARGA_CACHE = senzaTarga;
+    renderSenzaTarga();
+  } catch(e){
+    console.error('caricaSenzaTarga:', e);
+    toast('Errore caricamento DDT senza targa','err');
+  }
+}
+
+function renderSenzaTarga(){
+  const card  = document.getElementById('cardSenzaTarga');
+  const list  = document.getElementById('senzaTargaList');
+  const count = document.getElementById('senzaTargaCount');
+  if (!card || !list) return;
+
+  if (!SENZA_TARGA_CACHE.length) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = '';
+  count.textContent = SENZA_TARGA_CACHE.length;
+
+  list.innerHTML = SENZA_TARGA_CACHE.map(d => {
+    const ts = d.email_data
+      ? new Date(d.email_data).toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'2-digit'})
+      : '';
+    const telaio = d.ddt_estratto?.telaio || '';
+    const numDdt = d.ddt_estratto?.numero || '';
+    const fornitore = d.ddt_estratto?.fornitore || '';
+    const righe = d.ddt_estratto?.righe || [];
+    const totVal = righe.reduce((s,r)=>s+((+r.qta||1)*(+r.prezzo_netto||0)),0);
+
+    // Mostro le prime 2 righe come anteprima
+    const anteprima = righe.slice(0,2).map(r=>{
+      const desc = String(r.descrizione||'').slice(0,50);
+      const qta = r.qta || 1;
+      return `<div style="font-size:11px;color:var(--text-m);font-family:monospace">  ${qta}× ${desc}${desc.length>=50?'…':''}</div>`;
+    }).join('');
+    const altrePoche = righe.length > 2 ? `<div style="font-size:11px;color:var(--text-l);font-style:italic">  +${righe.length-2} altre righe…</div>` : '';
+
+    return `<div class="eq-item">
+      <div class="eq-meta">
+        <div class="eq-from">${ts} · ${fornitore || '—'}</div>
+        <div class="eq-sogg">${d.email_oggetto || ''}</div>
+        <div class="eq-info">
+          ${telaio ? `<span class="eq-pill" style="font-family:monospace;font-size:10px;background:#FFF8E6;color:#806000" title="Telaio rilevato — può aiutare a identificare il veicolo">VIN ${telaio}</span>` : ''}
+          ${numDdt ? `<span class="eq-pill">DDT ${numDdt}</span>` : ''}
+          <span class="eq-pill">${righe.length} righe · €${totVal.toFixed(2)}</span>
+        </div>
+        ${anteprima}${altrePoche}
+      </div>
+      <div class="eq-actions" style="gap:6px;flex-wrap:wrap;justify-content:flex-end">
+        <div style="display:flex;align-items:center;gap:4px">
+          <input type="text" id="manual-targa-${d.id}" placeholder="Targa..."
+            maxlength="7"
+            oninput="this.value=this.value.replace(/[^A-Z0-9]/gi,'').toUpperCase()"
+            style="font-family:monospace;font-weight:700;letter-spacing:.1em;width:90px;padding:3px 7px;font-size:13px;border:1px solid var(--border);border-radius:4px;text-transform:uppercase">
+          <button class="btn btn-p btn-sm" title="Assegna la targa al DDT (poi finirà in 'DDT orfani' se non c'è scheda bozza)"
+            onclick="senzaTargaAssegna('${d.id}')">🚗 Assegna</button>
+        </div>
+        <button class="btn btn-s btn-sm" title="Carica le righe del DDT come scorta in magazzino e marca confermato"
+          onclick="senzaTargaMagazzino('${d.id}', this)">📦 Magazzino</button>
+        <button class="btn btn-g btn-sm" title="Scarta il DDT (lo marca confermato senza fare niente)"
+          onclick="senzaTargaScarta('${d.id}', this)">🗑 Scarta</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function senzaTargaAssegna(ddtId){
+  const input = document.getElementById('manual-targa-'+ddtId);
+  if (!input) return;
+  const targa = String(input.value||'').replace(/[^A-Z0-9]/gi,'').toUpperCase();
+  if (targa.length < 4) { toast('Inserisci almeno 4 caratteri della targa','err'); return; }
+
+  try {
+    const { error } = await _sb.from('ddt_in_arrivo')
+      .update({ targa_estratta: targa })
+      .eq('id', ddtId);
+    if (error) throw error;
+    toast(`✓ Targa ${targa} assegnata. Il DDT è ora visibile in "DDT orfani".`, 'ok', 5000);
+    // Provo auto-confirm (potrebbe esserci già una scheda bozza con quella targa)
+    try { await _sb.functions.invoke('auto-confirm-ddt', { body: {} }); } catch(_){}
+    setTimeout(()=>{ caricaSenzaTarga(); caricaOrfani(); }, 1500);
+  } catch(e){
+    console.error('senzaTargaAssegna:', e);
+    toast('Errore: ' + (e.message||e), 'err');
+  }
+}
+
+async function senzaTargaMagazzino(ddtId, btn){
+  // Conferma doppio click
+  if (!btn._armato) {
+    btn._armato = true;
+    btn._origText = btn.textContent;
+    btn.textContent = '✓ Conferma magazzino';
+    btn.style.background = 'var(--accent)';
+    btn.style.color = '#FFF';
+    setTimeout(()=>{
+      btn._armato = false;
+      btn.textContent = btn._origText;
+      btn.style.background = '';
+      btn.style.color = '';
+    }, 3000);
+    return;
+  }
+
+  const ddt = SENZA_TARGA_CACHE.find(d=>d.id===ddtId);
+  if (!ddt) return;
+  const righe = ddt.ddt_estratto?.righe || [];
+  const fornitore = ddt.ddt_estratto?.fornitore || '';
+  const numDdt = ddt.ddt_estratto?.numero || '';
+
+  try {
+    // 1. Per ogni riga, upsert in articoli (incrementa qta se codice esiste)
+    let aggiunti = 0, aggiornati = 0;
+    for (const r of righe) {
+      const codice = String(r.codice||'').trim();
+      const desc = String(r.descrizione||'').trim();
+      const qta = +r.qta || 1;
+      const costo = +r.prezzo_netto || 0;
+      if (!codice && !desc) continue;
+
+      // Cerca articolo per codice (se codice presente) o per descrizione
+      let esistente = null;
+      if (codice) {
+        const { data } = await _sb.from('articoli').select('id, qta').eq('codice', codice).limit(1);
+        if (data?.length) esistente = data[0];
+      }
+
+      if (esistente) {
+        await _sb.from('articoli').update({
+          qta: (esistente.qta||0) + qta,
+          updated_at: new Date().toISOString()
+        }).eq('id', esistente.id);
+        aggiornati++;
+      } else {
+        await _sb.from('articoli').insert({
+          codice:        codice || `AUTO_${Date.now().toString().slice(-8)}_${aggiunti}`,
+          descrizione:   desc || codice,
+          tipo:          'ricambio',
+          um:            'NR',
+          qta:           qta,
+          soglia_minima: 1,
+          costo_acquisto: costo,
+          prezzo_vendita: 0,
+          note:          `Da DDT ${numDdt} ${fornitore}`.trim()
+        });
+        aggiunti++;
+      }
+    }
+
+    // 2. Marca DDT come confermato
+    await _sb.from('ddt_in_arrivo')
+      .update({
+        stato: 'confermato',
+        confermato_at: new Date().toISOString(),
+        confermato_da: 'magazzino-scorta'
+      })
+      .eq('id', ddtId);
+
+    toast(`✓ Magazzino aggiornato: ${aggiunti} nuovi + ${aggiornati} esistenti`, 'ok', 5000);
+    caricaSenzaTarga();
+    // Refresh KPI articoli/magazzino se la pagina lo supporta
+    try { if (typeof refreshKPI === 'function') refreshKPI(); } catch(_){}
+  } catch(e){
+    console.error('senzaTargaMagazzino:', e);
+    toast('Errore: ' + (e.message||e), 'err');
+  }
+}
+
+async function senzaTargaScarta(ddtId, btn){
+  if (!btn._armato) {
+    btn._armato = true;
+    btn._origText = btn.textContent;
+    btn.textContent = 'Sicuro?';
+    btn.style.background = 'var(--err)';
+    btn.style.color = '#FFF';
+    setTimeout(()=>{
+      btn._armato = false;
+      btn.textContent = btn._origText;
+      btn.style.background = '';
+      btn.style.color = '';
+    }, 3000);
+    return;
+  }
+  try {
+    const { error } = await _sb.from('ddt_in_arrivo')
+      .update({
+        stato: 'confermato',
+        confermato_at: new Date().toISOString(),
+        confermato_da: 'senza-targa-scartato'
+      })
+      .eq('id', ddtId);
+    if (error) throw error;
+    toast('DDT scartato','ok');
+    caricaSenzaTarga();
+  } catch(e){
+    console.error('senzaTargaScarta:', e);
+    toast('Errore: ' + (e.message||e), 'err');
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// DDT RESO DA ABBINARE
+// I BL-RCL-* sono le conferme che il fornitore ti emette quando accetta i
+// resi. Per ogni DDT reso, cerchiamo nei rapportini_giornalieri.elementi le
+// righe con reso=true E reso_confermato!=true E codice simile, e proponiamo
+// il match. Conferma → marca DDT confermato, marca elemento reso_confermato,
+// e segnala la scheda come "reso accreditato" (il prezzo va sottratto).
+// ══════════════════════════════════════════════════════════
+let DDT_RESO_CACHE = [];
+let RESI_PENDENTI_CACHE = []; // tutti gli elementi con reso=true e !reso_confermato
+
+async function caricaDdtReso(){
+  try {
+    // 1. Carico DDT pendenti con tipo_movimento=reso (BL-RCL-*)
+    const { data } = await _sb.from('ddt_in_arrivo')
+      .select('id, email_oggetto, email_data, targa_estratta, ddt_estratto, stato')
+      .eq('stato','da_confermare')
+      .order('email_data',{ascending:false})
+      .limit(200);
+
+    const resi = (data||[]).filter(d => d.ddt_estratto?.tipo_movimento === 'reso');
+    DDT_RESO_CACHE = resi;
+
+    // 2. Carico tutti i resi pendenti dalle schede
+    await caricaResiPendenti();
+
+    renderDdtReso();
+  } catch(e){
+    console.error('caricaDdtReso:', e);
+    toast('Errore caricamento DDT reso','err');
+  }
+}
+
+async function caricaResiPendenti(){
+  try {
+    // Carico tutti i rapportini_giornalieri con almeno un elemento.reso=true non confermato.
+    // Postgres JSONB: filtro lato client per semplicità (volumi piccoli)
+    const { data } = await _sb.from('rapportini_giornalieri')
+      .select('id, scheda_id, numero, data, elementi');
+
+    const pendenti = [];
+    (data||[]).forEach(rg => {
+      (rg.elementi||[]).forEach((el, idx) => {
+        if (el.tipo === 'ricambio' && el.reso === true && el.reso_confermato !== true) {
+          pendenti.push({
+            rg_id: rg.id,
+            scheda_id: rg.scheda_id,
+            rap_numero: rg.numero,
+            rap_data: rg.data,
+            el_idx: idx,
+            codice: String(el.codice||'').trim(),
+            descrizione: String(el.descrizione||'').trim(),
+            qty: parseFloat(el.qty)||0,
+            prezzo: parseFloat(el.prezzo)||0,
+            reso_at: el.reso_at
+          });
+        }
+      });
+    });
+
+    // Arricchisco con la targa (via scheda)
+    if (pendenti.length) {
+      const idsSchede = [...new Set(pendenti.map(p=>p.scheda_id))];
+      const { data: schede } = await _sb.from('rapportini').select('id, targa, numero_base').in('id', idsSchede);
+      const schedaInfo = {};
+      schede.forEach(s=>{ schedaInfo[s.id] = { targa: s.targa, numero_base: s.numero_base }; });
+      pendenti.forEach(p=>{
+        p.targa = schedaInfo[p.scheda_id]?.targa || '';
+        p.scheda_numero = schedaInfo[p.scheda_id]?.numero_base || '';
+      });
+    }
+
+    RESI_PENDENTI_CACHE = pendenti;
+  } catch(e){
+    console.error('caricaResiPendenti:', e);
+    RESI_PENDENTI_CACHE = [];
+  }
+}
+
+// Trova il miglior match per una riga DDT reso, cercando tra i RESI_PENDENTI_CACHE
+function trovaMatchReso(riga){
+  const codDdt = String(riga.codice||'').trim().toUpperCase().replace(/\s+/g,'');
+  const descDdt = String(riga.descrizione||'').trim().toUpperCase();
+  if (!codDdt && !descDdt) return null;
+
+  // Pass 1: codice ESATTO (normalizzato senza spazi e case-insensitive)
+  for (const p of RESI_PENDENTI_CACHE) {
+    if (p.codice && p.codice.toUpperCase().replace(/\s+/g,'') === codDdt) return { ...p, _matchType: 'codice', _confidence: 100 };
+  }
+  // Pass 2: codice contenuto (DDT può aggiungere prefix tipo "700 1639933" e in scheda è "1639933")
+  for (const p of RESI_PENDENTI_CACHE) {
+    if (!p.codice) continue;
+    const pc = p.codice.toUpperCase().replace(/\s+/g,'');
+    if (pc.length >= 4 && (codDdt.includes(pc) || pc.includes(codDdt))) return { ...p, _matchType: 'codice-parz', _confidence: 70 };
+  }
+  // Pass 3: descrizione (primi 20 char identici)
+  if (descDdt.length >= 10) {
+    for (const p of RESI_PENDENTI_CACHE) {
+      const pd = p.descrizione.toUpperCase();
+      if (pd.length >= 10 && pd.slice(0,20) === descDdt.slice(0,20)) return { ...p, _matchType: 'desc', _confidence: 50 };
+    }
+  }
+  return null;
+}
+
+function renderDdtReso(){
+  const card  = document.getElementById('cardDdtReso');
+  const list  = document.getElementById('ddtResoList');
+  const count = document.getElementById('ddtResoCount');
+  if (!card || !list) return;
+
+  if (!DDT_RESO_CACHE.length) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = '';
+  count.textContent = DDT_RESO_CACHE.length;
+
+  list.innerHTML = DDT_RESO_CACHE.map(d => {
+    const ts = d.email_data
+      ? new Date(d.email_data).toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'2-digit'})
+      : '';
+    const numDdt = d.ddt_estratto?.numero || '';
+    const fornitore = d.ddt_estratto?.fornitore || '';
+    const righe = d.ddt_estratto?.righe || [];
+    const totVal = righe.reduce((s,r)=>s+((+r.qty||+r.qta||1)*(+r.prezzo_netto||+r.prezzo||0)),0);
+
+    // Match per ogni riga
+    const matches = righe.map(r=>trovaMatchReso(r));
+    const matchOk = matches.filter(m=>m).length;
+    const tutteMatchate = matchOk === righe.length;
+
+    const righeHtml = righe.map((r, idx) => {
+      const m = matches[idx];
+      const desc = String(r.descrizione||'').slice(0,55);
+      const cod = String(r.codice||'').slice(0,18);
+      const qty = r.qty || r.qta || 1;
+      const prezzo = r.prezzo_netto || r.prezzo || 0;
+      if (m) {
+        const conf = m._confidence;
+        const colorConf = conf >= 100 ? '#1A7A3F' : conf >= 70 ? '#A04A1A' : '#A07020';
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:11px;border-bottom:1px dashed #EEE">
+          <div>
+            <span style="font-family:monospace">${cod}</span> ${qty}× ${desc} <span style="color:#888">€${prezzo.toFixed(2)}</span>
+          </div>
+          <div style="color:${colorConf};font-size:10px">
+            → ${m.scheda_numero} ${m.targa} (${m._matchType} ${conf}%)
+          </div>
+        </div>`;
+      }
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:11px;border-bottom:1px dashed #EEE;color:#A02020">
+        <div>
+          <span style="font-family:monospace">${cod}</span> ${qty}× ${desc} <span style="color:#888">€${prezzo.toFixed(2)}</span>
+        </div>
+        <div style="font-size:10px">⚠ nessun match</div>
+      </div>`;
+    }).join('');
+
+    return `<div class="eq-item" style="flex-direction:column;align-items:stretch">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;width:100%">
+        <div class="eq-meta">
+          <div class="eq-from">${ts} · ${fornitore || '—'}</div>
+          <div class="eq-sogg">${d.email_oggetto || ''}</div>
+          <div class="eq-info">
+            ${numDdt ? `<span class="eq-pill">DDT ${numDdt}</span>` : ''}
+            <span class="eq-pill">${righe.length} righe · €${totVal.toFixed(2)}</span>
+            <span class="eq-pill" style="background:${tutteMatchate?'#D8F0DD':'#FFEACA'};color:${tutteMatchate?'#0E5A2A':'#7A4D00'}">
+              ${matchOk}/${righe.length} match
+            </span>
+          </div>
+        </div>
+        <div class="eq-actions" style="gap:6px">
+          ${matchOk > 0 ? `<button class="btn btn-p btn-sm" title="Conferma il reso: marca DDT confermato, segna ${matchOk} elementi come reso_confermato, sottrae il costo dalle schede originali"
+            onclick="ddtResoConferma('${d.id}', this)">✓ Conferma reso (${matchOk})</button>` : ''}
+          <button class="btn btn-g btn-sm" title="Ignora questo DDT senza fare match"
+            onclick="ddtResoIgnora('${d.id}', this)">🗑 Ignora</button>
+        </div>
+      </div>
+      <div style="margin-top:6px;padding:6px 8px;background:#FAFAF8;border-radius:6px">
+        ${righeHtml}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function ddtResoConferma(ddtId, btn){
+  // Conferma doppio click
+  if (!btn._armato) {
+    btn._armato = true;
+    btn._origText = btn.textContent;
+    btn.textContent = '✓ Sicuro?';
+    btn.style.background = 'var(--ok)';
+    btn.style.color = '#FFF';
+    setTimeout(()=>{
+      btn._armato = false;
+      btn.textContent = btn._origText;
+      btn.style.background = '';
+      btn.style.color = '';
+    }, 3000);
+    return;
+  }
+
+  const ddt = DDT_RESO_CACHE.find(d=>d.id===ddtId);
+  if (!ddt) return;
+  const righe = ddt.ddt_estratto?.righe || [];
+
+  try {
+    // Per ogni riga del DDT reso: trova match, aggiorna l'elemento del rapportino
+    // e ricalcola i totali della scheda corrispondente
+    const schedeDaRicalcolare = new Set();
+    const rgDaAggiornare = {}; // rg_id → array elementi aggiornati
+
+    let confermati = 0;
+    for (const r of righe) {
+      const m = trovaMatchReso(r);
+      if (!m) continue;
+
+      // Carica il rapportino_giornaliero corrente
+      const { data: rg } = await _sb.from('rapportini_giornalieri')
+        .select('id, elementi').eq('id', m.rg_id).single();
+      if (!rg) continue;
+
+      const elementi = rg.elementi || [];
+      const target = elementi[m.el_idx];
+      if (!target) continue;
+
+      target.reso_confermato = true;
+      target.reso_confermato_at = new Date().toISOString();
+      target.reso_ddt_id = ddtId;
+
+      rgDaAggiornare[m.rg_id] = elementi;
+      schedeDaRicalcolare.add(m.scheda_id);
+      confermati++;
+    }
+
+    // Scrivi tutti gli aggiornamenti
+    for (const rgId in rgDaAggiornare) {
+      await _sb.from('rapportini_giornalieri')
+        .update({ elementi: rgDaAggiornare[rgId] })
+        .eq('id', rgId);
+    }
+
+    // Marca DDT come confermato
+    await _sb.from('ddt_in_arrivo')
+      .update({
+        stato: 'confermato',
+        confermato_at: new Date().toISOString(),
+        confermato_da: 'reso-abbinato'
+      })
+      .eq('id', ddtId);
+
+    toast(`✓ ${confermati} reso/i confermati · DDT ${ddt.ddt_estratto?.numero||''} chiuso. Riapri le ${schedeDaRicalcolare.size} schede per veder aggiornati i totali.`, 'ok', 6000);
+    caricaDdtReso();
+  } catch(e){
+    console.error('ddtResoConferma:', e);
+    toast('Errore: ' + (e.message||e), 'err');
+  }
+}
+
+async function ddtResoIgnora(ddtId, btn){
+  if (!btn._armato) {
+    btn._armato = true;
+    btn._origText = btn.textContent;
+    btn.textContent = 'Sicuro?';
+    btn.style.background = 'var(--err)';
+    btn.style.color = '#FFF';
+    setTimeout(()=>{
+      btn._armato = false;
+      btn.textContent = btn._origText;
+      btn.style.background = '';
+      btn.style.color = '';
+    }, 3000);
+    return;
+  }
+  try {
+    await _sb.from('ddt_in_arrivo')
+      .update({
+        stato: 'confermato',
+        confermato_at: new Date().toISOString(),
+        confermato_da: 'reso-ignorato'
+      })
+      .eq('id', ddtId);
+    toast('DDT reso ignorato','ok');
+    caricaDdtReso();
+  } catch(e){
+    toast('Errore: ' + (e.message||e), 'err');
+  }
 }
 
 function caricaDDTEmail(id){
