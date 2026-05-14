@@ -1558,6 +1558,15 @@ async function apriSchedaDaEmail(){
   }
 
   // Nessuna scheda trovata — crea nuova
+  // SAFETY: blocco se la targa è vuota. Altrimenti viene creata una scheda
+  // "fantasma" con targa = "" che è dato spurio (es. DDT BL-BAN-* di scorta).
+  if (!DR.targa || String(DR.targa).trim() === '') {
+    toast('⚠ DDT senza targa: impossibile creare scheda automaticamente. Usa la card "📦 DDT senza targa" per gestirlo (Magazzino o Assegna targa).', 'err', 7000);
+    // NON chiamo segnaEmailConfermata — il DDT resta in da_confermare
+    // così l'utente può gestirlo dalla card dedicata.
+    resetDDT();
+    return;
+  }
   const emailId = DR._emailId;
   sessionStorage.setItem('scheda_prefill', JSON.stringify({
     _from: 'ddt', ddt_numero: DR.numero,

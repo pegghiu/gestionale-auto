@@ -2863,6 +2863,17 @@ function caricaDaRapportino(){
     const d = JSON.parse(raw);
     sessionStorage.removeItem('scheda_prefill'); // usa una volta sola
 
+    // SAFETY: blocco se proviene da DDT senza targa.
+    // Una scheda con targa vuota è quasi sempre un errore:
+    //   - DDT scorta (lampadine, oli, bombole) → vanno in magazzino, non in scheda
+    //   - DDT con targa non parsata → vanno assegnati prima da "DDT senza targa"
+    // Tornare alla pagina precedente o restare vuoti evita di sporcare il DB.
+    if (d._from === 'ddt' && (!d.targa || String(d.targa).trim() === '')) {
+      toast('⚠ DDT senza targa: non creo scheda. Vai su DDT → "📦 DDT senza targa" per gestirlo.', 'err', 6000);
+      setTimeout(()=>{ window.location.href = 'ddt.html'; }, 2500);
+      return;
+    }
+
     if(d.targa)   precompilaTarga(d.targa);
     if(d.modello) precompilaModello(d.modello);
     if(d.anno)    { document.getElementById('anno').value = d.anno; SL.anno = d.anno; }
