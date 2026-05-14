@@ -468,16 +468,13 @@ button.btn-blocked:hover{background:var(--ok)}
       </div>
     </div>
 
-    <!-- Banner olio duplicato (form + DDT) -->
-    <div id="bannerOlio" class="banner-conferma" style="display:none;margin:14px 16px 0;background:var(--info-bg);border-color:#9DB4DD;border-left-color:var(--info);color:var(--info)">
+    <!-- Banner olio fuso form + DDT (informativo) -->
+    <div id="bannerOlio" class="banner-conferma" style="display:none;margin:14px 16px 0;background:#FFF8E5;border-color:#F0D88A;border-left-color:#F0A800;color:#7A4D00">
       <span class="ico">🛢️</span>
       <div class="txt" id="bannerOlioTxt">
-        <strong>Olio duplicato:</strong> ho trovato sia olio dal form ORE COMMESSE sia olio nei ricambi DDT.
-        Probabilmente l'olio è stato preso specifico e va tenuto quello del DDT.
+        <strong>Olio dal form fuso con DDT:</strong> nel riepilogo è stata creata una riga unica con il codice e prezzo del DDT e la quantità (litri) segnalata dal dipendente.
+        I rapportini non sono stati modificati.
       </div>
-      <button class="btn btn-p btn-sm" onclick="rimuoviOlioDalForm()" style="white-space:nowrap">
-        Rimuovi olio dal form
-      </button>
     </div>
 
     <!-- Lista rapportini -->
@@ -1927,20 +1924,22 @@ function aggiornaBannerOlio(){
   const txt    = document.getElementById('bannerOlioTxt');
   if (!banner || !txt) return;
 
-  const r = rilevaOlioDuplicato();
-  if (!r.duplicato) {
+  // Mostra banner solo se nel riepilogo c'è una riga FUSA (olio form+DDT)
+  const rip = SL.riepilogo_override;
+  const rigaFusa = (rip?.ricambi||[]).find(el=>el.fuso);
+  if (!rigaFusa) {
     banner.style.display = 'none';
     return;
   }
 
-  // Messaggio dinamico con avviso litri non coincidenti
-  const fmtL = n => Number.isInteger(n) ? n+'L' : n.toFixed(1).replace('.',',')+'L';
-  let msg = `<strong>Olio duplicato:</strong> ho trovato olio dal form (${fmtL(r.litriForm)}) e olio nei ricambi DDT (${fmtL(r.litriDdt)}). `;
-  if (Math.abs(r.litriForm - r.litriDdt) > 0.01) {
-    msg += `<strong style="color:var(--err)">⚠ Litri non coincidenti</strong> (differenza ${fmtL(Math.abs(r.litriForm-r.litriDdt))}). `;
-  }
-  msg += `Probabilmente l'olio è stato preso specifico e va tenuto quello del DDT.`;
-  txt.innerHTML = msg;
+  const fmtL = n => Number.isInteger(n) ? n+'L' : (parseFloat(n)||0).toFixed(1).replace('.',',')+'L';
+  const qtyForm = rigaFusa._qtyForm || rigaFusa.qty || 0;
+  const qtyDdt  = rigaFusa._qtyDdt  || 0;
+  txt.innerHTML = `<strong>🛢️ Olio dal form fuso con DDT:</strong>
+    riepilogo aggiornato a <strong>${rigaFusa.codice||'(DDT)'}</strong>
+    con qty <strong>${fmtL(qtyForm)}</strong> (segnalata dal dipendente).
+    Nel DDT c'erano ${fmtL(qtyDdt)} ma il riepilogo riporta quanto effettivamente versato.
+    I rapportini originali non sono stati modificati.`;
   banner.style.display = 'flex';
 }
 
@@ -2032,47 +2031,89 @@ function categoriaRicambio(descrizione, codice){
   return 'altro';
 }
 
-// Genera il riepilogo dai rapportini attuali (aggregato per codice)
+// Genera il riepilogo dai rapportini attuali (aggregato per codice).
+//
+// REGOLA SPECIALE OLIO MOTORE:
+// Il dipendente nel Form ORE COMMESSE inserisce i litri usati →
+// process-ore-commesse crea una riga "LIQ_OLIO_*" con qty = litri.
+// L'olio vero arriva dal DDT (con codice e prezzo del fornitore).
+// Nel riepilogo FONDIAMO le due righe:
+//   - codice/descrizione/prezzo DEL DDT (info reali del prodotto)
+//   - quantità DEL FORM (litri effettivamente versati dal dipendente)
+//   - flag .fuso=true per evidenziare l'automatismo nella UI
+// I rapportini originali NON vengono toccati.
 function generaRiepilogoDaRapportini(){
-  // Aggrega ricambi per codice (fallback su descrizione se codice vuoto)
-  const mappa = {}; // chiave → { categoria, descrizione, qty, prezzo, codice }
+  const mappa = {};
   let mdOreTotali = 0;
   let mdEuroTotali = 0;
 
+  // ── PASS 1: aggrego come prima ──
   SL.rapportini.forEach(r=>{
-    // Manodopera
     (r.ore||[]).forEach(o=>{
       const h = parseFloat(o.ore)||0;
       const t = parseFloat(o.tariffa)||0;
       mdOreTotali += h;
       mdEuroTotali += h * t;
     });
-    // Ricambi
     (r.elementi||[]).filter(el=>el.tipo==='ricambio').forEach(el=>{
       const codice = (el.codice||'').trim();
       const desc   = (el.descrizione||'').trim();
       const qty    = parseFloat(el.qty)||0;
       const prezzo = parseFloat(el.prezzo)||0;
-      if (qty <= 0) return; // salta righe vuote
+      if (qty <= 0) return;
 
       const chiave = codice || ('desc:'+desc.toLowerCase());
       if (mappa[chiave]) {
         mappa[chiave].qty += qty;
-        // Prezzo: tieni il più alto (di solito il listino corretto)
         if (prezzo > mappa[chiave].prezzo) mappa[chiave].prezzo = prezzo;
       } else {
         mappa[chiave] = {
-          codice: codice,
-          descrizione: desc,
-          qty: qty,
-          prezzo: prezzo,
+          codice, descrizione: desc, qty, prezzo,
           categoria: categoriaRicambio(desc, codice)
         };
       }
     });
   });
 
-  // Ordina per categoria (secondo RIEP_CATEGORIE) poi alfabetico
+  // ── PASS 2: FUSIONE OLIO FORM ↔ DDT ──
+  // Trovo righe "olio dal form" (LIQ_OLIO_*) e "olio dal DDT" (categoria=olio
+  // e codice non LIQ_*). Se entrambe presenti, copio info DDT → form e
+  // rimuovo la riga DDT (mantenendo qty form).
+  const chiaviForm = Object.keys(mappa).filter(k=>k.toUpperCase().startsWith('LIQ_OLIO'));
+  const chiaviDdt  = Object.keys(mappa).filter(k=>{
+    const m = mappa[k];
+    if (!m || m.categoria !== 'olio') return false;
+    const cu = String(m.codice||'').toUpperCase();
+    return cu && !cu.startsWith('LIQ_');
+  });
+
+  if (chiaviForm.length && chiaviDdt.length) {
+    // Strategia semplice: prendo il PRIMO olio DDT trovato come "fonte verità"
+    // (di solito ce n'è uno solo per scheda). Se ce ne sono di più, lascio
+    // gli altri intoccati.
+    const kForm = chiaviForm[0];
+    const kDdt  = chiaviDdt[0];
+    const dForm = mappa[kForm];
+    const dDdt  = mappa[kDdt];
+
+    // Fondo: tengo il codice/descrizione/prezzo del DDT, qty del Form
+    dForm.codice      = dDdt.codice;
+    dForm.descrizione = dDdt.descrizione;
+    dForm.prezzo      = dDdt.prezzo;
+    dForm.categoria   = 'olio';
+    dForm.fuso        = true;       // flag per evidenza UI
+    dForm._qtyForm    = dForm.qty;  // qty originale dal Form (litri)
+    dForm._qtyDdt     = dDdt.qty;   // qty originale dal DDT (confezioni)
+
+    // Rimuovo la riga DDT (è "assorbita" nella riga fusa)
+    delete mappa[kDdt];
+
+    // Riassegno chiave del nuovo elemento (per evitare duplicati con codice DDT)
+    delete mappa[kForm];
+    mappa[dDdt.codice] = dForm;
+  }
+
+  // ── Ordina per categoria poi alfabetico ──
   const ricambi = Object.values(mappa).sort((a,b)=>{
     const ia = RIEP_CATEGORIE.indexOf(a.categoria);
     const ib = RIEP_CATEGORIE.indexOf(b.categoria);
@@ -2081,7 +2122,7 @@ function generaRiepilogoDaRapportini(){
   });
 
   return {
-    ricambi: ricambi,
+    ricambi,
     manodopera_totale: Math.round(mdEuroTotali*100)/100,
     manodopera_ore: Math.round(mdOreTotali*100)/100,
     generato_at: new Date().toISOString()
@@ -2238,8 +2279,11 @@ function renderRiepilogo(){
             ` : '<span style="font-size:11px;color:var(--text-l)">—</span>'}
           </td>`;
       }
+      // Evidenza per righe FUSE (olio form + olio DDT auto-uniti)
+      const trStyle = el.fuso ? 'style="background:#FFF8E5"' : '';
+      const badgeFuso = el.fuso ? `<span title="Olio dal DDT con quantità segnalata dal dipendente nel form ORE COMMESSE (${el._qtyForm||el.qty} lt)" style="display:inline-block;background:#FFD27A;color:#7A4D00;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-left:4px;letter-spacing:.02em;vertical-align:middle">🛢️ AUTO-UNITO</span>` : '';
       html += `
-        <tr>
+        <tr ${trStyle}>
           <td>
             <select onchange="modRiepilogo(${el._idx},'categoria',this.value)"
               style="font-size:11px;padding:3px 6px;width:100%">
@@ -2262,7 +2306,8 @@ function renderRiepilogo(){
           <td>
             <input type="text" value="${(el.descrizione||'').replace(/"/g,'&quot;')}"
               onchange="modRiepilogo(${el._idx},'descrizione',this.value)"
-              style="width:100%;font-size:12px;padding:4px 6px">
+              style="width:calc(100% - 95px);font-size:12px;padding:4px 6px">
+            ${badgeFuso}
           </td>
           <td style="text-align:right">
             <input type="number" step="0.01" min="0" value="${el.qty||0}"
