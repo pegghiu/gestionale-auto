@@ -2338,7 +2338,21 @@ async function senzaTargaMagazzino(ddtId, btn){
   const numDdt = ddt.ddt_estratto?.numero || '';
 
   try {
-    // 1. Per ogni riga, upsert in articoli (incrementa qta se codice esiste)
+    // ─── ORDINE CRITICO ───
+    // 1° PRIMA: marca il DDT come confermato per "fermarlo" prima che il cron
+    //   auto-confirm-ddt possa pescarlo e creare una scheda fantasma con targa vuota.
+    //   Questo è importante: l'utente sta scegliendo "magazzino", non "scheda".
+    const { error: errConf } = await _sb.from('ddt_in_arrivo')
+      .update({
+        stato: 'confermato',
+        confermato_at: new Date().toISOString(),
+        confermato_da: 'magazzino-scorta'
+      })
+      .eq('id', ddtId)
+      .eq('stato', 'da_confermare'); // safety: solo se ancora pending
+    if (errConf) throw errConf;
+
+    // 2° POI: per ogni riga upsert in articoli
     let aggiunti = 0, aggiornati = 0;
     for (const r of righe) {
       const codice = String(r.codice||'').trim();
@@ -2347,7 +2361,6 @@ async function senzaTargaMagazzino(ddtId, btn){
       const costo = +r.prezzo_netto || 0;
       if (!codice && !desc) continue;
 
-      // Cerca articolo per codice (se codice presente) o per descrizione
       let esistente = null;
       if (codice) {
         const { data } = await _sb.from('articoli').select('id, qta').eq('codice', codice).limit(1);
@@ -2376,18 +2389,8 @@ async function senzaTargaMagazzino(ddtId, btn){
       }
     }
 
-    // 2. Marca DDT come confermato
-    await _sb.from('ddt_in_arrivo')
-      .update({
-        stato: 'confermato',
-        confermato_at: new Date().toISOString(),
-        confermato_da: 'magazzino-scorta'
-      })
-      .eq('id', ddtId);
-
     toast(`✓ Magazzino aggiornato: ${aggiunti} nuovi + ${aggiornati} esistenti`, 'ok', 5000);
     caricaSenzaTarga();
-    // Refresh KPI articoli/magazzino se la pagina lo supporta
     try { if (typeof refreshKPI === 'function') refreshKPI(); } catch(_){}
   } catch(e){
     console.error('senzaTargaMagazzino:', e);
