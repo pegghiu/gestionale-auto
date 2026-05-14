@@ -1432,6 +1432,13 @@ function renderRapportini(){
         <td style="text-align:right;font-size:12px;font-weight:600">${fmt((el.qty||0)*(el.prezzo||0))}</td>
         <td style="text-align:center;white-space:nowrap">
           ${(()=>{ 
+            // Tre stati possibili:
+            // - reso_confermato: il fornitore ha emesso il DDT BL-RCL → ✓ verde scuro, non toggleabile
+            // - reso pendente: segnalato dall'utente, in attesa DDT → ↺ verde
+            // - non in reso: ↩ rosso
+            if (el.reso_confermato === true) {
+              return `<span style="color:#0E5A2A;font-size:14px;font-weight:700" title="Reso confermato dal DDT del fornitore — costo accreditato">✓</span>`;
+            }
             const inReso = _isInResi(r.numero||'', el.codice||'', el.descrizione||'', el.qty||1);
             return `<button class="btn btn-g btn-sm"
               title="${inReso?'Annulla segnalazione reso':'Segna per reso'}"
@@ -1504,6 +1511,20 @@ function _chiaveReso(rapNumero, codice, descrizione, qty){
 
 // True se la riga è già segnalata per reso (presente in sessionStorage)
 function _isInResi(rapNumero, codice, descrizione, qty){
+  // Fonte primaria: flag reso=true sull'elemento del rapportino (persistente DB)
+  try {
+    const rap = SL.rapportini.find(r => (r.numero||'') === rapNumero);
+    if (rap) {
+      const elTarget = (rap.elementi||[]).find(el =>
+        el.tipo === 'ricambio' &&
+        String(el.codice||'') === codice &&
+        String(el.descrizione||'') === descrizione &&
+        (parseFloat(el.qty)||0) === (parseFloat(qty)||0)
+      );
+      if (elTarget?.reso) return true;
+    }
+  } catch(e){}
+  // Fonte secondaria (legacy): sessionStorage
   try {
     const existing = JSON.parse(sessionStorage.getItem('resi_da_scheda')||'[]');
     const k = _chiaveReso(rapNumero, codice, descrizione, qty);
@@ -1513,6 +1534,10 @@ function _isInResi(rapNumero, codice, descrizione, qty){
 
 // Toggle reso: se non segnalato → segnala (↩ → ↺ verde)
 //              se già segnalato → annulla (↺ verde → ↩ rosso)
+//
+// PERSISTENZA: oltre a sessionStorage (legacy), scrive il flag sull'elemento
+// del rapportino e salva su Supabase. Così il reso sopravvive a chiusura
+// browser, cambio computer, e può essere matchato col DDT BL-RCL del fornitore.
 function toggleResoScheda(btn){
   const rapNumero   = btn.dataset.rap   || '';
   const rapData     = btn.dataset.data  || '';
@@ -1521,29 +1546,47 @@ function toggleResoScheda(btn){
   const qty         = parseFloat(btn.dataset.qty)    || 1;
   const prezzo      = parseFloat(btn.dataset.prezzo) || 0;
 
+  // ─── Persistenza su SL.rapportini[].elementi[] ───
+  // Trovo l'elemento corrispondente nel rapportino e setto el.reso
+  const rap = SL.rapportini.find(r => (r.numero||'') === rapNumero);
+  let elTarget = null;
+  if (rap) {
+    elTarget = (rap.elementi||[]).find(el =>
+      el.tipo === 'ricambio' &&
+      String(el.codice||'') === codice &&
+      String(el.descrizione||'') === descrizione &&
+      (parseFloat(el.qty)||0) === qty
+    );
+  }
+
+  // ─── Toggle anche su sessionStorage (per ddt.html legacy) ───
   const KEY = 'resi_da_scheda';
   let existing = [];
   try { existing = JSON.parse(sessionStorage.getItem(KEY)||'[]'); } catch(e){ existing = []; }
-
   const chiave = _chiaveReso(rapNumero, codice, descrizione, qty);
   const idx = existing.findIndex(r => _chiaveReso(r.ddt_num, r.codice, r.descrizione, r.qty) === chiave);
 
-  if (idx >= 0) {
+  if (idx >= 0 || (elTarget && elTarget.reso)) {
     // ── ANNULLA RESO ──
-    const reso = existing[idx];
-    // Se è già stato convalidato (l'utente ha aperto ddt.html e processato il reso),
-    // non lasciamoglielo annullare dalla scheda senza preavviso
-    if (reso.convalidato){
-      if (!confirm(`Questo reso è già stato convalidato su DDT.\n\nVuoi comunque rimuoverlo dalla lista resi?`)) return;
+    if (idx >= 0 && existing[idx].convalidato){
+      if (!confirm(`Questo reso è già stato convalidato dal DDT del fornitore.\n\nVuoi comunque rimuoverlo dalla lista resi?`)) return;
     }
-    existing.splice(idx, 1);
-    sessionStorage.setItem(KEY, JSON.stringify(existing));
+    if (idx >= 0) { existing.splice(idx,1); sessionStorage.setItem(KEY, JSON.stringify(existing)); }
+    if (elTarget) {
+      delete elTarget.reso;
+      delete elTarget.reso_at;
+      delete elTarget.reso_confermato;
+      delete elTarget.reso_ddt_id;
+      SL._dirty = true;
+      salvaDebounced(`↺ ${descrizione||codice} — reso annullato`);
+    }
     btn.textContent = '↩';
     btn.style.color = 'var(--err)';
     btn.title = 'Segna per reso';
-    toast(`↺ ${descrizione||codice} — reso annullato`, 'info');
+    if (!elTarget) toast(`↺ ${descrizione||codice} — reso annullato`, 'info');
   } else {
     // ── SEGNALA RESO ──
+    const oraISO = new Date().toISOString();
     existing.push({
       id: Date.now()+'_'+Math.random(),
       codice, descrizione, qty, prezzo_netto: prezzo,
@@ -1552,13 +1595,19 @@ function toggleResoScheda(btn){
       fornitore: '',
       note: '',
       convalidato: false,
-      segnalato_at: new Date().toISOString()
+      segnalato_at: oraISO
     });
     sessionStorage.setItem(KEY, JSON.stringify(existing));
+    if (elTarget) {
+      elTarget.reso = true;
+      elTarget.reso_at = oraISO;
+      SL._dirty = true;
+      salvaDebounced(`↩ ${descrizione||codice} — segnalato per reso`);
+    }
     btn.textContent = '↺';
     btn.style.color = 'var(--ok)';
     btn.title = 'Annulla segnalazione reso';
-    toast(`↩ ${descrizione||codice} — segnalato per reso (apri DDT per convalidare)`, 'info');
+    if (!elTarget) toast(`↩ ${descrizione||codice} — segnalato per reso`, 'info');
   }
 }
 
@@ -2056,6 +2105,9 @@ function generaRiepilogoDaRapportini(){
       mdEuroTotali += h * t;
     });
     (r.elementi||[]).filter(el=>el.tipo==='ricambio').forEach(el=>{
+      // Skip righe il cui reso è stato confermato dal DDT BL-RCL del fornitore
+      // (il pezzo è accreditato, non lo paghi più → non va nel riepilogo)
+      if (el.reso_confermato === true) return;
       const codice = (el.codice||'').trim();
       const desc   = (el.descrizione||'').trim();
       const qty    = parseFloat(el.qty)||0;
@@ -2635,6 +2687,9 @@ function aggiornaTotali(){
 
     // Elementi: ricambi e/o manodopera "manuale" (rapportini legacy senza ore[])
     (r.elementi||[]).forEach(el=>{
+      // Se la riga è un reso confermato dal DDT BL-RCL del fornitore,
+      // il costo è stato accreditato → non lo conto nell'imponibile.
+      if (el.reso_confermato === true) return;
       const s = (parseFloat(el.qty)||0) * (parseFloat(el.prezzo)||0);
       imp += s;
       if(el.tipo==='ricambio') totRic += s;
