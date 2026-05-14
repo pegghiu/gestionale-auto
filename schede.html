@@ -420,11 +420,23 @@ function rigaScheda(s){
   };
   const st = stati[s.stato]||{cls:'s-bozza',lbl:s.stato};
 
+  // Estrae HH:MM dal timestamp ISO (s.dataAttivitaTs), convertendo al fuso locale
+  let ora = '';
+  if (s.dataAttivitaTs && s.dataAttivitaTs.includes('T')) {
+    try {
+      const d = new Date(s.dataAttivitaTs);
+      if (!isNaN(d.getTime())) {
+        ora = d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' });
+      }
+    } catch(e){}
+  }
+
   return `<a href="scheda.html?id=${s.id}" class="scheda-row">
     <div class="sc-cell">
       <div class="sc-num" style="font-size:13px">${fmtData(s.dataAttivita || s.data)}</div>
-      ${s.dataFonte === 'ddt' ? '<div style="font-size:9px;color:var(--text-l);margin-top:2px">via DDT</div>' : ''}
-      ${!s.dataFonte ? '<div style="font-size:9px;color:var(--text-l);margin-top:2px">manuale</div>' : ''}
+      ${ora ? `<div style="font-size:10px;color:var(--text-m);font-family:monospace;margin-top:2px">${ora}</div>` : ''}
+      ${s.dataFonte === 'ddt' ? '<div style="font-size:9px;color:var(--text-l);margin-top:1px">via DDT</div>' : ''}
+      ${!s.dataFonte ? '<div style="font-size:9px;color:var(--text-l);margin-top:1px">manuale</div>' : ''}
     </div>
     <div class="sc-cell">
       <div class="sc-num">${s.numero}</div>
