@@ -229,22 +229,33 @@ async function caricaDaSupabase(){
     }));
 
     // ─── Calcolo data ultima attività per ogni scheda ───
-    // Uso `submitted_at` (orario di submit del Form ORE COMMESSE), che è
-    // stabile e NON viene riscritto al salvataggio scheda — a differenza di
-    // created_at che viene reimpostato dal delete+insert in salvaRapportiniSeparati.
-    // Chiave ordinamento: GIORNO del lavoro (campo `data`) + ORA submitted_at.
+    // Considero SOLO rapportini "veri" inseriti dal dipendente, escludendo
+    // quelli "fittizi" creati da auto-confirm-ddt per i ricambi DDT.
+    //
+    // FIRMA dei rapportini fittizi (creati da edge function auto-confirm-ddt):
+    //   - note inizia con "Ricambi DDT", "Ricambi da DDT", "Ricambi da Invio"
+    //   - tecnico vuoto, h_totali=0
+    // Però i dipendenti POSSONO inserire rapportini con 0 ore (es. solo
+    // controllo o consegna), quindi NON uso h_totali come discriminante.
+    // Uso solo la firma della note che è univoca degli auto-creati.
     try {
       const { data: rg } = await _sb.from('rapportini_giornalieri')
-        .select('scheda_id, data, submitted_at, created_at');
-      const dtRap = {};    // scheda_id → chiave ordinamento "AAAA-MM-GGTHH:MM:SS"
-      const dtRapVis = {}; // scheda_id → data vis "AAAA-MM-GG"
+        .select('scheda_id, data, submitted_at, created_at, tecnico, h_totali, note');
+      const dtRap = {};
+      const dtRapVis = {};
       (rg||[]).forEach(r=>{
         if (!r.scheda_id) return;
-        // GIORNO: dal campo data se presente, fallback su submitted_at
+
+        // FILTRO: salta solo i rapportini chiaramente fittizi (firma nella note)
+        const note = String(r.note||'').trim();
+        const isFittizioAutoCreato =
+          /^Ricambi\s+(DDT|da\s+DDT|da\s+Invio)/i.test(note) &&
+          (!r.tecnico || r.tecnico.trim() === '');
+        if (isFittizioAutoCreato) return;
+
         const sub = r.submitted_at || r.created_at || '';
         const giorno = r.data || (sub ? String(sub).slice(0,10) : '');
         if (!giorno) return;
-        // ORA: solo l'ora di submitted_at (orario reale di submit Form)
         const ora = sub ? String(sub).slice(11,19) : '00:00:00';
         const chiave = `${giorno}T${ora}`;
         if (!dtRap[r.scheda_id] || chiave > dtRap[r.scheda_id]) {
