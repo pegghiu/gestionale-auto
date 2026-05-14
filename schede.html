@@ -53,7 +53,7 @@ body{font-family:'Helvetica Neue',Arial,-apple-system,sans-serif;background:var(
   background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
   box-shadow:var(--sh);margin-bottom:8px;
   display:grid;
-  grid-template-columns: 130px 100px 1fr 1fr 120px 90px 90px 80px 80px;
+  grid-template-columns: 100px 130px 100px 1fr 1fr 120px 90px 90px 80px 80px;
   align-items:center;gap:0;
   cursor:pointer;transition:box-shadow .15s,transform .12s;
   text-decoration:none;color:inherit;overflow:hidden;
@@ -217,7 +217,8 @@ async function caricaDaSupabase(){
       numero:  s.numero,
       tipo:    s.tipo||'',
       stato:   s.stato,
-      data:    s.data,
+      data:    s.data,            // data manuale della scheda (resta come prima)
+      dataAttivita: s.data,        // verrà sovrascritta sotto se troviamo rapportini/DDT
       targa:   s.targa||'',
       modello: s.modello||'',
       cliente: s.cliente_nome||'',
@@ -226,6 +227,43 @@ async function caricaDaSupabase(){
       rap:     s.n_rapportini||0,
       note:    s.problema||''
     }));
+
+    // ─── Calcolo data ultimo rapportino/DDT per ogni scheda ───
+    // 1° tentativo: max(data) da rapportini_giornalieri
+    try {
+      const { data: rg } = await _sb.from('rapportini_giornalieri')
+        .select('scheda_id, data');
+      const dtRap = {}; // scheda_id → max data rapportino
+      (rg||[]).forEach(r=>{
+        if (!r.scheda_id || !r.data) return;
+        if (!dtRap[r.scheda_id] || r.data > dtRap[r.scheda_id]) dtRap[r.scheda_id] = r.data;
+      });
+      TUTTE.forEach(s=>{
+        if (dtRap[s.id]) { s.dataAttivita = dtRap[s.id]; s.dataFonte = 'rapportino'; }
+      });
+
+      // 2° tentativo (solo per schede ancora senza dataAttivita aggiornata): DDT per targa
+      const targheSenzaData = TUTTE.filter(s=>!s.dataFonte && s.targa).map(s=>s.targa);
+      if (targheSenzaData.length) {
+        const { data: ddt } = await _sb.from('ddt_in_arrivo')
+          .select('targa_estratta, email_data')
+          .in('targa_estratta', [...new Set(targheSenzaData)]);
+        const dtDdt = {}; // targa → max email_data
+        (ddt||[]).forEach(d=>{
+          if (!d.targa_estratta || !d.email_data) return;
+          const dataSolo = String(d.email_data).slice(0,10); // ISO → "AAAA-MM-GG"
+          if (!dtDdt[d.targa_estratta] || dataSolo > dtDdt[d.targa_estratta]) dtDdt[d.targa_estratta] = dataSolo;
+        });
+        TUTTE.forEach(s=>{
+          if (!s.dataFonte && s.targa && dtDdt[s.targa]) {
+            s.dataAttivita = dtDdt[s.targa];
+            s.dataFonte = 'ddt';
+          }
+        });
+      }
+    } catch(e2){
+      console.warn('Calcolo data attività fallito (non critico):', e2);
+    }
   } catch(e){
     console.warn('Supabase non disponibile, uso localStorage:', e.message);
     // Fallback localStorage
@@ -290,8 +328,11 @@ function renderKpi(){
 }
 
 function renderLista(){
-  const schede     = _filtrate.filter(s=>s.tipo!=='S').sort((a,b)=>b.data.localeCompare(a.data));
-  const preventivi = _filtrate.filter(s=>s.tipo==='S').sort((a,b)=>b.data.localeCompare(a.data));
+  // Ordino per data ULTIMA ATTIVITÀ (rapportino o DDT più recente), non per data scheda.
+  // Fallback su s.data se non c'è attività.
+  const keyOrdine = s => String(s.dataAttivita || s.data || '');
+  const schede     = _filtrate.filter(s=>s.tipo!=='S').sort((a,b)=>keyOrdine(b).localeCompare(keyOrdine(a)));
+  const preventivi = _filtrate.filter(s=>s.tipo==='S').sort((a,b)=>keyOrdine(b).localeCompare(keyOrdine(a)));
 
   document.getElementById('risultati').textContent =
     `${_filtrate.length} schede${_filtrate.length!==TUTTE.length?' (filtrate)':''}`;
@@ -306,11 +347,12 @@ function renderLista(){
   } else {
     lista.innerHTML = `
       <div class="scheda-row header">
+        <div class="sc-cell">Data</div>
         <div class="sc-cell">N° Scheda</div>
         <div class="sc-cell">Targa</div>
         <div class="sc-cell">Veicolo / Note</div>
         <div class="sc-cell">Cliente</div>
-        <div class="sc-cell">Tecnico / Data</div>
+        <div class="sc-cell">Tecnico</div>
         <div class="sc-cell">Rapportini</div>
         <div class="sc-cell">Totale</div>
         <div class="sc-cell">Stato</div>
@@ -326,11 +368,12 @@ function renderLista(){
     sezPrev.style.display='';
     listaPrev.innerHTML = `
       <div class="scheda-row header">
+        <div class="sc-cell">Data</div>
         <div class="sc-cell">N° Preventivo</div>
         <div class="sc-cell">Targa</div>
         <div class="sc-cell">Descrizione</div>
         <div class="sc-cell">Cliente</div>
-        <div class="sc-cell">Tecnico / Data</div>
+        <div class="sc-cell">Tecnico</div>
         <div class="sc-cell">—</div>
         <div class="sc-cell">Totale</div>
         <div class="sc-cell">Stato</div>
@@ -355,6 +398,11 @@ function rigaScheda(s){
 
   return `<a href="scheda.html?id=${s.id}" class="scheda-row">
     <div class="sc-cell">
+      <div class="sc-num" style="font-size:13px">${fmtData(s.dataAttivita || s.data)}</div>
+      ${s.dataFonte === 'ddt' ? '<div style="font-size:9px;color:var(--text-l);margin-top:2px">via DDT</div>' : ''}
+      ${!s.dataFonte ? '<div style="font-size:9px;color:var(--text-l);margin-top:2px">manuale</div>' : ''}
+    </div>
+    <div class="sc-cell">
       <div class="sc-num">${s.numero}</div>
       <div style="margin-top:4px">
         <span class="tipo-badge" style="background:${tipo.bg};color:${tipo.col}">${tipo.label}</span>
@@ -372,7 +420,6 @@ function rigaScheda(s){
     </div>
     <div class="sc-cell">
       <div class="sc-data">${s.tecnico||'—'}</div>
-      <div class="sc-data" style="margin-top:2px">${fmtData(s.data)}</div>
     </div>
     <div class="sc-cell" style="text-align:center">
       <div style="font-size:18px;font-weight:700;color:var(--info)">${s.rap||0}</div>
