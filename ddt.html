@@ -223,6 +223,39 @@ textarea{resize:vertical;min-height:70px;line-height:1.6}
     <div class="kpi"><div class="kpi-val" id="k4">—</div><div class="kpi-lbl">Commesse aperte</div></div>
   </div>
 
+  <!-- ── FILTRI RAPIDI DDT ────────────────────────────────────
+       Mostra/nasconde le 4 categorie di DDT pendenti.
+       Click su un filtro = mostra solo quella categoria.
+       Click su "Tutti" = mostra tutto.
+  ──────────────────────────────────────────────────────── -->
+  <div id="filtriDdt" style="display:flex;gap:8px;flex-wrap:wrap;margin:14px 0;align-items:center">
+    <span style="font-size:12px;color:var(--text-m);font-weight:600;margin-right:4px">Filtra DDT pendenti:</span>
+    <button class="btn-filtro-ddt on" data-filtro="tutti" onclick="filtroDdt('tutti')"
+      style="padding:6px 12px;border:1px solid var(--border);background:#FFF;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;font-weight:600;display:inline-flex;align-items:center;gap:6px">
+      Tutti <span class="cnt-tutti" style="background:#444;color:#FFF;border-radius:10px;padding:1px 6px;font-size:10px">0</span>
+    </button>
+    <button class="btn-filtro-ddt" data-filtro="email" onclick="filtroDdt('email')"
+      style="padding:6px 12px;border:1px solid var(--border);background:#FFF;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;font-weight:600;display:inline-flex;align-items:center;gap:6px">
+      📧 Email <span class="cnt-email" style="background:#1A6FA5;color:#FFF;border-radius:10px;padding:1px 6px;font-size:10px">0</span>
+    </button>
+    <button class="btn-filtro-ddt" data-filtro="orfani" onclick="filtroDdt('orfani')"
+      style="padding:6px 12px;border:1px solid var(--border);background:#FFF;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;font-weight:600;display:inline-flex;align-items:center;gap:6px">
+      🚨 Orfani <span class="cnt-orfani" style="background:#A04A1A;color:#FFF;border-radius:10px;padding:1px 6px;font-size:10px">0</span>
+    </button>
+    <button class="btn-filtro-ddt" data-filtro="senzatarga" onclick="filtroDdt('senzatarga')"
+      style="padding:6px 12px;border:1px solid var(--border);background:#FFF;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;font-weight:600;display:inline-flex;align-items:center;gap:6px">
+      📦 Senza targa <span class="cnt-senzatarga" style="background:#5A5A40;color:#FFF;border-radius:10px;padding:1px 6px;font-size:10px">0</span>
+    </button>
+    <button class="btn-filtro-ddt" data-filtro="reso" onclick="filtroDdt('reso')"
+      style="padding:6px 12px;border:1px solid var(--border);background:#FFF;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;font-weight:600;display:inline-flex;align-items:center;gap:6px">
+      ↩ Resi <span class="cnt-reso" style="background:#A02020;color:#FFF;border-radius:10px;padding:1px 6px;font-size:10px">0</span>
+    </button>
+  </div>
+  <style>
+    .btn-filtro-ddt.on{background:var(--accent)!important;border-color:var(--accent)!important;color:#FFF!important}
+    .btn-filtro-ddt:hover:not(.on){background:#F5F2EE}
+  </style>
+
   <!-- ── CODA DDT DA EMAIL ─────────────────────────────────── -->
   <div class="card" id="cardEmailQueue" style="display:none">
     <div class="ch">
@@ -1826,12 +1859,15 @@ function startEmailPolling(){
   caricaOrfani();
   caricaSenzaTarga();
   caricaDdtReso();
+  // Aggiorno contatori filtri dopo che le cache si popolano
+  setTimeout(aggiornaContiFiltri, 1500);
   // Polling ogni 45 secondi (queue email + orfani + senza targa + ddt reso)
   _pollTimer = setInterval(()=>{
     pollEmailQueue();
     caricaOrfani();
     caricaSenzaTarga();
     caricaDdtReso();
+    setTimeout(aggiornaContiFiltri, 1500);
   }, 45000);
 }
 
@@ -2449,6 +2485,95 @@ async function senzaTargaScarta(ddtId, btn){
 // ══════════════════════════════════════════════════════════
 let DDT_RESO_CACHE = [];
 let RESI_PENDENTI_CACHE = []; // tutti gli elementi con reso=true e !reso_confermato
+
+// ══════════════════════════════════════════════════════════
+// FILTRI RAPIDI DDT
+// 4 pulsanti in alto al tab DDT che mostrano/nascondono le card di:
+// email, orfani, senza targa, resi. "Tutti" mostra tutto.
+// Aggiorna anche i contatori sui badge.
+// ══════════════════════════════════════════════════════════
+let _filtroDdtAttivo = 'tutti';
+
+function filtroDdt(filtro){
+  _filtroDdtAttivo = filtro;
+
+  // Stato attivo dei bottoni
+  document.querySelectorAll('.btn-filtro-ddt').forEach(b=>{
+    b.classList.toggle('on', b.dataset.filtro === filtro);
+  });
+
+  // Mappa filtro → card da mostrare
+  const cards = {
+    'email':      document.getElementById('cardEmailQueue'),
+    'orfani':     document.getElementById('cardOrfani'),
+    'senzatarga': document.getElementById('cardSenzaTarga'),
+    'reso':       document.getElementById('cardDdtReso')
+  };
+
+  if (filtro === 'tutti') {
+    // Mostra tutte: lascio che ogni render*() decida da sé se la card ha contenuti.
+    // Forzo solo la rimozione di display='none' impostato dai filtri esclusivi.
+    Object.entries(cards).forEach(([k, card])=>{
+      if (!card) return;
+      // Rimuovo eventuale display:none inline, ma chiamo subito il render
+      // che farà display:none di nuovo se la cache è vuota.
+      if (k==='email'  && typeof renderEmailQueue==='function') renderEmailQueue();
+      if (k==='orfani' && typeof renderOrfani==='function')     renderOrfani();
+      if (k==='senzatarga' && typeof renderSenzaTarga==='function') renderSenzaTarga();
+      if (k==='reso'   && typeof renderDdtReso==='function')    renderDdtReso();
+    });
+  } else {
+    // Mostra solo quella selezionata
+    Object.entries(cards).forEach(([k, card])=>{
+      if (!card) return;
+      if (k === filtro) {
+        // Forzo render per essere sicuro che mostri i contenuti
+        if (k==='email'  && typeof renderEmailQueue==='function') renderEmailQueue();
+        if (k==='orfani' && typeof renderOrfani==='function')     renderOrfani();
+        if (k==='senzatarga' && typeof renderSenzaTarga==='function') renderSenzaTarga();
+        if (k==='reso'   && typeof renderDdtReso==='function')    renderDdtReso();
+
+        // Se la card è nascosta perché vuota, la mostro lo stesso con un placeholder
+        if (card.style.display === 'none') {
+          card.style.display = '';
+          // Inietto placeholder se non già presente
+          const listId = ({
+            'email':'emailQueueList','orfani':'orfaniList',
+            'senzatarga':'senzaTargaList','reso':'ddtResoList'
+          })[k];
+          const list = document.getElementById(listId);
+          if (list && !list.querySelector('.filtro-empty')) {
+            list.innerHTML = `<div class="filtro-empty" style="padding:24px;text-align:center;color:var(--text-l);font-size:13px">Nessun DDT in questa categoria 👍</div>`;
+          }
+        }
+        // Scroll alla card
+        setTimeout(()=>card.scrollIntoView({behavior:'smooth', block:'start'}), 100);
+      } else {
+        card.style.display = 'none';
+      }
+    });
+  }
+}
+
+function aggiornaContiFiltri(){
+  // Email: i pendenti dalla queue
+  const nEmail = (typeof EMAIL_QUEUE !== 'undefined')
+    ? EMAIL_QUEUE.filter(d=>d.stato==='da_confermare'||d.stato==='errore').length
+    : 0;
+  const nOrfani = (typeof ORFANI_CACHE !== 'undefined') ? ORFANI_CACHE.length : 0;
+  const nSenza  = (typeof SENZA_TARGA_CACHE !== 'undefined') ? SENZA_TARGA_CACHE.length : 0;
+  const nReso   = (typeof DDT_RESO_CACHE !== 'undefined') ? DDT_RESO_CACHE.length : 0;
+  const nTutti  = nEmail + nOrfani + nSenza + nReso;
+
+  const set = (cls, val) => {
+    document.querySelectorAll('.'+cls).forEach(el=>el.textContent = val);
+  };
+  set('cnt-email', nEmail);
+  set('cnt-orfani', nOrfani);
+  set('cnt-senzatarga', nSenza);
+  set('cnt-reso', nReso);
+  set('cnt-tutti', nTutti);
+}
 
 async function caricaDdtReso(){
   try {
