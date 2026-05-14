@@ -765,15 +765,17 @@ const _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 async function prossimoNumeroScheda(){
   const anno = String(new Date().getFullYear()).slice(-2);
   try {
+    // Uso numero_base che è sempre formato "AA/NNNN" senza suffissi (-CA, -CO, -S)
     const {data} = await _sb.from('rapportini')
-      .select('numero')
-      .like('numero', `${anno}/%`)
-      .not('numero', 'like', `${anno}/R/%`)
-      .order('numero', {ascending: false})
+      .select('numero_base')
+      .like('numero_base', `${anno}/%`)
+      .not('numero_base', 'like', `${anno}/R/%`)
+      .order('numero_base', {ascending: false})
       .limit(1);
     let next = 1;
     if(data && data.length > 0){
-      const m = String(data[0].numero).match(/\/(\d+)$/);
+      // Estraggo le cifre del progressivo da "26/0215" o "26/0215-CA"
+      const m = String(data[0].numero_base).match(/\/(\d+)/);
       if(m) next = parseInt(m[1]) + 1;
     }
     return `${anno}/${String(next).padStart(4,'0')}`;
@@ -3084,10 +3086,12 @@ async function salvaBozza(){
   console.log('💾 SALVA SCHEDA:', payload);
 
   try {
-    // Genera numero scheda da Supabase se nuovo
+    // Genera numero scheda se nuovo. NON uso _sb.rpc('next_numero_scheda')
+    // perché la RPC sul DB è bacata e restituisce sempre "26/0001".
+    // prossimoNumeroScheda() fa MAX(numero) +1 dal frontend, che è corretto.
     if(!SL.id && !SL.numeroBase){
-      const { data: numData } = await _sb.rpc('next_numero_scheda');
-      if(numData) { SL.numeroBase = numData; setTipoScheda(SL.tipo); }
+      SL.numeroBase = await prossimoNumeroScheda();
+      setTipoScheda(SL.tipo);
     }
 
     const record = {
