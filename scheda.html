@@ -2422,8 +2422,23 @@ function renderRiepilogo(){
           </td>`;
       }
       // Evidenza per righe FUSE (olio form + olio DDT auto-uniti)
-      const trStyle = el.fuso ? 'style="background:#FFF8E5"' : '';
+      // E per righe SENZA PREZZO (prezzo <= 0) → sfondo giallo attenzione
+      const prezzoMancante = !(parseFloat(el.prezzo) > 0);
+      let trStyle;
+      if (prezzoMancante) {
+        trStyle = 'style="background:#FFF4D6;border-left:3px solid #E0A800" title="Prezzo da confermare"';
+      } else if (el.fuso) {
+        trStyle = 'style="background:#FFF8E5"';
+      } else {
+        trStyle = '';
+      }
       const badgeFuso = el.fuso ? `<span title="Olio dal DDT con quantità segnalata dal dipendente nel form ORE COMMESSE (${el._qtyForm||el.qty} lt)" style="display:inline-block;background:#FFD27A;color:#7A4D00;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-left:4px;letter-spacing:.02em;vertical-align:middle">🛢️ AUTO-UNITO</span>` : '';
+      // Bottone "imposta prezzo" se manca → apre prompt
+      const btnPrezzo = prezzoMancante
+        ? `<button type="button" title="Imposta prezzo (manca!)"
+             onclick="impostaPrezzoRiepilogo(${el._idx})"
+             style="background:#E0A800;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:800;padding:3px 8px;cursor:pointer;margin-left:4px">€?</button>`
+        : '';
       html += `
         <tr ${trStyle}>
           <td>
@@ -2463,6 +2478,7 @@ function renderRiepilogo(){
                 style="width:70px;font-size:12px;padding:4px 6px;text-align:right">
               <button type="button" class="btn-iva" title="Scorpora IVA 22% (prezzo / 1.22)"
                 onclick="scorporaIvaRiepilogo(${el._idx})">−IVA</button>
+              ${btnPrezzo}
             </div>
           </td>
           ${cellaNetto}
@@ -2746,6 +2762,34 @@ function eliminaRigaRiepilogo(idx){
   renderRiepilogo();
   aggiornaTotali();
   salvaDebounced('✓ Riga eliminata');
+}
+
+// Imposta prezzo via prompt rapido (per righe con prezzo mancante / da confermare)
+function impostaPrezzoRiepilogo(idx){
+  if (!SL.riepilogo_override || !SL.riepilogo_override.ricambi) return;
+  const el = SL.riepilogo_override.ricambi[idx];
+  if (!el) return;
+
+  const desc = el.descrizione || el.codice || 'riga senza descrizione';
+  const raw = prompt(
+    `Imposta prezzo unitario per:\n${desc}\n\n(in €, separatore . o ,)`,
+    el.prezzo > 0 ? String(el.prezzo) : ''
+  );
+  if (raw === null) return; // annullato
+  const v = parseFloat(String(raw).replace(',','.'));
+  if (isNaN(v) || v < 0) {
+    toast('Prezzo non valido','err');
+    return;
+  }
+  el.prezzo = v;
+  // Se ora abbiamo codice+descrizione+prezzo, salva nel listino articoli
+  if (el.codice && el.descrizione && el.prezzo > 0) {
+    salvaArticoloSeNuovo(el).catch(e=>console.warn('salvaArticoloSeNuovo:', e));
+  }
+  SL._dirty = true;
+  renderRiepilogo();
+  aggiornaTotali();
+  salvaDebounced('✓ Prezzo aggiornato');
 }
 
 // Reset: butta le override e ripopola dai rapportini attuali
