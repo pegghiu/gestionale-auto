@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- ═══ NO-CACHE: forza fetch fresco dell'HTML ad ogni apertura ═══ -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>Schede di Lavoro</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
@@ -136,8 +140,8 @@ body{font-family:'Helvetica Neue',Arial,-apple-system,sans-serif;background:var(
     <span class="hdr-title">Schede di Lavoro</span>
   </div>
   <div style="display:flex;gap:10px;align-items:center">
-    <a href="scheda.html?modo=preventivo" class="btn btn-s" style="font-size:12px">+ Preventivo -S</a>
-    <a href="scheda.html" class="btn btn-p">+ Nuova scheda</a>
+    <a id="btnNuovoPreventivo" href="scheda.html?modo=preventivo" class="btn btn-s" style="font-size:12px">+ Preventivo -S</a>
+    <a id="btnNuovaScheda" href="scheda.html" class="btn btn-p">+ Nuova scheda</a>
     <button class="btn-back" onclick="location.href='index.html'">← Menu</button>
   </div>
 </header>
@@ -200,15 +204,27 @@ const SUPABASE_URL = 'https://iztrrgqkzsovorcmixum.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml6dHJyZ3FrenNvdm9yY21peHVtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMDI3NzMsImV4cCI6MjA4OTc3ODc3M30.3IyUCDpFs9x_iSi5C4asodt5_O3F_cwgdb3eBkoQh3U';
 const _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// ═══ CACHE BUSTER ═══════════════════════════════════════════
+// Timestamp del caricamento di questa pagina. Appeso a tutti i link
+// verso scheda.html per forzare il browser/CDN a servire sempre
+// l'ultima versione del file (utile dopo un deploy su GitHub Pages).
+const _CB = Date.now();
+function urlScheda(params = ''){
+  const sep = params ? '&' : '';
+  return `scheda.html?${params}${sep}_v=${_CB}`;
+}
+
 const TIPI = {
   '':   { label:'Aperta',  col:'#706C65', bg:'#F0EDE8' },
   'CA': { label:'-CA',     col:'#854F0B', bg:'#FAEEDA' },
+  'CAF':{ label:'-CAF',    col:'#A8341A', bg:'#FCEAE3' },
   'CP': { label:'-CP',     col:'#1A4FAA', bg:'#EBF0FD' },
   'V':  { label:'-V',      col:'#534AB7', bg:'#EEEDFE' },
   'R':  { label:'-R',      col:'#1F7A35', bg:'#E6F5EB' },
   'F':  { label:'-F',      col:'#1F7A35', bg:'#E6F5EB' },
   'FF': { label:'-FF',     col:'#706C65', bg:'#F0EDE8' },
   'S':  { label:'-S',      col:'#534AB7', bg:'#EEEDFE' },
+  'X':  { label:'-X',      col:'#0B6E7A', bg:'#DEF1F4' },
 };
 
 // Demo schede — in prod: Supabase
@@ -218,6 +234,12 @@ let TUTTE = [];
 let _filtrate = [];
 
 async function init(){
+  // Patch dei link statici nell'header con cache buster
+  const a1 = document.getElementById('btnNuovaScheda');
+  if (a1) a1.href = urlScheda();
+  const a2 = document.getElementById('btnNuovoPreventivo');
+  if (a2) a2.href = urlScheda('modo=preventivo');
+
   await caricaDaSupabase();
   filtra();
 }
@@ -355,7 +377,7 @@ async function eliminaScheda(id, e){
 function stampaScheda(id, e){
   e.preventDefault();
   e.stopPropagation();
-  window.open(`scheda.html?id=${id}&print=1`, '_blank');
+  window.open(urlScheda(`id=${id}&print=1`), '_blank');
 }
 
 function filtra(){
@@ -488,7 +510,7 @@ function rigaScheda(s){
     return String(d);
   };
 
-  return `<a href="scheda.html?id=${s.id}" class="scheda-row">
+  return `<a href="${urlScheda(`id=${s.id}`)}" class="scheda-row">
     <div class="sc-cell">
       <div class="sc-data-short">${fmtDataShort(s.dataAttivita || s.data)}</div>
       ${ora ? `<div style="font-size:10px;color:var(--text-m);font-family:monospace;margin-top:2px">${ora}</div>` : ''}
