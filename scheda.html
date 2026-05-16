@@ -182,6 +182,29 @@ button.btn-blocked:hover{background:var(--ok)}
 .fbar-warn{background:var(--warn-bg);color:var(--warn);font-size:11px;font-weight:600;padding:4px 10px;border-radius:10px;border:1px solid #E5C36C;display:none;align-items:center;gap:5px;letter-spacing:.02em}
 .fbar-warn.show{display:inline-flex}
 
+/* ── CARD INFO STILE PROMEK (lettura) ───────────────────── */
+.info-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;box-shadow:var(--sh)}
+.info-card-head{background:var(--dark);color:#FFF;padding:8px 14px;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.info-card-head .badge{background:rgba(255,255,255,.15);color:#FFF;border:1px solid rgba(255,255,255,.25);padding:2px 8px;border-radius:10px;font-size:10px}
+.info-card-body{padding:10px 14px}
+.info-row{display:flex;align-items:baseline;padding:4px 0;gap:14px;border-bottom:1px dashed #F0EDE8}
+.info-row:last-child{border-bottom:none}
+.info-row-label{flex:0 0 130px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-m)}
+.info-row-val{flex:1;font-size:14px;font-weight:600;color:var(--text);word-break:break-word}
+.info-row-val.empty{color:var(--text-l);font-weight:400;font-style:italic}
+.info-row-val.targa{font-family:'Courier New',monospace;font-weight:700;letter-spacing:.08em;font-size:15px}
+.info-card-actions{padding:6px 14px 10px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid #F0EDE8;background:#FAFAF8}
+
+/* Autocomplete targa */
+.ac-targa-wrap{position:relative}
+.ac-targa-results{position:absolute;top:100%;left:0;right:0;z-index:50;background:#FFF;border:1px solid var(--border);border-top:none;border-radius:0 0 var(--rs) var(--rs);box-shadow:0 4px 12px rgba(0,0,0,.1);max-height:280px;overflow-y:auto;display:none}
+.ac-targa-item{padding:8px 12px;cursor:pointer;border-bottom:1px solid #F0EDE8;display:flex;flex-direction:column;gap:2px}
+.ac-targa-item:last-child{border-bottom:none}
+.ac-targa-item:hover,.ac-targa-item.sel{background:var(--accent-l)}
+.ac-targa-item .t{font-family:'Courier New',monospace;font-weight:800;letter-spacing:.08em;font-size:14px;color:var(--accent-d)}
+.ac-targa-item .m{font-size:12px;color:var(--text-m)}
+.ac-targa-item .c{font-size:11px;color:var(--text-l);font-style:italic}
+
 /* ── PRINT DOC ───────────────────────────────────────────── */
 #printDoc{display:none}
 @media print{#printDoc{display:block}}
@@ -348,6 +371,14 @@ button.btn-blocked:hover{background:var(--ok)}
 
   </div>
 
+  <!-- ═══ VEICOLO + CLIENTE ═══════════════════════════════════
+       Due modalità:
+       1. VIEW (stile ProMEK): info card con dati read-only, da anagrafica
+       2. EDIT: input editabili, come prima
+       Toggle automatico: VIEW se la scheda ha veicolo_id, altrimenti EDIT.
+       Il pulsante "Modifica" nella view porta in edit; salvare riporta in view.
+  ═══════════════════════════════════════════════════════════ -->
+
   <!-- VEICOLO -->
   <div class="card">
     <div class="ch">
@@ -358,12 +389,20 @@ button.btn-blocked:hover{background:var(--ok)}
         <span class="targa-badge" id="targaBadge"></span>
       </div>
     </div>
-    <div class="cb">
+
+    <!-- VISTA EDIT: input editabili (mostrata se NESSUN veicolo_id) -->
+    <div class="cb" id="veicoloEdit">
       <div class="g4">
         <div class="field">
           <label>Targa *</label>
-          <input class="targa-input" type="text" id="targa" placeholder="AB123CD" maxlength="7"
-            oninput="onTarga(this.value)">
+          <div class="ac-targa-wrap">
+            <input class="targa-input" type="text" id="targa" placeholder="AB123CD" maxlength="7"
+              autocomplete="off"
+              oninput="onTarga(this.value);autocompleteTarga(this)"
+              onfocus="autocompleteTarga(this)"
+              onblur="setTimeout(()=>chiudiAcTarga(),200)">
+            <div class="ac-targa-results" id="acTargaResults"></div>
+          </div>
         </div>
         <div class="field">
           <label>Marca / Modello *</label>
@@ -382,6 +421,42 @@ button.btn-blocked:hover{background:var(--ok)}
         </div>
       </div>
     </div>
+
+    <!-- VISTA PROMEK: dati anagrafica read-only (nascosta di default) -->
+    <div class="info-card-body" id="veicoloView" style="display:none">
+      <div class="info-row">
+        <div class="info-row-label">Targa</div>
+        <div class="info-row-val targa" id="vwTarga">—</div>
+      </div>
+      <div class="info-row">
+        <div class="info-row-label">Marca / Modello</div>
+        <div class="info-row-val" id="vwModello">—</div>
+      </div>
+      <div class="info-row">
+        <div class="info-row-label">Versione</div>
+        <div class="info-row-val" id="vwVersione">—</div>
+      </div>
+      <div class="info-row">
+        <div class="info-row-label">Motore</div>
+        <div class="info-row-val" id="vwMotore">—</div>
+      </div>
+      <div class="info-row">
+        <div class="info-row-label">Telaio</div>
+        <div class="info-row-val" id="vwTelaio">—</div>
+      </div>
+      <div class="info-row">
+        <div class="info-row-label">Immatricolazione</div>
+        <div class="info-row-val" id="vwImm">—</div>
+      </div>
+      <div class="info-row">
+        <div class="info-row-label">Km ingresso</div>
+        <div class="info-row-val" id="vwKm">—</div>
+      </div>
+    </div>
+    <div class="info-card-actions" id="veicoloActions" style="display:none">
+      <button class="btn btn-s btn-sm" onclick="modificaVeicolo()">✏️ Modifica veicolo</button>
+      <button class="btn btn-g btn-sm" onclick="scollegaVeicolo()" title="Scollega dall'anagrafica (resta solo come testo libero)">🔓 Scollega anagrafica</button>
+    </div>
   </div>
 
   <!-- CLIENTE -->
@@ -390,7 +465,9 @@ button.btn-blocked:hover{background:var(--ok)}
       <span class="ct">Cliente</span>
       <button class="btn btn-s btn-sm" onclick="apriMo('moCliente')">Cerca cliente</button>
     </div>
-    <div class="cb">
+
+    <!-- VISTA EDIT: input editabili (mostrata se NESSUN cliente_id) -->
+    <div class="cb" id="clienteEdit">
       <div class="g3">
         <div class="field sp2">
           <label>Ragione sociale / Nome *</label>
@@ -403,6 +480,46 @@ button.btn-blocked:hover{background:var(--ok)}
             oninput="SL.cliente.tel=this.value;dirty()">
         </div>
       </div>
+    </div>
+
+    <!-- VISTA PROMEK: dati anagrafica read-only (nascosta di default) -->
+    <div class="info-card-body" id="clienteView" style="display:none">
+      <div class="info-row">
+        <div class="info-row-label">Ragione sociale</div>
+        <div class="info-row-val" id="clRagSoc">—</div>
+      </div>
+      <div class="info-row" id="rowTipo">
+        <div class="info-row-label">Tipo</div>
+        <div class="info-row-val" id="clTipo">—</div>
+      </div>
+      <div class="info-row" id="rowCF">
+        <div class="info-row-label">Codice fiscale</div>
+        <div class="info-row-val" id="clCF">—</div>
+      </div>
+      <div class="info-row" id="rowPIVA">
+        <div class="info-row-label">Partita IVA</div>
+        <div class="info-row-val" id="clPIVA">—</div>
+      </div>
+      <div class="info-row" id="rowIndirizzo">
+        <div class="info-row-label">Indirizzo</div>
+        <div class="info-row-val" id="clIndirizzo">—</div>
+      </div>
+      <div class="info-row" id="rowTel">
+        <div class="info-row-label">Telefono</div>
+        <div class="info-row-val" id="clTel2">—</div>
+      </div>
+      <div class="info-row" id="rowCell">
+        <div class="info-row-label">Cellulare</div>
+        <div class="info-row-val" id="clCell">—</div>
+      </div>
+      <div class="info-row" id="rowEmail">
+        <div class="info-row-label">Email</div>
+        <div class="info-row-val" id="clEmail">—</div>
+      </div>
+    </div>
+    <div class="info-card-actions" id="clienteActions" style="display:none">
+      <button class="btn btn-s btn-sm" onclick="modificaCliente()">✏️ Modifica cliente</button>
+      <button class="btn btn-g btn-sm" onclick="scollegaCliente()" title="Scollega dall'anagrafica (resta solo come testo libero)">🔓 Scollega anagrafica</button>
     </div>
   </div>
 
@@ -907,6 +1024,11 @@ const SL = {
   note_interne: '', note_cliente: '',
   ore_riconosciute: 0, motivazione_rettifica: '',
   cliente: { id:null, nome:'', tel:'' },
+  veicolo_id: null,            // FK a veicoli_anagrafica (se collegato)
+  // Snapshot anagrafica per render vista ProMEK (popolato da loadAnagraficaPerScheda).
+  // Quando la scheda non è collegata ad anagrafica, restano null e si usa la vista edit.
+  _anagVeicolo: null,          // { targa, marca, modello, versione, motore, telaio, data_immatricolazione, cliente_id }
+  _anagCliente: null,          // { id, ragione_sociale, tipo, cf, piva, indirizzo, cap, comune, provincia, telefono, cellulare, email, nome, cognome }
   rapportini: [],
   _dirty: false, _daDDT: null
 };
@@ -3178,8 +3300,29 @@ async function caricaScheda(id){
     SL.note_interne= s.note_interne || '';
     SL.note_cliente= s.note_cliente || '';
     SL.cliente     = { id: s.cliente_id, nome: s.cliente_nome||'', tel: s.cliente_tel||'' };
+    SL.veicolo_id  = s.veicolo_id || null;
     SL.ore_riconosciute    = s.ore_riconosciute || 0;
     SL.motivazione_rettifica = s.motivazione_rettifica || '';
+
+    // Carica anagrafica veicolo+cliente da Supabase per vista ProMEK.
+    // Se la scheda è collegata (veicolo_id presente) → usa quello.
+    // Altrimenti, prova match per targa: se trovato veicolo, popola anche cliente.
+    try {
+      const targaLookup = SL.veicolo_id || SL.targa;
+      if (targaLookup) {
+        const anag = await caricaAnagraficaPerVeicolo(targaLookup);
+        if (anag) {
+          SL._anagVeicolo = anag;
+          if (anag.clienti) SL._anagCliente = anag.clienti;
+          // Se in DB non ho ancora veicolo_id ma il match per targa funziona,
+          // lo aggancio (sarà persistito al prossimo salvataggio)
+          if (!SL.veicolo_id) SL.veicolo_id = anag.targa;
+          if (!SL.cliente.id && anag.clienti) {
+            SL.cliente.id = anag.clienti.id;
+          }
+        }
+      }
+    } catch(e){ console.warn('Anagrafica per scheda:', e); }
 
     // Carica i rapportini DIRETTAMENTE dalla tabella `rapportini_giornalieri`
     // invece che dal mirror JSONB sulla scheda. Il mirror può essere stale
@@ -3256,6 +3399,10 @@ async function caricaScheda(id){
 
     renderRapportini();
     aggiornaTotali();
+
+    // Render delle viste anagrafica (ProMEK style se collegate, altrimenti edit)
+    renderVeicoloAnagrafica();
+    renderClienteAnagrafica();
 
   } catch(e){
     console.error('caricaScheda:', e);
@@ -3353,6 +3500,8 @@ async function salvaBozzaSilente(){
       problema:       SL.problema,
       note_interne:   SL.note_interne,
       note_cliente:   SL.note_cliente,
+      cliente_id:     SL.cliente.id || null,
+      veicolo_id:     SL.veicolo_id || null,
       cliente_nome:   SL.cliente.nome,
       cliente_tel:    SL.cliente.tel,
       imponibile:     SL._imp||0,
@@ -3467,6 +3616,8 @@ async function salvaBozza(){
       problema:       SL.problema,
       note_interne:   SL.note_interne,
       note_cliente:   SL.note_cliente,
+      cliente_id:     SL.cliente.id || null,
+      veicolo_id:     SL.veicolo_id || null,
       cliente_nome:   SL.cliente.nome,
       cliente_tel:    SL.cliente.tel,
       imponibile:     SL._imp||0,
@@ -3669,20 +3820,18 @@ async function cercaCliente(q){
   const res = document.getElementById('clienteResults');
   if(q.length < 2){ res.innerHTML=''; return; }
 
-  // ─── TODO SUPABASE ──────────────────────────────────────
-  // const { data } = await _sb.from('clienti')
-  //   .select('id,ragione_sociale,piva,cf,tipo,pec,codice_sdi')
-  //   .or(`ragione_sociale.ilike.%${q}%,piva.ilike.%${q}%`)
-  //   .limit(10);
-  // renderClienti(data||[]);
-  // ────────────────────────────────────────────────────────
-
-  // Demo
-  const demo = [
-    {id:'1',ragione_sociale:'Trasporti Bianchi Srl',piva:'IT01234567890',tipo:'b2b'},
-    {id:'2',ragione_sociale:'Mario Rossi',cf:'RSSMRA80A01H501U',tipo:'b2c'},
-  ].filter(c=>c.ragione_sociale.toLowerCase().includes(q.toLowerCase()));
-  renderClienti(demo);
+  try {
+    const { data, error } = await _sb.from('clienti')
+      .select('id, ragione_sociale, tipo, cf, piva, indirizzo, cap, comune, provincia, telefono, cellulare, email, nome, cognome')
+      .or(`ragione_sociale.ilike.%${q}%,piva.ilike.%${q}%,cf.ilike.%${q}%,cognome.ilike.%${q}%`)
+      .order('ragione_sociale', { ascending: true })
+      .limit(20);
+    if (error) throw error;
+    renderClienti(data || []);
+  } catch(e){
+    console.warn('cercaCliente:', e);
+    res.innerHTML = `<p style="font-size:13px;color:var(--err)">Errore di ricerca: ${e.message||e}</p>`;
+  }
 }
 
 function renderClienti(lista){
@@ -3699,11 +3848,252 @@ function renderClienti(lista){
 }
 
 function selCliente(c){
-  SL.cliente = { id:c.id, nome:c.ragione_sociale, tel:'' };
+  SL.cliente = { id:c.id, nome:c.ragione_sociale, tel: c.telefono || c.cellulare || '' };
+  // Salvo lo snapshot anagrafica completo per la vista ProMEK
+  SL._anagCliente = { ...c };
   document.getElementById('cNome').value = c.ragione_sociale;
+  const elTel = document.getElementById('cTel');
+  if (elTel) elTel.value = SL.cliente.tel;
   chiudiMo('moCliente');
   toast(`Cliente: ${c.ragione_sociale}`,'ok');
+  // Se ho selezionato un cliente con dati ricchi, mostro la vista ProMEK
+  renderClienteAnagrafica();
   dirty();
+}
+
+// ══════════════════════════════════════════════════════════
+// ANAGRAFICA VEICOLI / CLIENTI (Supabase)
+// ══════════════════════════════════════════════════════════
+// La scheda può essere "collegata" a un veicolo/cliente in anagrafica.
+// Quando lo è, mostriamo i dati read-only in stile ProMEK. Altrimenti
+// fall-back agli input editabili. Lo stato è tracciato in SL.veicolo_id,
+// SL.cliente.id, SL._anagVeicolo, SL._anagCliente.
+
+// Autocomplete sulla targa: query veicoli_anagrafica live (limit 8)
+let _acTargaTimer = null;
+let _acTargaSel = -1;
+async function autocompleteTarga(input){
+  const q = String(input.value||'').trim().toUpperCase();
+  // se ho cancellato tutto, chiudo dropdown senza scollegare automaticamente
+  // (lo scollegamento è esplicito col bottone)
+  if (q.length < 2) { chiudiAcTarga(); return; }
+  clearTimeout(_acTargaTimer);
+  _acTargaTimer = setTimeout(async ()=>{
+    try {
+      const { data } = await _sb.from('veicoli_anagrafica')
+        .select('targa, marca, modello, versione, motore, telaio, data_immatricolazione, cliente_id, clienti:cliente_id(id, ragione_sociale, tipo, cf, piva, indirizzo, cap, comune, provincia, telefono, cellulare, email, nome, cognome)')
+        .ilike('targa', `%${q}%`)
+        .limit(8);
+      mostraAcTarga(data || []);
+    } catch(e){ console.warn('autocompleteTarga:', e); }
+  }, 180);
+}
+
+function mostraAcTarga(items){
+  const box = document.getElementById('acTargaResults');
+  if (!box) return;
+  if (!items.length) {
+    box.style.display = 'none';
+    box.innerHTML = '';
+    return;
+  }
+  box.innerHTML = items.map((v,i) => {
+    const c = v.clienti || {};
+    const nomeCli = c.ragione_sociale || [c.cognome, c.nome].filter(Boolean).join(' ') || '—';
+    const modAll = [v.marca, v.modello].filter(Boolean).join(' ');
+    return `<div class="ac-targa-item" onclick='selezionaVeicoloAnagrafica(${JSON.stringify(v).replace(/'/g,"&apos;")})'>
+      <div class="t">${v.targa}</div>
+      <div class="m">${modAll || '—'}</div>
+      <div class="c">${nomeCli}</div>
+    </div>`;
+  }).join('');
+  box.style.display = 'block';
+  _acTargaSel = -1;
+}
+
+function chiudiAcTarga(){
+  const box = document.getElementById('acTargaResults');
+  if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+}
+
+// Selezione veicolo da autocomplete: popola SL + passa in vista ProMEK
+function selezionaVeicoloAnagrafica(v){
+  if (!v) return;
+  const c = v.clienti || null;
+
+  SL.veicolo_id    = v.targa;  // PK veicoli_anagrafica = targa (text)
+  SL.targa         = String(v.targa||'').toUpperCase();
+  SL.modello       = [v.marca, v.modello].filter(Boolean).join(' ');
+  SL._anagVeicolo  = { ...v };
+  // Reset esplicito: il cliente è quello del veicolo (regola: cambio veicolo → reset cliente)
+  if (c) {
+    SL.cliente = { id: c.id, nome: c.ragione_sociale || [c.cognome,c.nome].filter(Boolean).join(' '), tel: c.telefono || c.cellulare || '' };
+    SL._anagCliente = { ...c };
+  } else {
+    SL.cliente = { id: null, nome: '', tel: '' };
+    SL._anagCliente = null;
+  }
+
+  // Aggiorno i campi input (anche se nascosti) per coerenza con il salvataggio
+  const setV = (id,val)=>{ const el=document.getElementById(id); if(el) el.value = val||''; };
+  setV('targa',   SL.targa);
+  setV('modello', SL.modello);
+  setV('cNome',   SL.cliente.nome);
+  setV('cTel',    SL.cliente.tel);
+
+  chiudiAcTarga();
+  renderVeicoloAnagrafica();
+  renderClienteAnagrafica();
+  toast(`Veicolo ${SL.targa} collegato all'anagrafica`, 'ok');
+  dirty();
+}
+
+// Carica anagrafica veicolo+cliente da Supabase a partire da targa o veicolo_id
+async function caricaAnagraficaPerVeicolo(targa){
+  if (!targa) return null;
+  try {
+    const { data, error } = await _sb.from('veicoli_anagrafica')
+      .select('targa, marca, modello, versione, motore, telaio, data_immatricolazione, cliente_id, clienti:cliente_id(id, ragione_sociale, tipo, cf, piva, indirizzo, cap, comune, provincia, telefono, cellulare, email, nome, cognome)')
+      .eq('targa', String(targa).toUpperCase().trim())
+      .maybeSingle();
+    if (error || !data) return null;
+    return data;
+  } catch(e){ console.warn('caricaAnagraficaPerVeicolo:', e); return null; }
+}
+
+// Mostra la vista veicolo ProMEK / nasconde edit
+function renderVeicoloAnagrafica(){
+  const view   = document.getElementById('veicoloView');
+  const acts   = document.getElementById('veicoloActions');
+  const edit   = document.getElementById('veicoloEdit');
+  const v      = SL._anagVeicolo;
+  if (!v) {
+    // No anagrafica → vista edit
+    if (view) view.style.display = 'none';
+    if (acts) acts.style.display = 'none';
+    if (edit) edit.style.display = '';
+    return;
+  }
+  if (view) view.style.display = '';
+  if (acts) acts.style.display = '';
+  if (edit) edit.style.display = 'none';
+
+  const set = (id, val) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (val === null || val === undefined || val === '') {
+      el.textContent = '—';
+      el.classList.add('empty');
+    } else {
+      el.textContent = String(val);
+      el.classList.remove('empty');
+    }
+  };
+
+  const modAll = [v.marca, v.modello].filter(Boolean).join(' ');
+  set('vwTarga',    v.targa);
+  set('vwModello',  modAll);
+  set('vwVersione', v.versione);
+  set('vwMotore',   v.motore);
+  set('vwTelaio',   v.telaio);
+  set('vwImm',      formattaDataITA(v.data_immatricolazione));
+  set('vwKm',       SL.km ? SL.km + ' km' : null);
+}
+
+// Mostra la vista cliente ProMEK / nasconde edit
+function renderClienteAnagrafica(){
+  const view   = document.getElementById('clienteView');
+  const acts   = document.getElementById('clienteActions');
+  const edit   = document.getElementById('clienteEdit');
+  const c      = SL._anagCliente;
+  if (!c) {
+    if (view) view.style.display = 'none';
+    if (acts) acts.style.display = 'none';
+    if (edit) edit.style.display = '';
+    return;
+  }
+  if (view) view.style.display = '';
+  if (acts) acts.style.display = '';
+  if (edit) edit.style.display = 'none';
+
+  const set = (id, val) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (val === null || val === undefined || val === '') {
+      el.textContent = '—';
+      el.classList.add('empty');
+    } else {
+      el.textContent = String(val);
+      el.classList.remove('empty');
+    }
+  };
+
+  const tipo = c.tipo === 'b2b' ? 'Azienda' : 'Privato';
+  const indirizzo = [c.indirizzo, c.cap, c.comune, c.provincia ? `(${c.provincia})` : null]
+    .filter(Boolean).join(' ');
+
+  set('clRagSoc',    c.ragione_sociale);
+  set('clTipo',      tipo);
+  set('clCF',        c.cf);
+  set('clPIVA',      c.piva);
+  set('clIndirizzo', indirizzo);
+  set('clTel2',      c.telefono);
+  set('clCell',      c.cellulare);
+  set('clEmail',     c.email);
+
+  // Per i privati: nascondi P.IVA se vuota (non ha senso). Per le aziende: nascondi CF se = P.IVA (caso comune).
+  const rowPIVA = document.getElementById('rowPIVA');
+  const rowCF   = document.getElementById('rowCF');
+  if (rowPIVA) rowPIVA.style.display = c.piva ? '' : 'none';
+  if (rowCF)   rowCF.style.display   = (c.cf && c.cf !== c.piva) ? '' : 'none';
+}
+
+// Torna in vista edit per il veicolo (utente vuole modificare)
+function modificaVeicolo(){
+  const view = document.getElementById('veicoloView');
+  const acts = document.getElementById('veicoloActions');
+  const edit = document.getElementById('veicoloEdit');
+  if (view) view.style.display = 'none';
+  if (acts) acts.style.display = 'none';
+  if (edit) edit.style.display = '';
+  toast('Modifica veicolo: le modifiche sovrascrivono i dati anagrafici nella scheda', 'info');
+}
+
+function modificaCliente(){
+  const view = document.getElementById('clienteView');
+  const acts = document.getElementById('clienteActions');
+  const edit = document.getElementById('clienteEdit');
+  if (view) view.style.display = 'none';
+  if (acts) acts.style.display = 'none';
+  if (edit) edit.style.display = '';
+  toast('Modifica cliente: le modifiche sovrascrivono i dati anagrafici nella scheda', 'info');
+}
+
+// Scollegamento esplicito: rimuove il legame ma mantiene i dati come testo libero
+function scollegaVeicolo(){
+  if (!confirm('Scollegare il veicolo dall\'anagrafica? I dati restano nella scheda come testo libero.')) return;
+  SL.veicolo_id = null;
+  SL._anagVeicolo = null;
+  renderVeicoloAnagrafica();
+  toast('Veicolo scollegato dall\'anagrafica', 'info');
+  dirty();
+}
+
+function scollegaCliente(){
+  if (!confirm('Scollegare il cliente dall\'anagrafica? I dati restano nella scheda come testo libero.')) return;
+  SL.cliente.id = null;
+  SL._anagCliente = null;
+  renderClienteAnagrafica();
+  toast('Cliente scollegato dall\'anagrafica', 'info');
+  dirty();
+}
+
+// Formatta data ISO (YYYY-MM-DD) → DD/MM/YYYY
+function formattaDataITA(iso){
+  if (!iso) return null;
+  const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return iso;
+  return `${m[3]}/${m[2]}/${m[1]}`;
 }
 
 // ══════════════════════════════════════════════════════════
