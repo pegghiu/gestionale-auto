@@ -2422,20 +2422,25 @@ function renderRiepilogo(){
           </td>`;
       }
       // Evidenza per righe FUSE (olio form + olio DDT auto-uniti)
-      // E per righe SENZA PREZZO (prezzo <= 0) → sfondo giallo attenzione
-      const prezzoMancante = !(parseFloat(el.prezzo) > 0);
+      // E per righe con MARGINE ZERO: prezzo cliente == prezzo netto fornitore
+      // (è la stessa regola dei DDT: il listino al cliente NON deve coincidere
+      // col prezzo fornitore, altrimenti significa che nessuno ha ricaricato).
+      // Tolleranza 1 centesimo per arrotondamenti.
+      const prezzoCli = parseFloat(el.prezzo) || 0;
+      const nettoFor  = _NETTI_CACHE[String(el.codice||'').toUpperCase()] || 0;
+      const margineZero = (prezzoCli > 0 && nettoFor > 0 && Math.abs(prezzoCli - nettoFor) < 0.01);
       let trStyle;
-      if (prezzoMancante) {
-        trStyle = 'style="background:#FFF4D6;border-left:3px solid #E0A800" title="Prezzo da confermare"';
+      if (margineZero) {
+        trStyle = 'style="background:#FFF8E6;border-left:3px solid #E0A800" title="Prezzo cliente = prezzo fornitore (margine zero) — da aggiornare"';
       } else if (el.fuso) {
         trStyle = 'style="background:#FFF8E5"';
       } else {
         trStyle = '';
       }
       const badgeFuso = el.fuso ? `<span title="Olio dal DDT con quantità segnalata dal dipendente nel form ORE COMMESSE (${el._qtyForm||el.qty} lt)" style="display:inline-block;background:#FFD27A;color:#7A4D00;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-left:4px;letter-spacing:.02em;vertical-align:middle">🛢️ AUTO-UNITO</span>` : '';
-      // Bottone "imposta prezzo" se manca → apre prompt
-      const btnPrezzo = prezzoMancante
-        ? `<button type="button" title="Imposta prezzo (manca!)"
+      // Bottone "imposta prezzo cliente" se margine zero → apre prompt
+      const btnPrezzo = margineZero
+        ? `<button type="button" title="Prezzo cliente uguale al netto fornitore (€${nettoFor.toFixed(2)}) — clicca per aggiornarlo"
              onclick="impostaPrezzoRiepilogo(${el._idx})"
              style="background:#E0A800;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:800;padding:3px 8px;cursor:pointer;margin-left:4px">€?</button>`
         : '';
@@ -2764,15 +2769,17 @@ function eliminaRigaRiepilogo(idx){
   salvaDebounced('✓ Riga eliminata');
 }
 
-// Imposta prezzo via prompt rapido (per righe con prezzo mancante / da confermare)
+// Imposta prezzo via prompt rapido (per righe con margine zero / da aggiornare)
 function impostaPrezzoRiepilogo(idx){
   if (!SL.riepilogo_override || !SL.riepilogo_override.ricambi) return;
   const el = SL.riepilogo_override.ricambi[idx];
   if (!el) return;
 
   const desc = el.descrizione || el.codice || 'riga senza descrizione';
+  const netto = _NETTI_CACHE[String(el.codice||'').toUpperCase()] || 0;
+  const nettoInfo = netto > 0 ? `\n\nNetto fornitore: €${netto.toFixed(2)}\n(es. +30% → €${(netto*1.30).toFixed(2)} · +40% → €${(netto*1.40).toFixed(2)})` : '';
   const raw = prompt(
-    `Imposta prezzo unitario per:\n${desc}\n\n(in €, separatore . o ,)`,
+    `Imposta nuovo prezzo cliente per:\n${desc}${nettoInfo}\n\n(in €, separatore . o ,)`,
     el.prezzo > 0 ? String(el.prezzo) : ''
   );
   if (raw === null) return; // annullato
