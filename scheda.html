@@ -423,6 +423,10 @@ button.btn-blocked:hover{background:var(--ok)}
             oninput="SL.km=this.value;dirty()">
         </div>
       </div>
+      <!-- Bottone "Annulla modifica": visibile solo se c'è anagrafica a cui tornare -->
+      <div id="veicoloEditActions" style="display:none;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)">
+        <button class="btn btn-g btn-sm" onclick="annullaModificaVeicolo()" title="Scarta le modifiche e torna ai dati anagrafica">↩️ Annulla modifica</button>
+      </div>
     </div>
 
     <!-- VISTA PROMEK: dati anagrafica read-only (nascosta di default) -->
@@ -482,6 +486,10 @@ button.btn-blocked:hover{background:var(--ok)}
           <input type="text" id="cTel" placeholder="+39 030..."
             oninput="SL.cliente.tel=this.value;dirty()">
         </div>
+      </div>
+      <!-- Bottone "Annulla modifica": visibile solo se c'è anagrafica a cui tornare -->
+      <div id="clienteEditActions" style="display:none;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)">
+        <button class="btn btn-g btn-sm" onclick="annullaModificaCliente()" title="Scarta le modifiche e torna ai dati anagrafica">↩️ Annulla modifica</button>
       </div>
     </div>
 
@@ -3971,17 +3979,20 @@ function renderVeicoloAnagrafica(){
   const view   = document.getElementById('veicoloView');
   const acts   = document.getElementById('veicoloActions');
   const edit   = document.getElementById('veicoloEdit');
+  const editActs = document.getElementById('veicoloEditActions');
   const v      = SL._anagVeicolo;
   if (!v) {
     // No anagrafica → vista edit
     if (view) view.style.display = 'none';
     if (acts) acts.style.display = 'none';
     if (edit) edit.style.display = '';
+    if (editActs) editActs.style.display = 'none';  // niente "Annulla" se non c'è anagrafica
     return;
   }
   if (view) view.style.display = '';
   if (acts) acts.style.display = '';
   if (edit) edit.style.display = 'none';
+  if (editActs) editActs.style.display = 'none';  // nascosto in vista ProMEK
 
   const set = (id, val) => {
     const el = document.getElementById(id);
@@ -4010,16 +4021,19 @@ function renderClienteAnagrafica(){
   const view   = document.getElementById('clienteView');
   const acts   = document.getElementById('clienteActions');
   const edit   = document.getElementById('clienteEdit');
+  const editActs = document.getElementById('clienteEditActions');
   const c      = SL._anagCliente;
   if (!c) {
     if (view) view.style.display = 'none';
     if (acts) acts.style.display = 'none';
     if (edit) edit.style.display = '';
+    if (editActs) editActs.style.display = 'none';
     return;
   }
   if (view) view.style.display = '';
   if (acts) acts.style.display = '';
   if (edit) edit.style.display = 'none';
+  if (editActs) editActs.style.display = 'none';
 
   const set = (id, val) => {
     const el = document.getElementById(id);
@@ -4073,9 +4087,12 @@ function modificaVeicolo(){
   const view = document.getElementById('veicoloView');
   const acts = document.getElementById('veicoloActions');
   const edit = document.getElementById('veicoloEdit');
+  const editActs = document.getElementById('veicoloEditActions');
   if (view) view.style.display = 'none';
   if (acts) acts.style.display = 'none';
   if (edit) edit.style.display = '';
+  // Bottone "Annulla modifica" visibile solo se c'è anagrafica a cui tornare
+  if (editActs) editActs.style.display = SL._anagVeicolo ? '' : 'none';
   toast('Modifica veicolo: le modifiche sovrascrivono i dati anagrafici nella scheda', 'info');
 }
 
@@ -4083,10 +4100,44 @@ function modificaCliente(){
   const view = document.getElementById('clienteView');
   const acts = document.getElementById('clienteActions');
   const edit = document.getElementById('clienteEdit');
+  const editActs = document.getElementById('clienteEditActions');
   if (view) view.style.display = 'none';
   if (acts) acts.style.display = 'none';
   if (edit) edit.style.display = '';
+  if (editActs) editActs.style.display = SL._anagCliente ? '' : 'none';
   toast('Modifica cliente: le modifiche sovrascrivono i dati anagrafici nella scheda', 'info');
+}
+
+// Annulla modifica: scarta gli edit in corso e torna alla vista anagrafica.
+// Ripristina anche i campi input al valore originale dell'anagrafica, così
+// se l'utente avesse cambiato qualcosa nei campi non resta in memoria.
+function annullaModificaVeicolo(){
+  if (!SL._anagVeicolo) return;
+  const v = SL._anagVeicolo;
+  // Ripristino i campi input ai valori anagrafica
+  SL.targa   = String(v.targa||'').toUpperCase();
+  SL.modello = [v.marca, v.modello].filter(Boolean).join(' ');
+  const setV = (id,val)=>{ const el=document.getElementById(id); if(el) el.value = val||''; };
+  setV('targa',   SL.targa);
+  setV('modello', SL.modello);
+  // Anno e km non sono in anagrafica → li lascio come sono
+  renderVeicoloAnagrafica();
+  toast('Modifiche al veicolo annullate', 'info');
+}
+
+function annullaModificaCliente(){
+  if (!SL._anagCliente) return;
+  const c = SL._anagCliente;
+  SL.cliente = {
+    id:   c.id,
+    nome: c.ragione_sociale || [c.cognome, c.nome].filter(Boolean).join(' '),
+    tel:  c.telefono || c.cellulare || ''
+  };
+  const setV = (id,val)=>{ const el=document.getElementById(id); if(el) el.value = val||''; };
+  setV('cNome', SL.cliente.nome);
+  setV('cTel',  SL.cliente.tel);
+  renderClienteAnagrafica();
+  toast('Modifiche al cliente annullate', 'info');
 }
 
 // Scollegamento esplicito: rimuove il legame ma mantiene i dati come testo libero
