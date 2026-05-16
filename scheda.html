@@ -1564,6 +1564,19 @@ function riceviRapportino(rap){
   const idx = SL.rapportini.findIndex(r=>r._id===rap._id);
   if(idx>=0) SL.rapportini[idx] = rap;
   else SL.rapportini.push({ ...rap, _id: _rapId++ });
+
+  // Se il rapportino porta un km valido, aggiorna i km della scheda.
+  // Regola: l'ultimo rapportino con km > 0 vince (assumendo che i km siano monotoni crescenti).
+  const kmRap = parseInt(rap.km) || 0;
+  if (kmRap > 0) {
+    SL.km = String(kmRap);
+    // Aggiorno gli input visibili (sia vista edit che vista ProMEK)
+    const elKm = document.getElementById('km');
+    if (elKm) elKm.value = SL.km;
+    const elKmView = document.getElementById('vwKmInput');
+    if (elKmView) elKmView.value = SL.km;
+  }
+
   renderRapportini();
   aggiornaTotali();
   dirty();
@@ -3275,6 +3288,7 @@ function caricaDaRapportino(){
         data:   new Date().toISOString().slice(0,10),
         tecnico: d.tecnico||'',
         note: d._from==='ddt' ? `Ricambi da DDT ${d.ddt_numero||''}` : '',
+        km: parseInt(d.km)||null,
         elementi: d.elementi
       });
       document.getElementById('daDDT').textContent =
@@ -3357,11 +3371,29 @@ async function caricaScheda(id){
     // Fallback al mirror se la query fallisce, per compatibilità.
     let rapsReali = null;
     try {
-      const { data: rr, error: errR } = await _sb.from('rapportini_giornalieri')
-        .select('id, numero, data, tecnico, note, ore, elementi, h_totali, tot_ore, tot_ricambi, totale, created_at, submitted_at')
-        .eq('scheda_id', s.id)
-        .order('data', { ascending: true })
-        .order('created_at', { ascending: true });
+      // Provo a includere il campo km. Se la colonna non esiste su DB ancora,
+      // ricado sulla query base senza km.
+      let rr = null, errR = null;
+      try {
+        const r1 = await _sb.from('rapportini_giornalieri')
+          .select('id, numero, data, tecnico, note, ore, elementi, h_totali, tot_ore, tot_ricambi, totale, km, created_at, submitted_at')
+          .eq('scheda_id', s.id)
+          .order('data', { ascending: true })
+          .order('created_at', { ascending: true });
+        if (!r1.error) { rr = r1.data; errR = null; }
+        else { errR = r1.error; }
+      } catch(e){ errR = e; }
+
+      // Fallback senza km se la colonna non esiste
+      if (!rr) {
+        const r2 = await _sb.from('rapportini_giornalieri')
+          .select('id, numero, data, tecnico, note, ore, elementi, h_totali, tot_ore, tot_ricambi, totale, created_at, submitted_at')
+          .eq('scheda_id', s.id)
+          .order('data', { ascending: true })
+          .order('created_at', { ascending: true });
+        if (!r2.error) { rr = r2.data; errR = null; }
+        else { errR = r2.error; }
+      }
       if (!errR && Array.isArray(rr)) rapsReali = rr;
     } catch(_){}
 
@@ -3375,12 +3407,24 @@ async function caricaScheda(id){
         note:      r.note || '',
         ore:       r.ore || [],
         elementi:  r.elementi || [],
+        km:        r.km || null,           // km del rapportino (può non esserci)
         h_totali:  r.h_totali  || 0,
         tot_ore:   r.tot_ore   || 0,
         tot_ricambi: r.tot_ricambi || 0,
         totale:    r.totale    || 0,
-        submitted_at: r.submitted_at  // preserva l'orario di submit Form originale
+        submitted_at: r.submitted_at
       }));
+
+      // Auto-precompila SL.km dal rapportino più recente che ne ha uno valido.
+      // I rapportini sono ordinati ASC; cerco partendo dal fondo (più recente).
+      // Sovrascrivo SL.km SOLO se proviene da un rapportino, perché è dato fresco.
+      for (let i = SL.rapportini.length - 1; i >= 0; i--) {
+        const kmRap = parseInt(SL.rapportini[i].km) || 0;
+        if (kmRap > 0) {
+          SL.km = String(kmRap);
+          break;
+        }
+      }
     } else {
       SL.rapportini = s.rapportini_giornalieri || [];
     }
@@ -3591,9 +3635,8 @@ async function salvaRapportiniSeparati(schedaId){
       const tOre  = (r.ore||[]).reduce((s,o)=>s+(parseFloat(o.ore)||0)*(parseFloat(o.tariffa)||0),0);
       const tRic  = (r.elementi||[]).filter(el=>el.tipo==='ricambio')
                       .reduce((s,el)=>s+(el.qty||0)*(el.prezzo||0),0);
-      // submitted_at: preserva l'originale se esiste, altrimenti usa ora corrente
-      // (caso: rapportino creato manualmente da scheda, non da Form)
       const submitted = subMap[r.numero] || r.submitted_at || oraISO;
+      const kmRap = parseInt(r.km) || null;
       return {
         scheda_id:    schedaId,
         numero:       r.numero||'',
@@ -3606,11 +3649,17 @@ async function salvaRapportiniSeparati(schedaId){
         tot_ore:      tOre,
         tot_ricambi:  tRic,
         totale:       tOre+tRic,
+        km:           kmRap,
         submitted_at: submitted
       };
     });
 
-    const { error } = await _sb.from('rapportini_giornalieri').insert(righe);
+    // Tento insert con km; se la colonna non esiste, riprovo senza
+    let { error } = await _sb.from('rapportini_giornalieri').insert(righe);
+    if (error && /column .*km.* does not exist/i.test(error.message||'')) {
+      const righeNoKm = righe.map(({km, ...rest}) => rest);
+      ({ error } = await _sb.from('rapportini_giornalieri').insert(righeNoKm));
+    }
     if(error) console.error('salvaRapportiniSeparati:', error);
   } catch(e){ console.error('salvaRapportiniSeparati:', e); }
 }
