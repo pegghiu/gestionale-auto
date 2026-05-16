@@ -323,12 +323,14 @@ button.btn-blocked:hover{background:var(--ok)}
           style="font-size:14px;font-weight:600;padding:7px 12px;border:1px solid var(--border);border-radius:var(--rs);min-width:300px">
           <option value="">Aperta (lavoro in corso)</option>
           <option value="CA">-CA · Da pagare</option>
+          <option value="CAF">-CAF · Conclusa da fatturare (di solito a fine mese)</option>
           <option value="CP">-CP · Pagata, non ancora fatturata</option>
           <option value="V"> -V  · Veicolo in vendita / venduto</option>
           <option value="R"> -R  · Pagata con scontrino fiscale</option>
           <option value="F"> -F  · Fatturata</option>
           <option value="FF">-FF · Fatturata su altro veicolo</option>
           <option value="S"> -S  · Preventivo</option>
+          <option value="X"> -X  · Flotta (Arval / Ayvens / Alphabet)</option>
         </select>
       </div>
       <div style="border-left:1px solid var(--border);padding-left:14px">
@@ -989,12 +991,14 @@ function init(){
 const TIPI_SCHEDA = {
   '':   { label:'Aperta', desc:'Scheda aperta — lavoro in corso, suffisso da aggiungere al termine', colore:'#706C65', bg:'#F0EDE8' },
   'CA': { label:'-CA',    desc:'Da pagare — lavoro eseguito, pagamento in attesa',                   colore:'#854F0B', bg:'#FAEEDA' },
+  'CAF':{ label:'-CAF',   desc:'Conclusa da fatturare — lavoro chiuso, fattura da emettere (di solito a fine mese, raggruppata)', colore:'#A8341A', bg:'#FCEAE3' },
   'CP': { label:'-CP',    desc:'Pagata — incasso ricevuto, fattura non ancora emessa',               colore:'#1A4FAA', bg:'#EBF0FD' },
   'V':  { label:'-V',     desc:'Veicolo in vendita o già venduto',                                   colore:'#534AB7', bg:'#EEEDFE' },
   'R':  { label:'-R',     desc:'Pagata con scontrino fiscale — chiusa con corrispettivo',            colore:'#1F7A35', bg:'#E6F5EB' },
   'F':  { label:'-F',     desc:'Fatturata — fattura emessa e collegata a questa scheda',             colore:'#1F7A35', bg:'#E6F5EB' },
   'FF': { label:'-FF',    desc:'Fatturata su altro veicolo — costi imputati a targa diversa',       colore:'#706C65', bg:'#F0EDE8' },
   'S':  { label:'-S',     desc:'Preventivo — può diventare scheda definitiva',                      colore:'#534AB7', bg:'#EEEDFE' },
+  'X':  { label:'-X',     desc:'Flotta — veicolo Arval / Ayvens / Alphabet, fatturazione dedicata', colore:'#0B6E7A', bg:'#DEF1F4' },
 };
 
 function setTipoScheda(tipo){
@@ -3402,7 +3406,11 @@ function buildPayload(){
 // STAMPA PDF
 // ══════════════════════════════════════════════════════════
 function stampa(){
-  if(!valida()) return;
+  // Per la stampa NON è obbligatorio il tecnico (puoi stampare anche senza assegnarlo).
+  // Restano obbligatori targa, modello e cliente.
+  if(!SL.targa)        { toast('Inserisci la targa','err');             return; }
+  if(!SL.modello)      { toast('Inserisci il modello','err');           return; }
+  if(!SL.cliente.nome) { toast('Inserisci i dati del cliente','err');   return; }
 
   // Popola il documento stampabile
   const fmtData = d => d ? new Date(d).toLocaleDateString('it-IT',{day:'2-digit',month:'long',year:'numeric'}) : '—';
