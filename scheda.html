@@ -457,7 +457,12 @@ button.btn-blocked:hover{background:var(--ok)}
       </div>
       <div class="info-row">
         <div class="info-row-label">Km ingresso</div>
-        <div class="info-row-val" id="vwKm">—</div>
+        <div class="info-row-val">
+          <input type="number" id="vwKmInput" min="0" placeholder="—"
+            style="width:120px;padding:4px 8px;border:1px solid var(--border);border-radius:var(--rs);font-size:14px;font-weight:600;font-family:inherit;text-align:right"
+            oninput="SL.km=this.value;dirty()">
+          <span style="font-size:13px;color:var(--text-m);margin-left:6px">km</span>
+        </div>
       </div>
     </div>
     <div class="info-card-actions" id="veicoloActions" style="display:none">
@@ -495,9 +500,17 @@ button.btn-blocked:hover{background:var(--ok)}
 
     <!-- VISTA PROMEK: dati anagrafica read-only (nascosta di default) -->
     <div class="info-card-body" id="clienteView" style="display:none">
-      <div class="info-row">
-        <div class="info-row-label">Ragione sociale</div>
-        <div class="info-row-val" id="clRagSoc">—</div>
+      <div class="info-row" id="rowNomeAzienda">
+        <div class="info-row-label" id="clNomeLabel">Ragione sociale</div>
+        <div class="info-row-val" id="clNomeVal">—</div>
+      </div>
+      <div class="info-row" id="rowNomePrivato" style="display:none">
+        <div class="info-row-label">Nome</div>
+        <div class="info-row-val" id="clNome">—</div>
+      </div>
+      <div class="info-row" id="rowCognomePrivato" style="display:none">
+        <div class="info-row-label">Cognome</div>
+        <div class="info-row-val" id="clCognome">—</div>
       </div>
       <div class="info-row" id="rowTipo">
         <div class="info-row-label">Tipo</div>
@@ -950,8 +963,8 @@ button.btn-blocked:hover{background:var(--ok)}
     <div class="mh"><span class="mt">Cerca cliente</span><button class="btn btn-g btn-sm" onclick="chiudiMo('moCliente')">✕</button></div>
     <div class="mb">
       <div class="field">
-        <label>Cerca per nome o P. IVA</label>
-        <input type="text" id="clienteSearch" placeholder="Digita per cercare..."
+        <label>Cerca per ragione sociale, nome, cognome, P.IVA o CF</label>
+        <input type="text" id="clienteSearch" placeholder="es. Rossi Mario · MINCIOFIN · 02797660368..."
           oninput="cercaCliente(this.value)">
       </div>
       <div id="clienteResults" style="display:flex;flex-direction:column;gap:6px;max-height:280px;overflow:auto"></div>
@@ -3831,16 +3844,42 @@ function chiudiMo(id){ document.getElementById(id).classList.remove('open'); }
 
 async function cercaCliente(q){
   const res = document.getElementById('clienteResults');
+  q = String(q||'').trim();
   if(q.length < 2){ res.innerHTML=''; return; }
 
   try {
+    // Token-search: se l'utente digita più parole (es. "Mario Rossi") le cerco
+    // tutte separatamente, ognuna su tutti i campi rilevanti. Le righe che
+    // matchano tutti i token compaiono in cima (semplice scoring lato client).
+    const tokens = q.split(/\s+/).filter(t => t.length >= 2);
+    const campiCerca = ['ragione_sociale','piva','cf','cognome','nome','comune'];
+
+    // Una query per token; intersezione concettuale: prendo la query del 1° token
+    // e poi rifiltro lato client per match multi-token (Supabase non ha AND-OR misto facile)
+    const queryToken = tokens[0] || q;
+    const orClause = campiCerca.map(c => `${c}.ilike.%${queryToken}%`).join(',');
+
     const { data, error } = await _sb.from('clienti')
       .select('id, ragione_sociale, tipo, cf, piva, indirizzo, cap, comune, provincia, telefono, cellulare, email, nome, cognome')
-      .or(`ragione_sociale.ilike.%${q}%,piva.ilike.%${q}%,cf.ilike.%${q}%,cognome.ilike.%${q}%`)
+      .or(orClause)
       .order('ragione_sociale', { ascending: true })
-      .limit(20);
+      .limit(50);
     if (error) throw error;
-    renderClienti(data || []);
+
+    let lista = data || [];
+
+    // Se ci sono più token, rifiltro: ogni token deve matchare almeno un campo
+    if (tokens.length > 1) {
+      const norm = s => String(s||'').toLowerCase();
+      lista = lista.filter(c => {
+        const blob = norm([
+          c.ragione_sociale, c.piva, c.cf, c.cognome, c.nome, c.comune
+        ].filter(Boolean).join(' '));
+        return tokens.every(t => blob.includes(t.toLowerCase()));
+      });
+    }
+
+    renderClienti(lista.slice(0, 20));
   } catch(e){
     console.warn('cercaCliente:', e);
     res.innerHTML = `<p style="font-size:13px;color:var(--err)">Errore di ricerca: ${e.message||e}</p>`;
@@ -3850,14 +3889,29 @@ async function cercaCliente(q){
 function renderClienti(lista){
   const res = document.getElementById('clienteResults');
   if(!lista.length){ res.innerHTML='<p style="font-size:13px;color:var(--text-m)">Nessun risultato</p>'; return; }
-  res.innerHTML = lista.map(c=>`
+  res.innerHTML = lista.map(c=>{
+    // Titolo: per i privati con nome/cognome → "COGNOME NOME", altrimenti ragione_sociale
+    const isAzienda = c.tipo === 'b2b';
+    let titolo;
+    if (isAzienda) {
+      titolo = c.ragione_sociale || '—';
+    } else if (c.cognome || c.nome) {
+      titolo = [c.cognome, c.nome].filter(Boolean).join(' ');
+    } else {
+      titolo = c.ragione_sociale || '—';
+    }
+    // Sottotitolo: P.IVA o CF + tipo + comune
+    const cod = c.piva || c.cf || '';
+    const luogo = [c.comune, c.provincia ? `(${c.provincia})` : null].filter(Boolean).join(' ');
+    const meta = [cod, isAzienda ? 'Azienda' : 'Privato', luogo].filter(Boolean).join(' · ');
+    return `
     <div onclick='selCliente(${JSON.stringify(c).replace(/'/g,"&apos;")})'
       style="padding:10px 12px;border:1px solid var(--border);border-radius:var(--rs);cursor:pointer;transition:background .1s"
       onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''">
-      <div style="font-weight:600;font-size:13px">${c.ragione_sociale}</div>
-      <div style="font-size:11px;color:var(--text-m);margin-top:2px">${c.piva||c.cf||''} · ${c.tipo==='b2b'?'Azienda':'Privato'}</div>
-    </div>
-  `).join('');
+      <div style="font-weight:600;font-size:14px">${titolo}</div>
+      <div style="font-size:12px;color:var(--text-m);margin-top:3px">${meta}</div>
+    </div>`;
+  }).join('');
 }
 
 function selCliente(c){
@@ -4013,7 +4067,9 @@ function renderVeicoloAnagrafica(){
   set('vwMotore',   v.motore);
   set('vwTelaio',   v.telaio);
   set('vwImm',      formattaDataITA(v.data_immatricolazione));
-  set('vwKm',       SL.km ? SL.km + ' km' : null);
+  // Km è editabile (non viene dall'anagrafica, è specifico della scheda)
+  const elKm = document.getElementById('vwKmInput');
+  if (elKm) elKm.value = SL.km || '';
 }
 
 // Mostra la vista cliente ProMEK / nasconde edit
@@ -4048,6 +4104,7 @@ function renderClienteAnagrafica(){
   };
 
   const tipo = c.tipo === 'b2b' ? 'Azienda' : 'Privato';
+  const isAzienda = c.tipo === 'b2b';
 
   // Pulisci numeri salvati come float (es. "3389394773.0" → "3389394773")
   const pulisciNum = (v) => {
@@ -4066,7 +4123,37 @@ function renderClienteAnagrafica(){
     indirizzo = [indirBase, coda].filter(Boolean).join(' — ');
   }
 
-  set('clRagSoc',    c.ragione_sociale);
+  // ─── Differenzia visualizzazione AZIENDA vs PRIVATO ───
+  const rowAzienda  = document.getElementById('rowNomeAzienda');
+  const rowPrivN    = document.getElementById('rowNomePrivato');
+  const rowPrivCog  = document.getElementById('rowCognomePrivato');
+  if (isAzienda) {
+    // Mostra ragione sociale (label "Ragione sociale")
+    if (rowAzienda) rowAzienda.style.display = '';
+    if (rowPrivN)   rowPrivN.style.display   = 'none';
+    if (rowPrivCog) rowPrivCog.style.display = 'none';
+    const lbl = document.getElementById('clNomeLabel');
+    if (lbl) lbl.textContent = 'Ragione sociale';
+    set('clNomeVal', c.ragione_sociale);
+  } else {
+    // Privato: se ho nome+cognome separati uso quelli, altrimenti fallback su ragione_sociale
+    if (c.nome || c.cognome) {
+      if (rowAzienda) rowAzienda.style.display = 'none';
+      if (rowPrivN)   rowPrivN.style.display   = '';
+      if (rowPrivCog) rowPrivCog.style.display = '';
+      set('clNome',    c.nome);
+      set('clCognome', c.cognome);
+    } else {
+      // Fallback: niente nome/cognome → mostro ragione_sociale con label "Nominativo"
+      if (rowAzienda) rowAzienda.style.display = '';
+      if (rowPrivN)   rowPrivN.style.display   = 'none';
+      if (rowPrivCog) rowPrivCog.style.display = 'none';
+      const lbl = document.getElementById('clNomeLabel');
+      if (lbl) lbl.textContent = 'Nominativo';
+      set('clNomeVal', c.ragione_sociale);
+    }
+  }
+
   set('clTipo',      tipo);
   set('clCF',        c.cf);
   set('clPIVA',      c.piva);
