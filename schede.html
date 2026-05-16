@@ -53,11 +53,29 @@ body{font-family:'Helvetica Neue',Arial,-apple-system,sans-serif;background:var(
   background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
   box-shadow:var(--sh);margin-bottom:8px;
   display:grid;
-  grid-template-columns: 100px 130px 100px 1fr 1fr 120px 90px 90px 80px 80px;
-  align-items:center;gap:0;
+  grid-template-columns: 80px 110px 1fr 110px 180px 180px 110px 80px;
+  align-items:stretch;gap:0;
   cursor:pointer;transition:box-shadow .15s,transform .12s;
   text-decoration:none;color:inherit;overflow:hidden;
 }
+.scheda-row .sc-cell{ min-width:0; display:flex; flex-direction:column; justify-content:center; }
+.scheda-row .sc-cell.cell-num-scheda{ padding-left:6px; align-items:flex-start; }
+.sc-cell.note-cell{ align-items:flex-start; }
+.sc-cell.note-cell .note-text{
+  font-size:11px; color:var(--text-m); line-height:1.35;
+  display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical;
+  overflow:hidden; max-width:100%;
+}
+.sc-numscheda-bold{ font-family:monospace; font-size:15px; font-weight:900; letter-spacing:.04em; white-space:nowrap; }
+.sc-data-short{ font-family:monospace; font-size:12px; font-weight:700; }
+.scheda-row:not(.header) .sc-cliente{
+  font-weight:500; font-size:14px;
+  white-space:normal; overflow:hidden;
+  display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical;
+  line-height:1.25;
+}
+.scheda-row:not(.header) .sc-targa{ font-size:16px; font-weight:900; }
+.scheda-row:not(.header) .sc-tot{ font-size:15px; font-weight:800; }
 .scheda-row:hover{box-shadow:0 4px 16px rgba(0,0,0,.1);transform:translateY(-1px)}
 .scheda-row.header{
   background:#F7F6F3;cursor:default;font-size:10px;font-weight:700;
@@ -390,13 +408,11 @@ function renderLista(){
       <div class="scheda-row header">
         <div class="sc-cell">Data</div>
         <div class="sc-cell">N° Scheda</div>
-        <div class="sc-cell">Targa</div>
-        <div class="sc-cell">Veicolo / Note</div>
         <div class="sc-cell">Cliente</div>
-        <div class="sc-cell">Tecnico</div>
-        <div class="sc-cell">Rapportini</div>
-        <div class="sc-cell">Totale</div>
-        <div class="sc-cell">Stato</div>
+        <div class="sc-cell">Targa</div>
+        <div class="sc-cell">Veicolo</div>
+        <div class="sc-cell">Note</div>
+        <div class="sc-cell" style="text-align:right">Totale</div>
         <div class="sc-cell">Azioni</div>
       </div>
       ${schede.map(s=>rigaScheda(s)).join('')}
@@ -411,13 +427,11 @@ function renderLista(){
       <div class="scheda-row header">
         <div class="sc-cell">Data</div>
         <div class="sc-cell">N° Preventivo</div>
-        <div class="sc-cell">Targa</div>
-        <div class="sc-cell">Descrizione</div>
         <div class="sc-cell">Cliente</div>
-        <div class="sc-cell">Tecnico</div>
-        <div class="sc-cell">—</div>
-        <div class="sc-cell">Totale</div>
-        <div class="sc-cell">Stato</div>
+        <div class="sc-cell">Targa</div>
+        <div class="sc-cell">Veicolo</div>
+        <div class="sc-cell">Note</div>
+        <div class="sc-cell" style="text-align:right">Totale</div>
         <div class="sc-cell">Azioni</div>
       </div>
       ${preventivi.map(s=>rigaScheda(s)).join('')}
@@ -429,23 +443,12 @@ function renderLista(){
 
 function rigaScheda(s){
   const tipo = TIPI[s.tipo]||TIPI[''];
-  const stati = {
-    bozza:      {cls:'s-bozza',     lbl:'Accettazione'},
-    aperta:     {cls:'s-aperta',    lbl:'In lavorazione'},
-    pronta:     {cls:'s-pronta',    lbl:'Pronta'},
-    consegnata: {cls:'s-consegnata',lbl:'Consegnata'},
-  };
-  const st = stati[s.stato]||{cls:'s-bozza',lbl:s.stato};
 
-  // Estrae HH:MM dall'orario di inserimento, MA solo se il giorno del lavoro
-  // (s.dataAttivita) coincide con il giorno del timestamp (s.dataAttivitaTs).
-  // Così non mostro un orario di un giorno diverso da quello visualizzato.
+  // Estrae HH:MM dall'orario di inserimento, solo se giorno coincide
   let ora = '';
   if (s.dataAttivitaTs && s.dataAttivitaTs.includes('T')) {
     const giornoTs = s.dataAttivitaTs.slice(0,10);
     if (giornoTs === s.dataAttivita) {
-      // Per i rapportini il TS è già formato "AAAA-MM-GGTHH:MM:SS" senza fuso (mix giorno+ora estratti)
-      // Per i DDT è ISO UTC completo → convertiamo al fuso italiano
       if (s.dataFonte === 'ddt') {
         try {
           const d = new Date(s.dataAttivitaTs);
@@ -454,12 +457,8 @@ function rigaScheda(s){
           }
         } catch(e){}
       } else {
-        // rapportino: la parte ora è in UTC perché viene da created_at sliced
-        // Faccio comunque la conversione al fuso Europe/Rome
         try {
-          // Ricostruisco un ISO valido aggiungendo Z (UTC) se non già presente
-          const isoUtc = s.dataAttivitaTs.endsWith('Z') ? s.dataAttivitaTs :
-                         s.dataAttivitaTs + 'Z';
+          const isoUtc = s.dataAttivitaTs.endsWith('Z') ? s.dataAttivitaTs : s.dataAttivitaTs + 'Z';
           const d = new Date(isoUtc);
           if (!isNaN(d.getTime())) {
             ora = d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' });
@@ -469,43 +468,55 @@ function rigaScheda(s){
     }
   }
 
+  // Veicolo: marca + modello uniti
+  const veicolo = (s.marca && s.modello) ? `${s.marca} ${s.modello}` : (s.modello || s.marca || '');
+
+  // Data in formato gg/mm/aa
+  const fmtDataShort = (d) => {
+    if (!d) return '—';
+    const m = String(d).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return `${m[3]}/${m[2]}/${m[1].slice(2)}`;
+    try {
+      const dt = new Date(d);
+      if (!isNaN(dt.getTime())) {
+        const gg = String(dt.getDate()).padStart(2,'0');
+        const mm = String(dt.getMonth()+1).padStart(2,'0');
+        const aa = String(dt.getFullYear()).slice(2);
+        return `${gg}/${mm}/${aa}`;
+      }
+    } catch(e){}
+    return String(d);
+  };
+
   return `<a href="scheda.html?id=${s.id}" class="scheda-row">
     <div class="sc-cell">
-      <div class="sc-num" style="font-size:13px">${fmtData(s.dataAttivita || s.data)}</div>
+      <div class="sc-data-short">${fmtDataShort(s.dataAttivita || s.data)}</div>
       ${ora ? `<div style="font-size:10px;color:var(--text-m);font-family:monospace;margin-top:2px">${ora}</div>` : ''}
       ${s.dataFonte === 'ddt' ? '<div style="font-size:9px;color:var(--text-l);margin-top:1px">via DDT</div>' : ''}
       ${!s.dataFonte ? '<div style="font-size:9px;color:var(--text-l);margin-top:1px">manuale</div>' : ''}
     </div>
-    <div class="sc-cell">
-      <div class="sc-num">${s.numero}</div>
+    <div class="sc-cell cell-num-scheda">
+      <div class="sc-numscheda-bold">${s.numero}</div>
       <div style="margin-top:4px">
         <span class="tipo-badge" style="background:${tipo.bg};color:${tipo.col}">${tipo.label}</span>
       </div>
     </div>
     <div class="sc-cell">
-      <div class="sc-targa">${s.targa||'—'}</div>
-      <div class="sc-modello">${s.modello||''}</div>
-    </div>
-    <div class="sc-cell">
-      <div style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px">${s.note||'—'}</div>
-    </div>
-    <div class="sc-cell">
       <div class="sc-cliente">${s.cliente||'—'}</div>
     </div>
     <div class="sc-cell">
-      <div class="sc-data">${s.tecnico||'—'}</div>
-    </div>
-    <div class="sc-cell" style="text-align:center">
-      <div style="font-size:18px;font-weight:700;color:var(--info)">${s.rap||0}</div>
-      <div style="font-size:10px;color:var(--text-l)">rapportini</div>
+      <div class="sc-targa">${s.targa||'—'}</div>
     </div>
     <div class="sc-cell">
+      <div style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${veicolo || '—'}</div>
+    </div>
+    <div class="sc-cell note-cell">
+      <div class="note-text">${s.note || '—'}</div>
+    </div>
+    <div class="sc-cell" style="align-items:flex-end">
       <div class="sc-tot">${s.tot>0?fmt(s.tot):'—'}</div>
     </div>
-    <div class="sc-cell">
-      <div class="stato-dot ${st.cls}">${st.lbl}</div>
-    </div>
-    <div class="sc-cell" style="display:flex;flex-direction:column;gap:6px;align-items:center" onclick="event.preventDefault()">
+    <div class="sc-cell" style="display:flex;flex-direction:column;gap:6px;align-items:center;justify-content:center" onclick="event.preventDefault()">
       <button onclick="stampaScheda('${s.id}',event)"
         style="background:none;border:1px solid var(--border);border-radius:4px;padding:4px 8px;cursor:pointer;font-size:13px;width:100%" title="Stampa">🖨</button>
       <button onclick="eliminaScheda('${s.id}',event)"

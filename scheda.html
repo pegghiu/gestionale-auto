@@ -10,24 +10,26 @@
 <style id="printCSS">
 @page {
   size: A4 portrait;
-  margin: 12mm 15mm;  /* alto/basso 12mm, sinistra/destra 15mm — simmetrici */
+  margin: 0;  /* margini gestiti dentro #printDoc */
 }
 @media print {
   body * { visibility: hidden !important; }
   #printDoc, #printDoc * { visibility: visible !important; }
   #printDoc {
-    position: absolute !important;  /* non più fixed: rispetta @page */
+    position: absolute !important;
     top: 0 !important; left: 0 !important; right: 0 !important;
-    width: auto !important;          /* riempie l'area dentro @page margins */
+    width: 210mm !important;
+    min-height: 297mm !important;
     margin: 0 !important;
-    padding: 0 !important;           /* margini gestiti da @page */
+    padding: 12mm 14mm 50mm 14mm !important;
     font-family: 'Helvetica Neue', Arial, sans-serif !important;
-    font-size: 9.5pt !important;
-    background: #FFF !important; color: #111 !important;
+    font-size: 10.5pt !important;
+    line-height: 1.4 !important;
+    background: #FFF !important;
+    color: #1a1a1a !important;
   }
   .no-print { display: none !important; }
   .print-break { page-break-before: always; }
-  /* Evita doppio scroll bar/elementi flottanti che spostano la stampa */
   html, body { margin: 0 !important; padding: 0 !important; }
 }
 </style>
@@ -180,38 +182,85 @@ button.btn-blocked:hover{background:var(--ok)}
 #printDoc{display:none}
 @media print{#printDoc{display:block}}
 
-.pdoc-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #111}
-.pdoc-logo{font-size:18pt;font-weight:800;letter-spacing:-.02em}
-.pdoc-logo span{color:#E85A00}
-.pdoc-meta{text-align:right}
-.pdoc-num{font-size:14pt;font-weight:700}
-.pdoc-date{font-size:9pt;color:#666;margin-top:3px}
+/* Variabili colori Paghera per la stampa */
+#printDoc{
+  --pa-red:#c8102e;
+  --pa-black:#1a1a1a;
+  --pa-gray:#6b6b6b;
+  --pa-gray-l:#f4f4f4;
+  --pa-border:#d9d9d9;
+}
 
-.pdoc-section{margin-bottom:14px}
-.pdoc-label{font-size:7.5pt;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#888;margin-bottom:5px}
-.pdoc-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.pdoc-field{display:flex;flex-direction:column;gap:2px}
-.pdoc-field-label{font-size:7pt;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#999}
-.pdoc-field-val{font-size:10pt;font-weight:500;border-bottom:1px solid #E0E0E0;padding-bottom:3px;min-height:20px}
+/* HEADER: logo + indirizzo */
+.pdoc-header{display:flex;align-items:center;justify-content:space-between;gap:8mm;padding-bottom:4mm;border-bottom:2px solid var(--pa-red);margin-bottom:4mm}
+.pdoc-logo-img{height:30mm;width:auto;display:block}
+.pdoc-header-info{text-align:right;font-size:8.5pt;color:var(--pa-black);line-height:1.45;max-width:75mm}
+.pdoc-header-info strong{font-size:9.5pt;color:var(--pa-black);display:block;margin-bottom:0.5mm}
 
-.pdoc-table{width:100%;border-collapse:collapse;font-size:9pt;margin-top:8px}
-.pdoc-table th{background:#F5F4F0;padding:5px 8px;text-align:left;font-size:7.5pt;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#666;border-bottom:1.5px solid #DDD}
-.pdoc-table th.r{text-align:right}
-.pdoc-table td{padding:5px 8px;border-bottom:1px solid #EEE;vertical-align:top}
-.pdoc-table td.r{text-align:right}
-.pdoc-table tbody tr:last-child td{border-bottom:none}
+/* TITOLO SCHEDA + NUMERO */
+.pdoc-titolo{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:3mm;gap:8mm}
+.pdoc-titolo h1{margin:0 0 1mm 0;font-size:11pt;text-transform:uppercase;letter-spacing:1.5px;color:var(--pa-gray);font-weight:600}
+.pdoc-num-box{text-align:right;flex:0 0 auto}
+.pdoc-num{font-size:24pt;font-weight:900;color:var(--pa-red);letter-spacing:0.5px;line-height:1}
+.pdoc-date{font-size:8.5pt;color:var(--pa-gray);margin-top:1mm}
+.pdoc-badge-stato{display:inline-block;background:var(--pa-red);color:#fff;padding:1mm 2.5mm;border-radius:3px;font-size:7.5pt;font-weight:700;text-transform:uppercase;letter-spacing:0.5px}
 
-.pdoc-totals{margin-top:10px;max-width:200px;margin-left:auto}
-.pdoc-tot-row{display:flex;justify-content:space-between;font-size:9.5pt;padding:3px 0}
-.pdoc-tot-row.final{font-weight:800;font-size:12pt;border-top:1.5px solid #111;margin-top:5px;padding-top:6px}
-.pdoc-tot-row.final .v{color:#E85A00}
+/* CARD VEICOLO/CLIENTE */
+.pdoc-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:3mm;margin-bottom:3mm}
+.pdoc-card{border:1px solid var(--pa-border);border-radius:2px;overflow:hidden}
+.pdoc-card-header{background:var(--pa-black);color:#fff;padding:1.3mm 3mm;font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:1px}
+.pdoc-card-body{padding:2mm 3mm}
+.pdoc-row{display:flex;margin-bottom:0.8mm;font-size:9pt}
+.pdoc-row:last-child{margin-bottom:0}
+.pdoc-row-label{flex:0 0 28mm;color:var(--pa-gray);font-size:7.5pt;text-transform:uppercase;letter-spacing:0.5px;padding-top:0.3mm}
+.pdoc-row-val{flex:1;font-weight:600;color:var(--pa-black);word-break:break-word}
+.pdoc-row-val.empty{color:var(--pa-gray);font-weight:400}
+.pdoc-row-val.targa{font-family:"Courier New",monospace;font-weight:700;font-size:10.5pt;letter-spacing:1.5px}
 
-.pdoc-firma{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-top:24px;padding-top:16px;border-top:1px solid #DDD}
-.pdoc-firma-box{display:flex;flex-direction:column;gap:6px}
-.pdoc-firma-label{font-size:7.5pt;color:#888;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
-.pdoc-firma-line{border-bottom:1px solid #BBB;height:40px;margin-top:4px}
+/* PROBLEMA */
+.pdoc-problema{border:1px solid var(--pa-border);border-left:3px solid var(--pa-red);padding:1.8mm 3mm;margin-bottom:3mm;background:var(--pa-gray-l)}
+.pdoc-problema-label{font-size:7.5pt;text-transform:uppercase;letter-spacing:0.5px;color:var(--pa-gray);font-weight:700;margin-bottom:0.5mm}
+.pdoc-problema-text{font-size:9pt;color:var(--pa-black);min-height:3mm;white-space:pre-wrap}
+.pdoc-problema-text.empty{color:var(--pa-gray);font-style:italic}
 
-.pdoc-note{background:#F9F8F5;border:1px solid #E8E5DF;border-radius:5px;padding:10px 12px;font-size:9pt;color:#444;line-height:1.6;margin-top:10px}
+/* TABELLA MATERIALI */
+.pdoc-tab-titolo{font-size:9.5pt;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--pa-black);margin-bottom:2mm;padding-bottom:1.5mm;border-bottom:2px solid var(--pa-red)}
+.pdoc-table{width:100%;border-collapse:collapse;font-size:8.5pt;margin-bottom:4mm;table-layout:fixed}
+.pdoc-table thead th{background:var(--pa-red);color:#fff;text-align:left;padding:1.8mm 2mm;font-weight:600;font-size:8pt;text-transform:uppercase;letter-spacing:0.4px;border-right:1px solid rgba(255,255,255,0.15)}
+.pdoc-table thead th:last-child{border-right:none}
+.pdoc-table thead th.r{text-align:right}
+.pdoc-table tbody td{padding:1.8mm 2mm;border-bottom:1px solid var(--pa-border);vertical-align:top;word-wrap:break-word;overflow-wrap:break-word}
+.pdoc-table tbody td.r{text-align:right}
+.pdoc-table tbody tr:nth-child(even){background:var(--pa-gray-l)}
+.pdoc-col-codice{width:34mm;font-family:"Courier New",monospace;font-size:8pt}
+.pdoc-col-qta{width:10mm;text-align:center}
+.pdoc-col-prezzo{width:18mm;text-align:right}
+.pdoc-col-iva{width:10mm;text-align:center;font-size:8pt;color:var(--pa-gray)}
+.pdoc-col-subtot{width:20mm;text-align:right;font-weight:600}
+.pdoc-table tbody tr.row-manodopera{background:#fff8e8 !important;border-top:2px solid var(--pa-black);font-weight:600}
+.pdoc-table tbody tr.row-manodopera td{border-bottom:none}
+
+/* TOTALI */
+.pdoc-totals-wrap{display:flex;justify-content:flex-end;margin-bottom:6mm}
+.pdoc-totals{min-width:70mm;border:1px solid var(--pa-border);border-radius:2px;overflow:hidden}
+.pdoc-tot-row{display:flex;justify-content:space-between;padding:1.8mm 3.5mm;font-size:9.5pt;border-bottom:1px solid var(--pa-border)}
+.pdoc-tot-row:nth-child(even){background:var(--pa-gray-l)}
+.pdoc-tot-row .l{color:var(--pa-gray)}
+.pdoc-tot-row .v{font-weight:600}
+.pdoc-tot-row.final{background:var(--pa-red);color:#fff;font-size:11pt;padding:2.5mm 3.5mm;border-bottom:none}
+.pdoc-tot-row.final .l,.pdoc-tot-row.final .v{color:#fff;font-weight:700;text-transform:uppercase;letter-spacing:0.5px}
+
+/* NOTE CLIENTE */
+.pdoc-note{background:var(--pa-gray-l);border:1px solid var(--pa-border);border-radius:2px;padding:2mm 3mm;font-size:8.5pt;color:#444;line-height:1.5;margin-bottom:4mm;white-space:pre-wrap}
+
+/* FIRME (ancorate al fondo) */
+.pdoc-firma{display:grid;grid-template-columns:1fr 1fr;gap:10mm;position:absolute;bottom:18mm;left:14mm;right:14mm}
+.pdoc-firma-box{text-align:center}
+.pdoc-firma-line{border-top:1px solid var(--pa-black);margin-bottom:2mm;height:1px}
+.pdoc-firma-label{font-size:8pt;text-transform:uppercase;letter-spacing:0.8px;color:var(--pa-gray);font-weight:600}
+
+/* FOOTER (ancorato al fondo, sotto le firme) */
+.pdoc-footer{position:absolute;bottom:6mm;left:14mm;right:14mm;border-top:1px solid var(--pa-border);padding-top:2mm;text-align:center;font-size:7pt;color:var(--pa-gray)}
 
 /* ── RAPPORTINI GIORNALIERI ──────────────────────────────── */
 .rap-card{border:1px solid var(--border);border-radius:var(--rs);overflow:hidden;margin-bottom:10px}
@@ -619,89 +668,126 @@ button.btn-blocked:hover{background:var(--ok)}
 
 <!-- ═══ DOCUMENTO STAMPABILE ════════════════════════════════ -->
 <div id="printDoc">
+  <!-- HEADER: logo + indirizzo -->
   <div class="pdoc-header">
     <div>
-      <div class="pdoc-logo">PAGHERA<span> AUTO</span></div>
-      <div style="font-size:8pt;color:#666;margin-top:3px">Italia Automotive Service</div>
-      <div style="font-size:8pt;color:#666">Castiglione delle Stiviere (MN)</div>
+      <img class="pdoc-logo-img" src="logo-paghera.jpg" alt="Paghera Auto">
     </div>
-    <div class="pdoc-meta">
+    <div class="pdoc-header-info">
+      <strong>Paghera Auto SRL</strong>
+      Via Medole 81<br>
+      46043 Castiglione delle Stiviere (MN)<br>
+      C.F. / P.IVA 02630620207<br>
+      amministrazione.paghera@gmail.com
+    </div>
+  </div>
+
+  <!-- TITOLO + NUMERO SCHEDA -->
+  <div class="pdoc-titolo">
+    <div>
+      <h1>Scheda di Lavoro</h1>
+      <div class="pdoc-badge-stato" id="pStato">SCHEDA DI LAVORO</div>
+    </div>
+    <div class="pdoc-num-box">
       <div class="pdoc-num" id="pNum">—</div>
       <div class="pdoc-date" id="pDate">—</div>
-      <div style="margin-top:8px;display:inline-block;padding:3px 10px;background:#111;color:#FFF;font-size:8pt;font-weight:700;border-radius:3px;letter-spacing:.06em" id="pStato">SCHEDA DI LAVORO</div>
     </div>
   </div>
 
-  <!-- Veicolo + Cliente -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:14px">
-    <div class="pdoc-section">
-      <div class="pdoc-label">Veicolo</div>
-      <div class="pdoc-grid" style="grid-template-columns:auto 1fr;gap:6px 12px">
-        <div class="pdoc-field"><div class="pdoc-field-label">Targa</div><div class="pdoc-field-val" id="pTarga" style="font-weight:800;letter-spacing:.12em;font-size:12pt"></div></div>
-        <div class="pdoc-field"><div class="pdoc-field-label">Modello</div><div class="pdoc-field-val" id="pModello"></div></div>
-        <div class="pdoc-field"><div class="pdoc-field-label">Anno</div><div class="pdoc-field-val" id="pAnno"></div></div>
-        <div class="pdoc-field"><div class="pdoc-field-label">Km ingresso</div><div class="pdoc-field-val" id="pKm"></div></div>
+  <!-- VEICOLO + CLIENTE -->
+  <div class="pdoc-info-grid">
+    <div class="pdoc-card">
+      <div class="pdoc-card-header">Veicolo</div>
+      <div class="pdoc-card-body">
+        <div class="pdoc-row">
+          <div class="pdoc-row-label">Targa</div>
+          <div class="pdoc-row-val targa" id="pTarga">—</div>
+        </div>
+        <div class="pdoc-row">
+          <div class="pdoc-row-label">Modello</div>
+          <div class="pdoc-row-val" id="pModello">—</div>
+        </div>
+        <div class="pdoc-row">
+          <div class="pdoc-row-label">Anno</div>
+          <div class="pdoc-row-val" id="pAnno">—</div>
+        </div>
+        <div class="pdoc-row">
+          <div class="pdoc-row-label">Km ingresso</div>
+          <div class="pdoc-row-val" id="pKm">—</div>
+        </div>
       </div>
     </div>
-    <div class="pdoc-section">
-      <div class="pdoc-label">Cliente</div>
-      <div class="pdoc-field" style="margin-bottom:6px"><div class="pdoc-field-label">Ragione sociale / Nome</div><div class="pdoc-field-val" id="pCliente" style="font-weight:700"></div></div>
-      <div class="pdoc-field"><div class="pdoc-field-label">Telefono</div><div class="pdoc-field-val" id="pTel"></div></div>
+
+    <div class="pdoc-card">
+      <div class="pdoc-card-header">Cliente</div>
+      <div class="pdoc-card-body">
+        <div class="pdoc-row">
+          <div class="pdoc-row-label">Ragione sociale</div>
+          <div class="pdoc-row-val" id="pCliente">—</div>
+        </div>
+        <div class="pdoc-row">
+          <div class="pdoc-row-label">Telefono</div>
+          <div class="pdoc-row-val" id="pTel">—</div>
+        </div>
+        <div class="pdoc-row">
+          <div class="pdoc-row-label">Tecnico</div>
+          <div class="pdoc-row-val" id="pTecnico">—</div>
+        </div>
+        <div class="pdoc-row">
+          <div class="pdoc-row-label">Consegna prevista</div>
+          <div class="pdoc-row-val" id="pDataCons">—</div>
+        </div>
+      </div>
     </div>
   </div>
 
-  <!-- Problema -->
-  <div class="pdoc-section">
-    <div class="pdoc-label">Problema / Lavorazioni richieste</div>
-    <div class="pdoc-note" id="pProblema">—</div>
+  <!-- PROBLEMA / LAVORAZIONI -->
+  <div class="pdoc-problema">
+    <div class="pdoc-problema-label">Problema / Lavorazioni richieste</div>
+    <div class="pdoc-problema-text" id="pProblema">—</div>
   </div>
 
-  <!-- Tecnico e date -->
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
-    <div class="pdoc-field"><div class="pdoc-field-label">Tecnico</div><div class="pdoc-field-val" id="pTecnico"></div></div>
-    <div class="pdoc-field"><div class="pdoc-field-label">Data apertura</div><div class="pdoc-field-val" id="pDataAp"></div></div>
-    <div class="pdoc-field"><div class="pdoc-field-label">Data consegna prevista</div><div class="pdoc-field-val" id="pDataCons"></div></div>
-  </div>
+  <!-- TABELLA MATERIALI E MANODOPERA -->
+  <div class="pdoc-tab-titolo">Materiali &amp; Manodopera</div>
+  <table class="pdoc-table">
+    <thead><tr>
+      <th class="pdoc-col-codice">Codice</th>
+      <th>Descrizione</th>
+      <th class="pdoc-col-qta">Qtà</th>
+      <th class="pdoc-col-prezzo r">Prezzo</th>
+      <th class="pdoc-col-iva">IVA</th>
+      <th class="pdoc-col-subtot r">Subtot.</th>
+    </tr></thead>
+    <tbody id="pLines"></tbody>
+  </table>
 
-  <!-- Righe -->
-  <div class="pdoc-section">
-    <div class="pdoc-label">Ricambi &amp; servizi</div>
-    <table class="pdoc-table">
-      <thead><tr>
-        <th style="width:80px">Tipo</th>
-        <th style="width:90px">Codice</th>
-        <th>Descrizione</th>
-        <th class="r" style="width:40px">Qtà</th>
-        <th class="r" style="width:70px">Prezzo</th>
-        <th class="r" style="width:45px">IVA</th>
-        <th class="r" style="width:75px">Subtot.</th>
-      </tr></thead>
-      <tbody id="pLines"></tbody>
-    </table>
+  <!-- TOTALI -->
+  <div class="pdoc-totals-wrap">
     <div class="pdoc-totals">
-      <div class="pdoc-tot-row"><span>Imponibile</span><span class="v" id="pImp">€ 0,00</span></div>
-      <div class="pdoc-tot-row" id="p22"><span>IVA 22%</span><span class="v" id="pT22">€ 0,00</span></div>
-      <div class="pdoc-tot-row final"><span>TOTALE</span><span class="v" id="pTot">€ 0,00</span></div>
+      <div class="pdoc-tot-row"><span class="l">Imponibile</span><span class="v" id="pImp">€ 0,00</span></div>
+      <div class="pdoc-tot-row" id="p22"><span class="l">IVA 22%</span><span class="v" id="pT22">€ 0,00</span></div>
+      <div class="pdoc-tot-row final"><span class="l">Totale</span><span class="v" id="pTot">€ 0,00</span></div>
     </div>
   </div>
 
-  <!-- Note cliente -->
-  <div class="pdoc-note" id="pNoteCliente" style="display:none;margin-top:10px"></div>
+  <!-- NOTE CLIENTE (opzionale) -->
+  <div class="pdoc-note" id="pNoteCliente" style="display:none"></div>
 
-  <!-- Firme -->
+  <!-- FIRME (ancorate al fondo) -->
   <div class="pdoc-firma">
     <div class="pdoc-firma-box">
-      <div class="pdoc-firma-label">Firma del cliente per accettazione</div>
       <div class="pdoc-firma-line"></div>
+      <div class="pdoc-firma-label">Firma del cliente per accettazione</div>
     </div>
     <div class="pdoc-firma-box">
-      <div class="pdoc-firma-label">Firma del tecnico</div>
       <div class="pdoc-firma-line"></div>
+      <div class="pdoc-firma-label">Firma del tecnico</div>
     </div>
   </div>
 
-  <div style="margin-top:16px;font-size:7pt;color:#AAA;border-top:1px solid #EEE;padding-top:8px">
-    Documento generato il <span id="pGenData"></span> — Paghera Auto SRL / Italia Automotive Service
+  <!-- FOOTER -->
+  <div class="pdoc-footer">
+    Documento generato il <span id="pGenData"></span> — Paghera Auto SRL · Via Medole 81, 46043 Castiglione delle Stiviere (MN) · P.IVA 02630620207
   </div>
 </div><!-- /printDoc -->
 
@@ -3321,34 +3407,78 @@ function stampa(){
   // Popola il documento stampabile
   const fmtData = d => d ? new Date(d).toLocaleDateString('it-IT',{day:'2-digit',month:'long',year:'numeric'}) : '—';
 
-  document.getElementById('pNum').textContent    = SL.numero;
-  document.getElementById('pDate').textContent   = 'Data: ' + fmtData(SL.data);
-  document.getElementById('pTarga').textContent  = SL.targa;
-  document.getElementById('pModello').textContent= SL.modello;
-  document.getElementById('pAnno').textContent   = SL.anno||'—';
-  document.getElementById('pKm').textContent     = SL.km ? SL.km.toLocaleString('it-IT')+' km' : '—';
-  document.getElementById('pCliente').textContent= SL.cliente.nome||'—';
-  document.getElementById('pTel').textContent    = SL.cliente.tel||'—';
-  document.getElementById('pTecnico').textContent= SL.tecnico||'—';
-  document.getElementById('pDataAp').textContent = fmtData(SL.data);
-  document.getElementById('pDataCons').textContent = fmtData(SL.data_consegna);
-  document.getElementById('pProblema').textContent = SL.problema||'—';
-  document.getElementById('pGenData').textContent= new Date().toLocaleDateString('it-IT');
+  // Helper: setta testo + classe empty se valore vuoto/falsy
+  const setVal = (id, val, suffix='') => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    if(val === null || val === undefined || val === '' || val === '—'){
+      el.textContent = '—';
+      el.classList.add('empty');
+    } else {
+      el.textContent = String(val) + suffix;
+      el.classList.remove('empty');
+    }
+  };
 
-  // Righe — usa tutti gli elementi aggregati dai rapportini
-  const tutti = elementiAggregati();
+  // Data sotto al numero scheda = ultimo rapportino, fallback su SL.data
+  const dataUltimoRap = (SL.rapportini && SL.rapportini.length)
+    ? SL.rapportini.map(r => r.data).filter(Boolean).sort().pop()
+    : null;
+  const dataDoc = dataUltimoRap || SL.data;
+
+  document.getElementById('pNum').textContent  = SL.numero;
+  document.getElementById('pDate').textContent = fmtData(dataDoc);
+  setVal('pTarga',   SL.targa);
+  setVal('pModello', SL.modello);
+  setVal('pAnno',    SL.anno);
+  setVal('pKm',      SL.km ? SL.km.toLocaleString('it-IT') : null, SL.km ? ' km' : '');
+  setVal('pCliente', SL.cliente && SL.cliente.nome);
+  setVal('pTel',     SL.cliente && SL.cliente.tel);
+  setVal('pTecnico', SL.tecnico);
+  setVal('pDataCons', SL.data_consegna ? fmtData(SL.data_consegna) : null);
+  setVal('pProblema', SL.problema);
+
+  document.getElementById('pGenData').textContent = new Date().toLocaleDateString('it-IT');
+
+  // ── RIGHE TABELLA: dal riepilogo materiali e manodopera ──
+  // Usa SL.riepilogo_override se popolato (ordine per categoria gestito dal gestionale),
+  // altrimenti rigenera al volo dai rapportini.
+  const rip = (SL.riepilogo_override && Array.isArray(SL.riepilogo_override.ricambi))
+    ? SL.riepilogo_override
+    : generaRiepilogoDaRapportini();
+
+  const ricambi = rip.ricambi || [];
+  const mdOre   = parseFloat(rip.manodopera_ore)||0;
+  const mdEuro  = parseFloat(rip.manodopera_totale)||0;
+
   const tbody = document.getElementById('pLines');
-  tbody.innerHTML = tutti.map((el,i)=>`
-    <tr>
-      <td style="font-size:8pt;color:#888">${el.tipo}</td>
-      <td style="font-family:monospace;font-size:8pt">${el.codice||'—'}</td>
-      <td>${el.descrizione}${el._rapData?`<span style="font-size:7.5pt;color:#AAA;margin-left:6px">(${new Date(el._rapData).toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit'})})</span>`:''}</td>
-      <td class="r">${el.qty}</td>
-      <td class="r">${fmt(el.prezzo)}</td>
-      <td class="r">${el.iva_pct||22}%</td>
-      <td class="r" style="font-weight:600">${fmt(el.qty*el.prezzo)}</td>
-    </tr>
-  `).join('') || '<tr><td colspan="7" style="text-align:center;color:#999;padding:12px">Nessun elemento</td></tr>';
+  const rowsRicambi = ricambi.map(el => {
+    const qty    = parseFloat(el.qty)||0;
+    const prezzo = parseFloat(el.prezzo)||0;
+    const subtot = qty * prezzo;
+    return `
+      <tr>
+        <td class="pdoc-col-codice">${el.codice || '—'}</td>
+        <td>${escapeHtml(el.descrizione || '')}</td>
+        <td class="pdoc-col-qta">${qty}</td>
+        <td class="pdoc-col-prezzo">${fmt(prezzo)}</td>
+        <td class="pdoc-col-iva">22%</td>
+        <td class="pdoc-col-subtot">${fmt(subtot)}</td>
+      </tr>`;
+  }).join('');
+
+  const rowManodopera = (mdEuro > 0 || mdOre > 0) ? `
+      <tr class="row-manodopera">
+        <td class="pdoc-col-codice">—</td>
+        <td>Manodopera totale (${fmtH(mdOre)})</td>
+        <td class="pdoc-col-qta">${mdOre}</td>
+        <td class="pdoc-col-prezzo">${mdOre>0 ? fmt(mdEuro/mdOre) : '—'}</td>
+        <td class="pdoc-col-iva">22%</td>
+        <td class="pdoc-col-subtot">${fmt(mdEuro)}</td>
+      </tr>` : '';
+
+  tbody.innerHTML = (rowsRicambi + rowManodopera) ||
+    '<tr><td colspan="6" style="text-align:center;color:#999;padding:12px">Nessun elemento</td></tr>';
 
   // Totali stampa
   document.getElementById('pImp').textContent = fmt(SL._imp||0);
@@ -3360,14 +3490,23 @@ function stampa(){
   if(SL.note_cliente){ nEl.textContent = SL.note_cliente; nEl.style.display=''; }
   else nEl.style.display='none';
 
-  // Stato sul documento
+  // Badge stato sul documento (sfondo rosso Paghera gestito dal CSS)
   const statoMap = {bozza:'ACCETTAZIONE',aperta:'IN LAVORAZIONE',pronta:'PRONTA PER RITIRO',consegnata:'CONSEGNATA'};
   const tipoInfo = TIPI_SCHEDA[SL.tipo];
+  const labelTipo = (tipoInfo?.label || '').trim();
+  const labelStato = statoMap[SL.stato] || 'SCHEDA DI LAVORO';
   const pStato = document.getElementById('pStato');
-  pStato.textContent = (tipoInfo?.label.trim()||'') + ' · ' + (statoMap[SL.stato]||'SCHEDA DI LAVORO');
-  if(tipoInfo) pStato.style.background = tipoInfo.colore;
+  pStato.textContent = labelTipo ? (labelTipo + ' · ' + labelStato) : labelStato;
+  // NB: NON sovrascriviamo più lo sfondo — il CSS .pdoc-badge-stato usa rosso Paghera
 
   setTimeout(()=>window.print(), 100);
+}
+
+// Escape minimale per le descrizioni dei ricambi inserite via innerHTML
+function escapeHtml(s){
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 // ══════════════════════════════════════════════════════════
