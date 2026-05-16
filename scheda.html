@@ -2427,7 +2427,7 @@ function renderRiepilogo(){
       // col prezzo fornitore, altrimenti significa che nessuno ha ricaricato).
       // Tolleranza 1 centesimo per arrotondamenti.
       const prezzoCli = parseFloat(el.prezzo) || 0;
-      const nettoFor  = _NETTI_CACHE[String(el.codice||'').toUpperCase()] || 0;
+      const nettoFor  = _NETTI_CACHE[String(el.codice||'').toUpperCase().trim()] || 0;
       const margineZero = (prezzoCli > 0 && nettoFor > 0 && Math.abs(prezzoCli - nettoFor) < 0.01);
       let trStyle;
       if (margineZero) {
