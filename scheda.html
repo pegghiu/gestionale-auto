@@ -3163,6 +3163,11 @@ async function caricaScheda(id){
     const stepIdx = {bozza:1,aperta:2,pronta:3,consegnata:4}[SL.stato]||1;
     setStato(SL.stato, document.getElementById('step'+stepIdx));
 
+    // Pre-carico i prezzi netti dai DDT per la targa, in modo che il check
+    // "margine zero" nel riepilogo (prezzo cliente == netto fornitore) scatti
+    // già al primo render — senza dover prima cliccare "Mostra netti".
+    await caricaNettiDaDdt();
+
     renderRapportini();
     aggiornaTotali();
 
