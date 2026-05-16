@@ -2438,11 +2438,11 @@ function renderRiepilogo(){
         trStyle = '';
       }
       const badgeFuso = el.fuso ? `<span title="Olio dal DDT con quantità segnalata dal dipendente nel form ORE COMMESSE (${el._qtyForm||el.qty} lt)" style="display:inline-block;background:#FFD27A;color:#7A4D00;font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-left:4px;letter-spacing:.02em;vertical-align:middle">🛢️ AUTO-UNITO</span>` : '';
-      // Bottone "imposta prezzo cliente" se margine zero → apre prompt
+      // Bottone "imposta prezzo cliente" se margine zero → apre prompt (nella colonna azioni)
       const btnPrezzo = margineZero
         ? `<button type="button" title="Prezzo cliente uguale al netto fornitore (€${nettoFor.toFixed(2)}) — clicca per aggiornarlo"
              onclick="impostaPrezzoRiepilogo(${el._idx})"
-             style="background:#E0A800;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:800;padding:3px 8px;cursor:pointer;margin-left:4px">€?</button>`
+             style="background:#E0A800;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:800;padding:2px 6px;cursor:pointer;vertical-align:middle">€?</button>`
         : '';
       html += `
         <tr ${trStyle}>
@@ -2483,13 +2483,13 @@ function renderRiepilogo(){
                 style="width:70px;font-size:12px;padding:4px 6px;text-align:right">
               <button type="button" class="btn-iva" title="Scorpora IVA 22% (prezzo / 1.22)"
                 onclick="scorporaIvaRiepilogo(${el._idx})">−IVA</button>
-              ${btnPrezzo}
             </div>
           </td>
           ${cellaNetto}
           ${cellaRicarico}
           <td style="text-align:right;font-size:12px;font-weight:600">${fmt(sub)}</td>
-          <td style="text-align:center">
+          <td style="text-align:center;white-space:nowrap">
+            ${btnPrezzo}
             <button class="btn btn-g btn-sm btn-del-conferma" title="Elimina riga (clicca due volte)"
               style="color:var(--err);font-size:13px"
               onclick="eliminaConferma(this,()=>eliminaRigaRiepilogo(${el._idx}))">🗑</button>
