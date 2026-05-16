@@ -578,8 +578,8 @@ button.btn-blocked:hover{background:var(--ok)}
       </div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-s btn-sm" id="btnToggleNetti" onclick="toggleNetti()"
-          title="Mostra/nascondi prezzi netti dai DDT e percentuale ricarico">
-          👁 Mostra netti
+          title="Mostra netti — prezzi netti dai DDT e percentuale ricarico">
+          👁
         </button>
         <button class="btn btn-s btn-sm" onclick="resetRiepilogo()" title="Cancella le modifiche manuali e ripopola dai rapportini attuali">
           🔄 Reset dai rapportini
@@ -2339,7 +2339,10 @@ async function toggleNetti(){
 function aggiornaBottoneNetti(mostra){
   const btn = document.getElementById('btnToggleNetti');
   if (!btn) return;
-  btn.innerHTML = mostra ? '👁‍🗨 Nascondi netti' : '👁 Mostra netti';
+  btn.innerHTML = mostra ? '👁‍🗨' : '👁';
+  btn.title    = mostra
+    ? 'Nascondi netti — torna alla vista standard'
+    : 'Mostra netti — prezzi netti dai DDT e percentuale ricarico';
 }
 
 function aggiornaHeaderRiepilogo(mostra){
