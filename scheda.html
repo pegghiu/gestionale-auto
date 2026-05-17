@@ -322,6 +322,10 @@ button.btn-blocked:hover{background:var(--ok)}
 .hdr-xl-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
 .hdr-xl-num{font-size:30px;font-weight:800;color:var(--dark);font-family:'Courier New',monospace;letter-spacing:.05em;line-height:1}
 .hdr-xl-tag{font-size:13px;font-weight:600;color:var(--accent);background:var(--accent-l);padding:3px 10px;border-radius:5px;white-space:nowrap}
+.hdr-xl-tipo{font-size:13px;font-weight:700;padding:6px 12px;border:1px solid var(--border);border-radius:var(--rs);background:#FFF;color:var(--text);cursor:pointer;font-family:inherit;outline:none;transition:all .15s;-webkit-appearance:none;appearance:none;padding-right:28px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='none' stroke='%23706C65' stroke-width='1.5' d='M1 1l4 4 4-4'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}
+.hdr-xl-tipo:hover{border-color:var(--accent)}
+.hdr-xl-tipo:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-l)}
+.hdr-xl-tipo.has-value{background-color:var(--accent-l);border-color:var(--accent);color:var(--accent-d)}
 .hdr-xl-dates{display:flex;gap:14px;padding-left:14px;border-left:1px solid var(--border)}
 .hdr-xl-date-lbl{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-l)}
 .hdr-xl-date-val{font-size:13px;font-weight:700;color:var(--dark);font-variant-numeric:tabular-nums}
@@ -380,6 +384,18 @@ button.btn-blocked:hover{background:var(--ok)}
     <div class="hdr-xl-brand">Paghera Auto · Scheda di lavoro</div>
     <div class="hdr-xl-row">
       <div class="hdr-xl-num" id="hNum">Nuova</div>
+      <select id="tipoScheda" class="hdr-xl-tipo" onchange="setTipoScheda(this.value)">
+        <option value="">— tipo scheda —</option>
+        <option value="CA">-CA · Da pagare</option>
+        <option value="CAF">-CAF · Conclusa da fatturare (di solito a fine mese)</option>
+        <option value="CP">-CP · Pagata, non ancora fatturata</option>
+        <option value="V">-V · Veicolo in vendita / venduto</option>
+        <option value="R">-R · Pagata con scontrino fiscale</option>
+        <option value="F">-F · Fatturata</option>
+        <option value="FF">-FF · Fatturata su altro veicolo</option>
+        <option value="S">-S · Preventivo</option>
+        <option value="X">-X · Flotta (Arval / Ayvens / Alphabet)</option>
+      </select>
       <div class="hdr-xl-tag" id="hTag" style="display:none">—</div>
       <div class="hdr-xl-dates">
         <div>
@@ -398,7 +414,7 @@ button.btn-blocked:hover{background:var(--ok)}
     <div class="hdr-xl-veh" id="hModelloBig"></div>
   </div>
   <div class="hdr-xl-actions">
-    <span class="badge b-bozza" id="hBadge">Bozza</span>
+    <span class="badge b-bozza" id="hBadge" style="display:none">Bozza</span>
     <button class="btn-back-xl" onclick="location.href='schede.html'">← Schede</button>
   </div>
 </header>
@@ -435,36 +451,11 @@ button.btn-blocked:hover{background:var(--ok)}
     </div>
   </div>
 
-  <!-- TIPO SCHEDA / SUFFISSO NUMERAZIONE -->
-  <div style="display:flex;align-items:stretch;gap:10px;flex-wrap:wrap">
-
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px 18px;display:flex;align-items:center;gap:14px;flex:1;box-shadow:var(--sh)">
-      <div>
-        <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-m);margin-bottom:4px">Tipo scheda</div>
-        <select id="tipoScheda" onchange="setTipoScheda(this.value)"
-          style="font-size:14px;font-weight:600;padding:7px 12px;border:1px solid var(--border);border-radius:var(--rs);min-width:300px">
-          <option value="">Aperta (lavoro in corso)</option>
-          <option value="CA">-CA · Da pagare</option>
-          <option value="CAF">-CAF · Conclusa da fatturare (di solito a fine mese)</option>
-          <option value="CP">-CP · Pagata, non ancora fatturata</option>
-          <option value="V"> -V  · Veicolo in vendita / venduto</option>
-          <option value="R"> -R  · Pagata con scontrino fiscale</option>
-          <option value="F"> -F  · Fatturata</option>
-          <option value="FF">-FF · Fatturata su altro veicolo</option>
-          <option value="S"> -S  · Preventivo</option>
-          <option value="X"> -X  · Flotta (Arval / Ayvens / Alphabet)</option>
-        </select>
-      </div>
-      <div style="border-left:1px solid var(--border);padding-left:14px">
-        <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-m);margin-bottom:4px">N° scheda</div>
-        <div id="numeroDisplay" style="font-size:18px;font-weight:800;font-family:monospace;letter-spacing:.04em;color:var(--accent)">—</div>
-      </div>
-    </div>
-
-    <div id="tipoDescrizione" style="background:var(--accent-l);border:1px solid #F0C8A8;border-radius:var(--r);padding:12px 18px;font-size:13px;color:var(--accent-d);font-weight:600;display:flex;align-items:center;max-width:280px;box-shadow:var(--sh)">
-    </div>
-
-  </div>
+  <!-- TIPO SCHEDA: spostato nell'header XL.
+       Mantengo numeroDisplay e tipoDescrizione nel DOM nascosti
+       perché setTipoScheda() li aggiorna ad ogni cambio. -->
+  <div id="numeroDisplay" style="display:none">—</div>
+  <div id="tipoDescrizione" style="display:none"></div>
 
   <!-- ═══ VEICOLO + CLIENTE ═══════════════════════════════════
        Due modalità:
@@ -644,8 +635,10 @@ button.btn-blocked:hover{background:var(--ok)}
 
   </div><!-- /g2 CLIENTE + VEICOLO -->
 
-  <!-- DATI SCHEDA -->
-  <div class="card">
+  <!-- DATI SCHEDA: card nascosta.
+       I campi dataAp, dataConsCons, numero, tecnico restano nel DOM
+       perché il JS li legge/scrive in molti punti (salvataggio, stampa, ecc.) -->
+  <div class="card" style="display:none">
     <div class="ch"><span class="ct">Dati scheda</span></div>
     <div class="cb">
       <div class="dati-slim">
@@ -673,8 +666,9 @@ button.btn-blocked:hover{background:var(--ok)}
     </div>
   </div>
 
-  <!-- SINTOMI / PROBLEMA -->
-  <div class="card">
+  <!-- SINTOMI / PROBLEMA: card nascosta.
+       textarea#problema e #sintomsGrid restano nel DOM per il JS. -->
+  <div class="card" style="display:none">
     <div class="ch"><span class="ct">Problema riportato dal cliente</span></div>
     <div class="cb">
       <!-- Chip sintomi rapidi -->
@@ -842,8 +836,11 @@ button.btn-blocked:hover{background:var(--ok)}
     </div>
   </div>
 
-  <!-- RETTIFICA ORE FINALI -->
-  <div class="card" style="border-left:4px solid var(--accent)">
+  <!-- RETTIFICA ORE FINALI: card nascosta.
+       I campi (oreRiconosciute, motivazioneRett, oreDelta, oreEff, oreDichiarate)
+       restano nel DOM per compatibilità JS — aggiornaRettifica() può crashare
+       se non trova oreDelta. -->
+  <div class="card" style="display:none;border-left:4px solid var(--accent)">
     <div class="ch">
       <div>
         <span class="ct">Rettifica ore finali</span>
@@ -1271,15 +1268,11 @@ function setTipoScheda(tipo){
     badge.textContent      = tipo ? t.label : 'Aperta';
   }
 
-  // Pillino tipo nell'header XL
-  const hTag = document.getElementById('hTag');
-  if(hTag){
-    if(tipo && t){
-      hTag.textContent = tipo + ' · ' + t.label;
-      hTag.style.display = 'inline-block';
-    } else {
-      hTag.style.display = 'none';
-    }
+  // Evidenzia il select tipoScheda nell'header quando ha un valore
+  const sel = document.getElementById('tipoScheda');
+  if(sel){
+    if(tipo) sel.classList.add('has-value');
+    else     sel.classList.remove('has-value');
   }
 
   dirty();
