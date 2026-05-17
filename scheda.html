@@ -3348,18 +3348,15 @@ async function caricaScheda(id){
     // Se la scheda è collegata (veicolo_id presente) → usa quello.
     // Altrimenti, prova match per targa: se trovato veicolo, popola anche cliente.
     try {
-      const isUuid = (s) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(s||''));
-      const targaLookup = SL.targa;
+      const targaLookup = SL.veicolo_id || SL.targa;
       if (targaLookup) {
         const anag = await caricaAnagraficaPerVeicolo(targaLookup);
         if (anag) {
           SL._anagVeicolo = anag;
           if (anag.clienti) SL._anagCliente = anag.clienti;
-          // Aggancia veicolo_id SOLO se è un UUID valido (alcuni schema usano
-          // PK testuali — in quel caso lasciamo null, la targa basta a ritrovare il veicolo)
-          if (!SL.veicolo_id && isUuid(anag.id)) {
-            SL.veicolo_id = anag.id;
-          }
+          // Se in DB non c'era veicolo_id ma il match per targa funziona,
+          // lo aggancio (verrà persistito al prossimo salvataggio)
+          if (!SL.veicolo_id) SL.veicolo_id = anag.targa;
           if (!SL.cliente.id && anag.clienti) {
             SL.cliente.id = anag.clienti.id;
           }
@@ -4040,12 +4037,8 @@ function selezionaVeicoloAnagrafica(v){
   if (!v) return;
   const c = v.clienti || null;
 
-  // veicolo_id: alcuni schema hanno PK = id UUID (joinato con cliente_id),
-  // altri PK = targa text. Salvo l'UUID se presente, altrimenti null
-  // (la targa è comunque in SL.targa, sufficiente per il match).
-  // Pattern UUID v4-ish: 8-4-4-4-12 hex con trattini.
-  const isUuid = (s) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(s||''));
-  SL.veicolo_id = isUuid(v.id) ? v.id : null;
+  // veicolo_id = targa (PK di veicoli_anagrafica, FK su rapportini.veicolo_id)
+  SL.veicolo_id    = String(v.targa||'').toUpperCase();
   SL.targa         = String(v.targa||'').toUpperCase();
   SL.modello       = [v.marca, v.modello].filter(Boolean).join(' ');
   SL._anagVeicolo  = { ...v };
