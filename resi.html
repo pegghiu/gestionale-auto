@@ -174,6 +174,9 @@ body{font-family:'Helvetica Neue',Arial,-apple-system,sans-serif;background:var(
     <button class="tab" data-tab="nc" onclick="cambiaTab('nc')">In attesa NC <span class="tab-count" id="cNc">0</span></button>
     <button class="tab" data-tab="storico" onclick="cambiaTab('storico')">Storico <span class="tab-count" id="cStorico">0</span></button>
     <button class="tab" data-tab="fornitori" onclick="cambiaTab('fornitori')">Per fornitore</button>
+    <button class="tab" data-tab="ddt" onclick="cambiaTab('ddt')">DDT emessi <span class="tab-count" id="cDdt">0</span></button>
+    <div style="flex:1"></div>
+    <button class="btn btn-p btn-sm" onclick="apriWizardDdt()" style="align-self:center;margin-bottom:6px">🖨 Nuovo DDT di reso</button>
   </div>
 
   <!-- TOOLBAR (visibile su gestire/nc/storico) -->
@@ -297,6 +300,124 @@ body{font-family:'Helvetica Neue',Arial,-apple-system,sans-serif;background:var(
   </div>
 </div>
 
+<!-- ═══════════════ WIZARD DDT — STEP 1: SCELTA FORNITORE E RESI ═══════════════ -->
+<div class="modal-bg" id="modalWiz1">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-h">
+      <div class="modal-t">🖨 Nuovo DDT di reso — passo 1 di 2</div>
+      <button class="modal-x" onclick="chiudiModal('modalWiz1')">×</button>
+    </div>
+    <div class="modal-b">
+      <div class="fld">
+        <span class="fld-l">Fornitore destinatario</span>
+        <select id="wizFornitore" onchange="aggiornaWizResiCandidati()">
+          <option value="">— seleziona —</option>
+        </select>
+      </div>
+
+      <div id="wizFornEmpty" style="display:none;background:var(--warn-bg);border:1px solid var(--warn);border-radius:6px;padding:10px;font-size:12px;color:var(--warn);margin-bottom:10px">
+        ⚠️ Nessun fornitore in anagrafica. <a href="fornitori.html" style="color:inherit;font-weight:700">Aggiungi un fornitore</a> prima di emettere un DDT.
+      </div>
+
+      <div class="fld">
+        <span class="fld-l">Resi da includere</span>
+        <div style="font-size:11px;color:var(--text-l);margin-bottom:6px">
+          Vengono mostrati solo i resi <strong>da rendere</strong> o <strong>spediti</strong> non ancora associati ad altri DDT.
+        </div>
+        <div id="wizResiBox" style="border:1px solid var(--border);border-radius:6px;max-height:280px;overflow-y:auto;padding:6px">
+          <div style="text-align:center;color:var(--text-l);font-size:12px;padding:20px">Seleziona prima un fornitore</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11px;color:var(--text-m)">
+          <span><a href="#" onclick="event.preventDefault();wizSelTutti(true)" style="color:var(--accent)">Seleziona tutti</a> · <a href="#" onclick="event.preventDefault();wizSelTutti(false)" style="color:var(--accent)">Deseleziona</a></span>
+          <span id="wizSelCount">0 selezionati · € 0,00</span>
+        </div>
+      </div>
+    </div>
+    <div class="modal-f">
+      <button class="btn btn-s btn-sm" onclick="chiudiModal('modalWiz1')">Annulla</button>
+      <button class="btn btn-p btn-sm" id="wizNextBtn" onclick="wizVaiStep2()" disabled>Avanti →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ WIZARD DDT — STEP 2: DATI DDT E STAMPA ═══════════════ -->
+<div class="modal-bg" id="modalWiz2">
+  <div class="modal" style="max-width:680px">
+    <div class="modal-h">
+      <div class="modal-t">🖨 Nuovo DDT di reso — passo 2 di 2</div>
+      <button class="modal-x" onclick="chiudiModal('modalWiz2')">×</button>
+    </div>
+    <div class="modal-b">
+      <div class="info-box" id="wizRiepilogo"></div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="fld">
+          <span class="fld-l">Numero DDT</span>
+          <input type="text" id="wizNumero" readonly style="background:#F7F6F3;font-family:monospace;font-weight:700">
+        </div>
+        <div class="fld">
+          <span class="fld-l">Data DDT</span>
+          <input type="date" id="wizData">
+        </div>
+      </div>
+
+      <div class="fld">
+        <span class="fld-l">Causale del trasporto</span>
+        <input type="text" id="wizCausale" value="Reso merce per garanzia/difettosa">
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="fld">
+          <span class="fld-l">Trasporto a cura di</span>
+          <select id="wizTrasporto">
+            <option value="mittente">Mittente (Paghera)</option>
+            <option value="destinatario" selected>Destinatario (Fornitore)</option>
+            <option value="vettore">Vettore</option>
+          </select>
+        </div>
+        <div class="fld">
+          <span class="fld-l">Vettore (se applicabile)</span>
+          <input type="text" id="wizVettore" placeholder="es. GLS, BRT...">
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div class="fld">
+          <span class="fld-l">Aspetto beni</span>
+          <select id="wizAspetto">
+            <option value="Colli" selected>Colli</option>
+            <option value="Pacchi">Pacchi</option>
+            <option value="Pallet">Pallet</option>
+            <option value="Buste">Buste</option>
+          </select>
+        </div>
+        <div class="fld">
+          <span class="fld-l">N. colli</span>
+          <input type="number" min="1" id="wizColli" value="1">
+        </div>
+        <div class="fld">
+          <span class="fld-l">Peso (kg)</span>
+          <input type="number" step="0.1" min="0" id="wizPeso" placeholder="0">
+        </div>
+      </div>
+
+      <div class="fld">
+        <span class="fld-l">Note (facoltative)</span>
+        <textarea id="wizNote" rows="2" placeholder="Es: si richiede nota di credito entro 30 giorni..."></textarea>
+      </div>
+
+      <div class="fld">
+        <span class="fld-l">Operatore che emette</span>
+        <select id="wizEmesso"></select>
+      </div>
+    </div>
+    <div class="modal-f">
+      <button class="btn btn-s btn-sm" onclick="wizTorna1()">← Indietro</button>
+      <button class="btn btn-p btn-sm" onclick="wizGeneraDdt()">Genera DDT e stampa</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const SUPABASE_URL = 'https://iztrrgqkzsovorcmixum.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml6dHJyZ3FrenNvdm9yY21peHVtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMDI3NzMsImV4cCI6MjA4OTc3ODc3M30.3IyUCDpFs9x_iSi5C4asodt5_O3F_cwgdb3eBkoQh3U';
@@ -324,8 +445,13 @@ const STATO_LBL = {
 
 // ─── STATE ───
 let TUTTI = [];
+let FORNITORI = [];
+let DDT_RESI = [];
 let _tabAttuale = 'gestire';
 let _modalCtx = null; // {id, reso, action}
+let _wiz = null;      // stato wizard DDT
+
+const OPERATORI = ['Davide','Cristian','Ivan','Marco','Luca','Andrea','Bepi','Stagista'];
 
 // ─── UTILS ───
 function fmt(n){ return '€ ' + (n||0).toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}); }
@@ -351,18 +477,23 @@ async function init(){
 
 async function carica(){
   try {
-    const { data, error } = await _sb
-      .from('resi_fornitore')
-      .select('*')
-      .order('created_at', { ascending: false });
-    if (error) throw error;
-    TUTTI = data || [];
+    const [{ data: resi, error: e1 }, { data: forn, error: e2 }, { data: ddt, error: e3 }] = await Promise.all([
+      _sb.from('resi_fornitore').select('*').order('created_at', { ascending: false }),
+      _sb.from('fornitori').select('*').eq('attivo', true).order('nome'),
+      _sb.from('ddt_resi').select('*').order('data', { ascending: false })
+    ]);
+    if (e1) throw e1;
+    if (e2) console.warn('fornitori:', e2);
+    if (e3) console.warn('ddt_resi:', e3);
+    TUTTI = resi || [];
+    FORNITORI = forn || [];
+    DDT_RESI = ddt || [];
     aggiornaKpi();
     render();
   } catch(e){
-    console.error('Carica resi:', e);
-    toast('Errore caricamento resi — vedi console', 'err');
-    TUTTI = [];
+    console.error('Carica:', e);
+    toast('Errore caricamento — vedi console', 'err');
+    TUTTI = []; FORNITORI = []; DDT_RESI = [];
   }
 }
 
@@ -385,6 +516,8 @@ function aggiornaKpi(){
   document.getElementById('cGestire').textContent = cGestire;
   document.getElementById('cNc').textContent      = cNc;
   document.getElementById('cStorico').textContent = cStorico;
+  const cDdtEl = document.getElementById('cDdt');
+  if (cDdtEl) cDdtEl.textContent = DDT_RESI.length;
 }
 
 // ─── TAB ───
@@ -393,13 +526,15 @@ function cambiaTab(tab){
   document.querySelectorAll('.tab').forEach(t => {
     t.classList.toggle('active', t.dataset.tab === tab);
   });
-  document.getElementById('toolbar').style.display = (tab === 'fornitori') ? 'none' : 'flex';
+  const senzaToolbar = ['fornitori','ddt'];
+  document.getElementById('toolbar').style.display = senzaToolbar.includes(tab) ? 'none' : 'flex';
   render();
 }
 
 // ─── RENDER ───
 function render(){
   if (_tabAttuale === 'fornitori') return renderFornitori();
+  if (_tabAttuale === 'ddt')       return renderDdtEmessi();
 
   const cerca   = (document.getElementById('cerca').value || '').toLowerCase().trim();
   const fMotivo = document.getElementById('fMotivo').value;
@@ -756,6 +891,299 @@ async function confermaChiudi(){
   } catch(e){
     console.error('confermaChiudi:', e);
     toast('Errore chiusura reso — vedi console', 'err');
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// TAB DDT EMESSI — Lista dei documenti di trasporto di reso generati
+// ════════════════════════════════════════════════════════════════════
+function renderDdtEmessi(){
+  document.getElementById('risultati').textContent = '';
+  const container = document.getElementById('lista');
+
+  if (!DDT_RESI.length) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">📄</div>
+        <div class="empty-state-title">Nessun DDT di reso emesso</div>
+        <div class="empty-state-sub">Clicca "🖨 Nuovo DDT di reso" per crearne uno.</div>
+      </div>`;
+    return;
+  }
+
+  // Mappa resi per ddt_reso_id (conteggio righe per DDT)
+  const conteggioRighe = {};
+  TUTTI.forEach(r => {
+    if (r.ddt_reso_id) conteggioRighe[r.ddt_reso_id] = (conteggioRighe[r.ddt_reso_id] || 0) + 1;
+  });
+
+  container.innerHTML = `
+    <div class="forn-card" style="background:#F7F6F3;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-m);grid-template-columns:120px 110px 1fr 80px 110px 160px">
+      <div>Numero</div><div>Data</div><div>Fornitore</div><div style="text-align:center">Righe</div><div>Stato</div><div style="text-align:right">Azioni</div>
+    </div>
+    ${DDT_RESI.map(d => `
+      <div class="forn-card" style="grid-template-columns:120px 110px 1fr 80px 110px 160px">
+        <div style="font-family:monospace;font-weight:800">${d.numero}</div>
+        <div style="font-family:monospace;font-size:13px">${fmtData(d.data)}</div>
+        <div>
+          <div style="font-weight:600">${d.dest_nome || '—'}</div>
+          ${d.causale_trasporto ? `<div style="font-size:11px;color:var(--text-m);margin-top:2px">${d.causale_trasporto}</div>` : ''}
+        </div>
+        <div style="text-align:center;font-weight:700">${conteggioRighe[d.id] || 0}</div>
+        <div><span class="stato-badge ${d.stato === 'annullato' ? 's-rifiutato' : 's-chiuso'}">${d.stato}</span></div>
+        <div style="text-align:right">
+          <a href="ddt-reso-stampa.html?id=${d.id}&_v=${_CB}" target="_blank" class="btn btn-p btn-sm">🖨 Apri/Stampa</a>
+        </div>
+      </div>
+    `).join('')}
+  `;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// WIZARD DDT — Step 1: scegli fornitore + resi da includere
+// ════════════════════════════════════════════════════════════════════
+function apriWizardDdt(){
+  if (!FORNITORI.length) {
+    document.getElementById('wizFornEmpty').style.display = '';
+  } else {
+    document.getElementById('wizFornEmpty').style.display = 'none';
+  }
+
+  // Popola dropdown fornitori
+  const sel = document.getElementById('wizFornitore');
+  sel.innerHTML = '<option value="">— seleziona —</option>' +
+    FORNITORI.map(f => `<option value="${f.id}">${f.nome}</option>`).join('');
+
+  // Resetta selezione e UI
+  _wiz = { fornitore_id:null, resi_selezionati:new Set(), resi_candidati:[] };
+  document.getElementById('wizResiBox').innerHTML =
+    '<div style="text-align:center;color:var(--text-l);font-size:12px;padding:20px">Seleziona prima un fornitore</div>';
+  document.getElementById('wizSelCount').textContent = '0 selezionati · € 0,00';
+  document.getElementById('wizNextBtn').disabled = true;
+
+  document.getElementById('modalWiz1').classList.add('show');
+}
+
+function aggiornaWizResiCandidati(){
+  const fornId = document.getElementById('wizFornitore').value;
+  _wiz.fornitore_id = fornId || null;
+  _wiz.resi_selezionati.clear();
+
+  if (!fornId) {
+    document.getElementById('wizResiBox').innerHTML =
+      '<div style="text-align:center;color:var(--text-l);font-size:12px;padding:20px">Seleziona prima un fornitore</div>';
+    document.getElementById('wizSelCount').textContent = '0 selezionati · € 0,00';
+    document.getElementById('wizNextBtn').disabled = true;
+    return;
+  }
+
+  // Resi candidati = stato da_rendere o spedito + (fornitore_id match OR fornitore_nome match) + non già in altro DDT
+  const fornObj = FORNITORI.find(f => f.id === fornId);
+  const nomeF = (fornObj?.nome || '').trim().toLowerCase();
+
+  const candidati = TUTTI.filter(r => {
+    if (!['da_rendere','spedito'].includes(r.stato)) return false;
+    if (r.ddt_reso_id) return false;
+    if (r.fornitore_id === fornId) return true;
+    if (!r.fornitore_id && nomeF && (r.fornitore_nome||'').trim().toLowerCase() === nomeF) return true;
+    return false;
+  });
+
+  _wiz.resi_candidati = candidati;
+
+  if (!candidati.length) {
+    document.getElementById('wizResiBox').innerHTML =
+      '<div style="text-align:center;color:var(--text-l);font-size:12px;padding:20px">Nessun reso pendente per questo fornitore</div>';
+    document.getElementById('wizNextBtn').disabled = true;
+    return;
+  }
+
+  document.getElementById('wizResiBox').innerHTML = candidati.map(r => `
+    <label style="display:grid;grid-template-columns:24px 110px 1fr 70px 90px;align-items:center;gap:8px;padding:8px;border-bottom:1px solid #F0EDE8;cursor:pointer;font-size:12px">
+      <input type="checkbox" data-id="${r.id}" onchange="wizToggleReso(this)" style="width:18px;height:18px">
+      <span style="font-family:monospace;font-weight:700">${r.numero}</span>
+      <span>
+        <div style="font-weight:600">${r.descrizione || '—'}</div>
+        <div style="color:var(--text-m);font-family:monospace;font-size:11px">${r.codice || '—'} · ${MOTIVO_LBL[r.motivo]||'—'}</div>
+      </span>
+      <span style="text-align:center;font-weight:700">${r.qta || 1}</span>
+      <span style="text-align:right;font-weight:700">${fmt(r.importo_atteso)}</span>
+    </label>
+  `).join('');
+
+  aggiornaWizSelCount();
+}
+
+function wizToggleReso(cb){
+  const id = cb.dataset.id;
+  if (cb.checked) _wiz.resi_selezionati.add(id);
+  else _wiz.resi_selezionati.delete(id);
+  aggiornaWizSelCount();
+}
+
+function wizSelTutti(sel){
+  document.querySelectorAll('#wizResiBox input[type=checkbox]').forEach(cb => {
+    cb.checked = sel;
+    const id = cb.dataset.id;
+    if (sel) _wiz.resi_selezionati.add(id);
+    else _wiz.resi_selezionati.delete(id);
+  });
+  aggiornaWizSelCount();
+}
+
+function aggiornaWizSelCount(){
+  const n = _wiz.resi_selezionati.size;
+  const tot = _wiz.resi_candidati
+    .filter(r => _wiz.resi_selezionati.has(r.id))
+    .reduce((s,r)=> s + (parseFloat(r.importo_atteso)||0), 0);
+  document.getElementById('wizSelCount').textContent =
+    `${n} selezionat${n===1?'o':'i'} · ${fmt(tot)}`;
+  document.getElementById('wizNextBtn').disabled = (n === 0);
+}
+
+// ────────────────────────────────────────────────────────────────────
+// WIZARD STEP 2: dati DDT
+// ────────────────────────────────────────────────────────────────────
+async function wizVaiStep2(){
+  if (!_wiz || _wiz.resi_selezionati.size === 0) return;
+
+  // Genera numero DDT preview
+  try {
+    const annoBreve = String(new Date().getFullYear()).slice(-2);
+    const { data: num, error } = await _sb.rpc('prossimo_numero_ddt_reso', { p_anno: annoBreve });
+    if (error) throw error;
+    document.getElementById('wizNumero').value = num;
+    _wiz.numero = num;
+  } catch(e){
+    console.error('prossimo_numero_ddt_reso:', e);
+    toast('Errore numerazione DDT — verifica la function RPC su Supabase', 'err');
+    return;
+  }
+
+  // Default campi
+  document.getElementById('wizData').value     = oggi();
+  document.getElementById('wizCausale').value  = 'Reso merce per garanzia/difettosa';
+  document.getElementById('wizTrasporto').value= 'destinatario';
+  document.getElementById('wizVettore').value  = '';
+  document.getElementById('wizAspetto').value  = 'Colli';
+  document.getElementById('wizColli').value    = '1';
+  document.getElementById('wizPeso').value     = '';
+  document.getElementById('wizNote').value     = '';
+
+  // Popola operatori
+  const opSel = document.getElementById('wizEmesso');
+  const def = operatoreCorrente();
+  opSel.innerHTML = OPERATORI.map(o =>
+    `<option value="${o}" ${o===def?'selected':''}>${o}</option>`
+  ).join('');
+
+  // Riepilogo
+  const forn = FORNITORI.find(f => f.id === _wiz.fornitore_id);
+  const sel = _wiz.resi_candidati.filter(r => _wiz.resi_selezionati.has(r.id));
+  const tot = sel.reduce((s,r)=> s + (parseFloat(r.importo_atteso)||0), 0);
+  document.getElementById('wizRiepilogo').innerHTML = `
+    <div><strong>${forn?.nome || '—'}</strong></div>
+    <div class="info-box-l">${sel.length} resi · ${fmt(tot)}</div>
+    ${(!forn?.indirizzo || !forn?.p_iva) ? `<div style="color:var(--warn);font-size:11px;margin-top:6px">⚠️ Anagrafica incompleta (manca indirizzo o P.IVA) — il DDT verrà generato ma alcuni campi appariranno vuoti. <a href="fornitori.html" style="color:var(--warn);font-weight:700">Completa l'anagrafica</a></div>` : ''}
+  `;
+
+  chiudiModal('modalWiz1');
+  document.getElementById('modalWiz2').classList.add('show');
+}
+
+function wizTorna1(){
+  chiudiModal('modalWiz2');
+  document.getElementById('modalWiz1').classList.add('show');
+}
+
+async function wizGeneraDdt(){
+  if (!_wiz) return;
+
+  const forn = FORNITORI.find(f => f.id === _wiz.fornitore_id);
+  if (!forn) { toast('Fornitore non trovato', 'err'); return; }
+
+  const operatore = document.getElementById('wizEmesso').value;
+  if (operatore) localStorage.setItem('gestionale_operatore_default', operatore);
+
+  // Snapshot mittente (Paghera Auto SRL — dati hardcoded; in futuro da tabella aziende)
+  const MITTENTE = {
+    nome: 'Paghera Auto SRL',
+    ragione_sociale: 'Paghera Auto SRL',
+    p_iva: '',           // ← Da configurare
+    codice_fiscale: '',  // ← Da configurare
+    indirizzo: '',       // ← Da configurare
+    cap: '',
+    citta: '',
+    provincia: ''
+  };
+
+  const payload = {
+    numero: _wiz.numero,
+    data: document.getElementById('wizData').value || oggi(),
+    fornitore_id: forn.id,
+    dest_nome: forn.nome,
+    dest_ragione_sociale: forn.ragione_sociale,
+    dest_p_iva: forn.p_iva,
+    dest_codice_fiscale: forn.codice_fiscale,
+    dest_indirizzo: forn.indirizzo,
+    dest_cap: forn.cap,
+    dest_citta: forn.citta,
+    dest_provincia: forn.provincia,
+    dest_nazione: forn.nazione || 'IT',
+    mitt_nome: MITTENTE.nome,
+    mitt_ragione_sociale: MITTENTE.ragione_sociale,
+    mitt_p_iva: MITTENTE.p_iva,
+    mitt_codice_fiscale: MITTENTE.codice_fiscale,
+    mitt_indirizzo: MITTENTE.indirizzo,
+    mitt_cap: MITTENTE.cap,
+    mitt_citta: MITTENTE.citta,
+    mitt_provincia: MITTENTE.provincia,
+    causale: 'Reso a fornitore',
+    causale_trasporto: document.getElementById('wizCausale').value.trim() || 'Reso merce',
+    trasporto_a_cura: document.getElementById('wizTrasporto').value,
+    vettore_nome: document.getElementById('wizVettore').value.trim() || null,
+    aspetto_beni: document.getElementById('wizAspetto').value,
+    n_colli: parseInt(document.getElementById('wizColli').value) || 1,
+    peso_kg: parseFloat(document.getElementById('wizPeso').value) || null,
+    note: document.getElementById('wizNote').value.trim() || null,
+    emesso_da: operatore || null,
+    stato: 'emesso'
+  };
+
+  try {
+    // 1) Insert DDT
+    const { data: ddtIns, error: e1 } = await _sb.from('ddt_resi')
+      .insert(payload).select('id').single();
+    if (e1) throw e1;
+    const ddtId = ddtIns.id;
+
+    // 2) Collega i resi selezionati al DDT
+    const idsResi = Array.from(_wiz.resi_selezionati);
+    const { error: e2 } = await _sb.from('resi_fornitore')
+      .update({ ddt_reso_id: ddtId })
+      .in('id', idsResi);
+    if (e2) throw e2;
+
+    // 3) Se i resi erano 'da_rendere', li spingo a 'spedito' usando la data del DDT
+    const daSpedire = TUTTI.filter(r => idsResi.includes(r.id) && r.stato === 'da_rendere');
+    if (daSpedire.length) {
+      const { error: e3 } = await _sb.from('resi_fornitore')
+        .update({ stato: 'spedito', data_spedizione: payload.data })
+        .in('id', daSpedire.map(r => r.id));
+      if (e3) console.warn('Aggiornamento stato spedito:', e3);
+    }
+
+    toast(`📄 DDT ${_wiz.numero} creato`, 'ok');
+    chiudiModal('modalWiz2');
+    _wiz = null;
+    await carica();
+
+    // 4) Apri stampa in nuova tab
+    window.open(`ddt-reso-stampa.html?id=${ddtId}&_v=${_CB}`, '_blank');
+
+  } catch(e){
+    console.error('wizGeneraDdt:', e);
+    toast('Errore generazione DDT — vedi console', 'err');
   }
 }
 
