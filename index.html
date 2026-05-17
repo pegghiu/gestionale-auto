@@ -279,6 +279,18 @@ body{
     <span class="ddt-alert-cta" style="color:var(--amber)">Gestisci orfani →</span>
   </a>
 
+  <!-- Alert Resi con NC ricevuta in attesa di chiusura -->
+  <a href="resi.html" class="ddt-alert" id="resiAlert" style="display:none;background:var(--red-l);border-color:var(--red)">
+    <div class="ddt-alert-left">
+      <span class="ddt-alert-icon">🔄</span>
+      <div class="ddt-alert-text">
+        <strong id="resiAlertNum">0 resi</strong> con nota di credito ricevuta da chiudere
+        <p id="resiAlertDetail">Clicca per finalizzare la compensazione</p>
+      </div>
+    </div>
+    <span class="ddt-alert-cta" style="color:var(--red)">Gestisci resi →</span>
+  </a>
+
   <!-- KPI -->
   <div class="section-head">
     <span class="section-title">Situazione attuale</span>
@@ -394,6 +406,22 @@ body{
       </div>
     </a>
 
+    <!-- Resi a fornitore -->
+    <a href="resi.html" class="mod" style="border-top:3px solid var(--red)">
+      <div class="mod-top">
+        <div class="mod-icon" style="background:var(--red-l);color:var(--red);font-size:20px">🔄</div>
+        <span class="mod-badge" style="background:var(--red-l);color:var(--red)">Resi</span>
+      </div>
+      <div class="mod-body">
+        <div class="mod-title">Resi a fornitore</div>
+        <div class="mod-desc">Tracciamento ricambi resi: da rendere → spedito → accettato → NC ricevuta → chiuso. Scarico magazzino automatico e riepilogo per fornitore.</div>
+      </div>
+      <div class="mod-footer">
+        <span class="mod-stat"><strong id="mResiAperti">—</strong> aperti · <strong id="mResiNc">—</strong> NC</span>
+        <span class="mod-cta">Apri resi →</span>
+      </div>
+    </a>
+
     <!-- Report efficienza -->
     <a href="report.html" class="mod" style="border-top:3px solid #534AB7">
       <div class="mod-top">
@@ -464,6 +492,7 @@ function init(){
 
   caricaKpi();
   caricaOrfaniCount();
+  caricaResiCount();
   caricaAttivita();
 }
 
@@ -559,6 +588,52 @@ async function caricaOrfaniCount(){
     console.error('Orfani count error:', e);
     const stat = document.getElementById('mOrfani');
     if(stat) stat.textContent = '—';
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// CONTEGGIO RESI A FORNITORE
+// Mostra n.resi aperti totali + n.resi con NC ricevuta da chiudere
+// Alert visibile solo se ci sono NC da compensare.
+// ══════════════════════════════════════════════════════════
+async function caricaResiCount(){
+  try {
+    const { data, error } = await _sb
+      .from('resi_fornitore')
+      .select('stato');
+    if (error) throw error;
+
+    const arr = data || [];
+    const nAperti = arr.filter(r =>
+      ['da_rendere','spedito','accettato','nota_credito_ricevuta'].includes(r.stato)
+    ).length;
+    const nNc = arr.filter(r => r.stato === 'nota_credito_ricevuta').length;
+
+    const sA  = document.getElementById('mResiAperti');
+    const sNc = document.getElementById('mResiNc');
+    if (sA)  sA.textContent  = nAperti;
+    if (sNc) sNc.textContent = nNc;
+
+    const alert = document.getElementById('resiAlert');
+    if (alert) {
+      if (nNc > 0) {
+        alert.style.display = 'flex';
+        document.getElementById('resiAlertNum').textContent =
+          nNc + (nNc === 1 ? ' reso' : ' resi');
+        document.getElementById('resiAlertDetail').textContent =
+          nNc === 1
+            ? '1 nota di credito ricevuta — clicca per chiudere il reso'
+            : `${nNc} note di credito ricevute — clicca per chiudere i resi`;
+      } else {
+        alert.style.display = 'none';
+      }
+    }
+  } catch(e){
+    console.error('Resi count error:', e);
+    const sA  = document.getElementById('mResiAperti');
+    const sNc = document.getElementById('mResiNc');
+    if (sA)  sA.textContent  = '—';
+    if (sNc) sNc.textContent = '—';
   }
 }
 
