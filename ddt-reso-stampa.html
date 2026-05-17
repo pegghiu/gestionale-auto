@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<title>DDT di reso — Stampa</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:'Helvetica Neue',Arial,sans-serif;
+  background:#9a9690;
+  color:#1A1A1A;
+  font-size:11pt;
+  line-height:1.35;
+  padding:14px;
+}
+
+/* TOOLBAR (non stampabile) */
+.tb{
+  max-width:210mm;margin:0 auto 12px;
+  display:flex;justify-content:space-between;align-items:center;
+  background:#FFF;border-radius:8px;padding:10px 14px;
+  box-shadow:0 1px 4px rgba(0,0,0,.12);
+}
+.tb-l{display:flex;gap:10px;align-items:center}
+.tb h1{font-size:14px;font-weight:700}
+.tb-l .doc-num{font-family:monospace;font-size:13px;background:#F4F2EE;padding:3px 8px;border-radius:4px;font-weight:700}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:5px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid transparent;font-family:inherit;text-decoration:none}
+.btn-p{background:#E85A00;color:#FFF;border-color:#E85A00}
+.btn-p:hover{background:#C04800}
+.btn-s{background:#FFF;color:#1A1A1A;border-color:#DEDAD4}
+.btn-s:hover{background:#F4F2EE}
+
+/* FOGLIO A4 */
+.page{
+  background:#FFF;
+  width:210mm;
+  min-height:297mm;
+  margin:0 auto;
+  padding:18mm 16mm 16mm;
+  box-shadow:0 2px 12px rgba(0,0,0,.18);
+  position:relative;
+}
+
+/* HEADER */
+.header{
+  display:grid;grid-template-columns:1fr 1fr;
+  gap:16px;
+  border-bottom:2px solid #1A1A1A;
+  padding-bottom:10px;
+  margin-bottom:14px;
+}
+.brand{
+  display:flex;align-items:center;gap:12px;
+}
+.brand-logo{
+  width:60px;height:60px;
+  background:#E85A00;color:#FFF;
+  display:flex;align-items:center;justify-content:center;
+  font-weight:800;font-size:22px;border-radius:6px;
+  flex-shrink:0;
+}
+.brand-text{font-size:10pt;line-height:1.3}
+.brand-text strong{font-size:14pt;display:block;margin-bottom:2px}
+.doc-title{
+  text-align:right;
+}
+.doc-title-h{
+  font-size:14pt;font-weight:800;letter-spacing:.05em;text-transform:uppercase;
+}
+.doc-title-num{
+  font-family:monospace;font-size:18pt;font-weight:900;margin-top:4px;letter-spacing:.04em;
+}
+.doc-title-data{
+  font-size:11pt;color:#4A4A4A;margin-top:2px;
+}
+
+/* INTESTAZIONI MITTENTE / DESTINATARIO */
+.intest-row{
+  display:grid;grid-template-columns:1fr 1fr;gap:14px;
+  margin-bottom:14px;
+}
+.intest-box{
+  border:1px solid #C4C0B8;border-radius:4px;padding:9px 12px;
+}
+.intest-lbl{
+  font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
+  color:#706C65;margin-bottom:4px;
+}
+.intest-name{font-size:12pt;font-weight:700;margin-bottom:2px}
+.intest-rs{font-size:10pt;color:#4A4A4A;margin-bottom:4px}
+.intest-line{font-size:10pt;line-height:1.4}
+.intest-piva{font-size:9pt;color:#4A4A4A;margin-top:4px}
+
+/* META INFO (causale, trasporto, ecc) */
+.meta-row{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:8px;
+  margin-bottom:14px;
+}
+.meta-cell{
+  border:1px solid #C4C0B8;border-radius:4px;padding:6px 10px;
+}
+.meta-lbl{font-size:7.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#706C65;margin-bottom:2px}
+.meta-val{font-size:10pt;font-weight:600}
+.meta-val.mono{font-family:monospace;font-weight:700}
+
+/* TABELLA RIGHE */
+table.righe{
+  width:100%;border-collapse:collapse;margin-bottom:14px;
+}
+table.righe thead th{
+  background:#F4F2EE;
+  border:1px solid #C4C0B8;
+  font-size:8.5pt;font-weight:700;text-transform:uppercase;letter-spacing:.04em;
+  padding:6px 8px;color:#3A3A3A;
+}
+table.righe tbody td{
+  border:1px solid #DEDAD4;
+  padding:6px 8px;font-size:10pt;
+  vertical-align:top;
+}
+table.righe .c-num{font-family:monospace;font-weight:700;width:80px;font-size:9.5pt}
+table.righe .c-cod{font-family:monospace;width:100px;font-size:9.5pt}
+table.righe .c-desc{}
+table.righe .c-qty{width:50px;text-align:center;font-weight:700}
+table.righe .c-um{width:36px;text-align:center;color:#706C65;font-size:9pt}
+table.righe .c-mot{width:120px;font-size:9pt;color:#4A4A4A}
+table.righe .c-rif{width:130px;font-size:9pt;color:#4A4A4A}
+
+/* TOTALI / NOTE */
+.tot-row{
+  display:grid;grid-template-columns:2fr 1fr;gap:14px;margin-bottom:14px;
+}
+.note-box{
+  border:1px solid #C4C0B8;border-radius:4px;padding:9px 12px;min-height:60px;
+}
+.note-lbl{font-size:8pt;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#706C65;margin-bottom:4px}
+.note-txt{font-size:10pt;line-height:1.4;white-space:pre-wrap}
+
+.tot-box{
+  border:1px solid #C4C0B8;border-radius:4px;padding:9px 12px;
+  display:flex;flex-direction:column;gap:5px;
+}
+.tot-line{display:flex;justify-content:space-between;font-size:10pt}
+.tot-line strong{font-weight:700}
+.tot-line.fin{border-top:1px solid #C4C0B8;padding-top:6px;margin-top:3px;font-size:12pt;font-weight:800}
+
+/* FIRME */
+.firme{
+  display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-top:30px;
+}
+.firma-box{
+  border-top:1px solid #1A1A1A;padding-top:6px;
+  font-size:8.5pt;color:#706C65;text-transform:uppercase;letter-spacing:.06em;font-weight:600;text-align:center;
+}
+
+/* FOOTER PAGE */
+.footer{
+  position:absolute;bottom:8mm;left:16mm;right:16mm;
+  border-top:1px solid #DEDAD4;padding-top:6px;
+  font-size:8pt;color:#706C65;text-align:center;
+}
+
+/* STAMPA */
+@media print {
+  body{background:#FFF;padding:0}
+  .tb{display:none}
+  .page{margin:0;padding:14mm 12mm;box-shadow:none;width:auto;min-height:auto}
+  @page { size: A4; margin: 0; }
+}
+
+/* LOADING */
+.loading{text-align:center;padding:60px;color:#706C65;font-size:13pt}
+.err-box{background:#FDECEC;border:1px solid #B82020;color:#B82020;padding:14px;border-radius:6px;margin:20px auto;max-width:540px}
+</style>
+</head>
+<body>
+
+<!-- TOOLBAR (non stampabile) -->
+<div class="tb" id="toolbar">
+  <div class="tb-l">
+    <h1>📄 DDT di reso</h1>
+    <span class="doc-num" id="tbNumero">—</span>
+  </div>
+  <div style="display:flex;gap:8px">
+    <button class="btn btn-s" onclick="window.close()">Chiudi</button>
+    <button class="btn btn-p" onclick="window.print()">🖨 Stampa</button>
+  </div>
+</div>
+
+<!-- FOGLIO A4 -->
+<div class="page" id="foglio">
+  <div class="loading">Caricamento...</div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://iztrrgqkzsovorcmixum.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml6dHJyZ3FrenNvdm9yY21peHVtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMDI3NzMsImV4cCI6MjA4OTc3ODc3M30.3IyUCDpFs9x_iSi5C4asodt5_O3F_cwgdb3eBkoQh3U';
+const _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const MOTIVO_LBL = {
+  difettoso:'Difettoso',
+  sbagliato:'Codice errato',
+  non_necessario:'Non necessario',
+  danneggiato_trasporto:'Danneggiato in trasporto',
+  altro:'Altro'
+};
+
+const TRASPORTO_LBL = {
+  mittente: 'Mittente',
+  destinatario: 'Destinatario',
+  vettore: 'Vettore'
+};
+
+function fmt(n){ return (n||0).toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtData(d){ if(!d) return '—'; const dt = new Date(d); return dt.toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric'}); }
+function safe(s){ return (s||'').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+async function init(){
+  const params = new URLSearchParams(location.search);
+  const id = params.get('id');
+  if (!id) { showError('ID DDT mancante in URL.'); return; }
+
+  try {
+    // 1) DDT
+    const { data: ddt, error: e1 } = await _sb.from('ddt_resi').select('*').eq('id', id).single();
+    if (e1) throw e1;
+    if (!ddt) { showError('DDT non trovato.'); return; }
+
+    // 2) Righe (resi collegati a questo DDT)
+    const { data: righe, error: e2 } = await _sb.from('resi_fornitore')
+      .select('*')
+      .eq('ddt_reso_id', id)
+      .order('numero');
+    if (e2) throw e2;
+
+    document.title = `DDT ${ddt.numero} — ${ddt.dest_nome||'—'}`;
+    document.getElementById('tbNumero').textContent = ddt.numero;
+    renderFoglio(ddt, righe || []);
+
+  } catch(e){
+    console.error(e);
+    showError('Errore caricamento: ' + (e.message || e));
+  }
+}
+
+function showError(msg){
+  document.getElementById('foglio').innerHTML = `<div class="err-box">${safe(msg)}</div>`;
+}
+
+function renderFoglio(ddt, righe){
+  // Totale "valore commerciale" dei pezzi resi (informativo)
+  const totValore = righe.reduce((s,r)=> s + (parseFloat(r.importo_atteso)||0), 0);
+
+  // Costruisci HTML
+  const html = `
+    <!-- HEADER -->
+    <div class="header">
+      <div class="brand">
+        <div class="brand-logo">PA</div>
+        <div class="brand-text">
+          <strong>${safe(ddt.mitt_nome || 'Paghera Auto SRL')}</strong>
+          ${ddt.mitt_indirizzo ? `<div>${safe(ddt.mitt_indirizzo)}</div>` : ''}
+          ${(ddt.mitt_cap || ddt.mitt_citta) ? `<div>${safe(ddt.mitt_cap||'')} ${safe(ddt.mitt_citta||'')} ${ddt.mitt_provincia?`(${safe(ddt.mitt_provincia)})`:''}</div>` : ''}
+          ${ddt.mitt_p_iva ? `<div>P.IVA ${safe(ddt.mitt_p_iva)}</div>` : ''}
+          ${ddt.mitt_codice_fiscale && ddt.mitt_codice_fiscale !== ddt.mitt_p_iva ? `<div>C.F. ${safe(ddt.mitt_codice_fiscale)}</div>` : ''}
+        </div>
+      </div>
+      <div class="doc-title">
+        <div class="doc-title-h">Documento di trasporto</div>
+        <div class="doc-title-num">${safe(ddt.numero)}</div>
+        <div class="doc-title-data">Data: ${fmtData(ddt.data)}</div>
+      </div>
+    </div>
+
+    <!-- MITTENTE / DESTINATARIO -->
+    <div class="intest-row">
+      <div class="intest-box">
+        <div class="intest-lbl">Mittente</div>
+        <div class="intest-name">${safe(ddt.mitt_nome || 'Paghera Auto SRL')}</div>
+        ${ddt.mitt_ragione_sociale && ddt.mitt_ragione_sociale !== ddt.mitt_nome ? `<div class="intest-rs">${safe(ddt.mitt_ragione_sociale)}</div>` : ''}
+        ${ddt.mitt_indirizzo ? `<div class="intest-line">${safe(ddt.mitt_indirizzo)}</div>` : ''}
+        ${(ddt.mitt_cap || ddt.mitt_citta) ? `<div class="intest-line">${safe(ddt.mitt_cap||'')} ${safe(ddt.mitt_citta||'')} ${ddt.mitt_provincia?`(${safe(ddt.mitt_provincia)})`:''}</div>` : ''}
+        ${ddt.mitt_p_iva ? `<div class="intest-piva">P.IVA ${safe(ddt.mitt_p_iva)}${ddt.mitt_codice_fiscale && ddt.mitt_codice_fiscale !== ddt.mitt_p_iva ? ` · C.F. ${safe(ddt.mitt_codice_fiscale)}` : ''}</div>` : ''}
+      </div>
+      <div class="intest-box">
+        <div class="intest-lbl">Destinatario</div>
+        <div class="intest-name">${safe(ddt.dest_nome || '—')}</div>
+        ${ddt.dest_ragione_sociale && ddt.dest_ragione_sociale !== ddt.dest_nome ? `<div class="intest-rs">${safe(ddt.dest_ragione_sociale)}</div>` : ''}
+        ${ddt.dest_indirizzo ? `<div class="intest-line">${safe(ddt.dest_indirizzo)}</div>` : ''}
+        ${(ddt.dest_cap || ddt.dest_citta) ? `<div class="intest-line">${safe(ddt.dest_cap||'')} ${safe(ddt.dest_citta||'')} ${ddt.dest_provincia?`(${safe(ddt.dest_provincia)})`:''}</div>` : ''}
+        ${ddt.dest_p_iva ? `<div class="intest-piva">P.IVA ${safe(ddt.dest_p_iva)}${ddt.dest_codice_fiscale && ddt.dest_codice_fiscale !== ddt.dest_p_iva ? ` · C.F. ${safe(ddt.dest_codice_fiscale)}` : ''}</div>` : ''}
+      </div>
+    </div>
+
+    <!-- META -->
+    <div class="meta-row">
+      <div class="meta-cell">
+        <div class="meta-lbl">Causale</div>
+        <div class="meta-val">${safe(ddt.causale_trasporto || ddt.causale || 'Reso a fornitore')}</div>
+      </div>
+      <div class="meta-cell">
+        <div class="meta-lbl">Trasporto a cura di</div>
+        <div class="meta-val">${TRASPORTO_LBL[ddt.trasporto_a_cura] || '—'}${ddt.vettore_nome ? ` (${safe(ddt.vettore_nome)})` : ''}</div>
+      </div>
+      <div class="meta-cell">
+        <div class="meta-lbl">Aspetto beni</div>
+        <div class="meta-val">${safe(ddt.aspetto_beni || 'Colli')}</div>
+      </div>
+      <div class="meta-cell">
+        <div class="meta-lbl">N. colli / Peso</div>
+        <div class="meta-val">${ddt.n_colli || 1}${ddt.peso_kg ? ` · ${fmt(ddt.peso_kg)} kg` : ''}</div>
+      </div>
+    </div>
+
+    <!-- RIGHE -->
+    <table class="righe">
+      <thead>
+        <tr>
+          <th class="c-num">Reso n.</th>
+          <th class="c-cod">Codice</th>
+          <th class="c-desc">Descrizione</th>
+          <th class="c-qty">Q.tà</th>
+          <th class="c-um">U.M.</th>
+          <th class="c-mot">Motivo</th>
+          <th class="c-rif">Riferimento</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${righe.length ? righe.map(r => `
+          <tr>
+            <td class="c-num">${safe(r.numero)}</td>
+            <td class="c-cod">${safe(r.codice || '—')}</td>
+            <td class="c-desc">
+              ${safe(r.descrizione || '—')}
+              ${r.note ? `<div style="font-size:9pt;color:#706C65;margin-top:2px;font-style:italic">${safe(r.note)}</div>` : ''}
+            </td>
+            <td class="c-qty">${r.qta || 1}</td>
+            <td class="c-um">NR</td>
+            <td class="c-mot">${MOTIVO_LBL[r.motivo] || r.motivo || '—'}</td>
+            <td class="c-rif">${r.codice_fornitore ? 'Cod.forn. ' + safe(r.codice_fornitore) : ''}</td>
+          </tr>
+        `).join('') : `<tr><td colspan="7" style="text-align:center;color:#706C65;padding:18px">Nessuna riga associata a questo DDT</td></tr>`}
+      </tbody>
+    </table>
+
+    <!-- NOTE + TOTALE INFORMATIVO -->
+    <div class="tot-row">
+      <div class="note-box">
+        <div class="note-lbl">Note</div>
+        <div class="note-txt">${ddt.note ? safe(ddt.note) : 'Si richiede emissione di nota di credito per i pezzi resi.'}</div>
+      </div>
+      <div class="tot-box">
+        <div class="tot-line"><span>N. righe</span><strong>${righe.length}</strong></div>
+        <div class="tot-line"><span>Q.tà totale</span><strong>${righe.reduce((s,r)=> s + (parseFloat(r.qta)||0), 0)}</strong></div>
+        <div class="tot-line fin"><span>Valore commerciale</span><strong>€ ${fmt(totValore)}</strong></div>
+      </div>
+    </div>
+
+    <!-- FIRME -->
+    <div class="firme">
+      <div class="firma-box">Firma conducente</div>
+      <div class="firma-box">Firma vettore</div>
+      <div class="firma-box">Firma destinatario</div>
+    </div>
+
+    <!-- FOOTER -->
+    <div class="footer">
+      Documento generato il ${fmtData(ddt.created_at)}${ddt.emesso_da ? ' da ' + safe(ddt.emesso_da) : ''} — DDT ${safe(ddt.numero)}
+    </div>
+  `;
+
+  document.getElementById('foglio').innerHTML = html;
+}
+
+init();
+</script>
+</body>
+</html>

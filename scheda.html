@@ -2069,9 +2069,37 @@ async function confermaModalReso(){
     }
   }
 
+  // 4-bis) AGGIORNA RIEPILOGO_OVERRIDE
+  // Il riepilogo è una copia aggregata persistita: se esiste, va sincronizzata
+  // togliendo (o decrementando) la riga del ricambio appena reso, altrimenti
+  // resterebbe visibile nel riepilogo fattura nonostante la rimozione dal rapportino.
+  if (SL.riepilogo_override && Array.isArray(SL.riepilogo_override.ricambi)) {
+    const cTarget = (ctx.codice||'').trim();
+    const dTarget = (ctx.descrizione||'').trim().toLowerCase();
+    const ricIdx = SL.riepilogo_override.ricambi.findIndex(r => {
+      const c = (r.codice||'').trim();
+      const d = (r.descrizione||'').trim().toLowerCase();
+      return (cTarget && c === cTarget) || (!cTarget && d === dTarget);
+    });
+    if (ricIdx >= 0) {
+      const ricRow = SL.riepilogo_override.ricambi[ricIdx];
+      const qtyAttuale = parseFloat(ricRow.qty) || 0;
+      const qtyReso    = parseFloat(ctx.qty)    || 0;
+      if (qtyReso >= qtyAttuale - 0.001) {
+        // Reso copre tutta la qty del riepilogo → rimuovo la riga intera
+        SL.riepilogo_override.ricambi.splice(ricIdx, 1);
+      } else {
+        // Reso parziale → decremento la qty
+        ricRow.qty = Math.round((qtyAttuale - qtyReso) * 100) / 100;
+      }
+      SL._dirty = true;
+    }
+  }
+
   // 5) Ricalcola totali e re-renderizza
   renderRapportini();
   aggiornaTotali();
+  if (typeof renderRiepilogo === 'function') renderRiepilogo();
 
   // 6) Salva persistente (la salvaDebounced fa UPSERT scheda + salvaRapportiniSeparati)
   salvaDebounced(`✓ Reso ${numeroReso} creato — riga rimossa`);
