@@ -71,7 +71,7 @@ body{font-family:'Helvetica Neue',Arial,-apple-system,sans-serif;background:var(
   overflow:hidden; max-width:100%;
 }
 .sc-numscheda-bold{ font-family:monospace; font-size:15px; font-weight:900; letter-spacing:.04em; white-space:nowrap; }
-.sc-data-short{ font-family:monospace; font-size:12px; font-weight:700; }
+.sc-data-short{ font-family:monospace; font-size:15px; font-weight:700; }
 .scheda-row:not(.header) .sc-cliente{
   font-weight:500; font-size:14px;
   white-space:normal; overflow:hidden;
@@ -516,7 +516,7 @@ function rigaScheda(s){
   return `<a href="${urlScheda(`id=${s.id}`)}" class="scheda-row">
     <div class="sc-cell">
       <div class="sc-data-short">${fmtDataShort(s.dataAttivita || s.data)}</div>
-      ${ora ? `<div style="font-size:10px;color:var(--text-m);font-family:monospace;margin-top:2px">${ora}</div>` : ''}
+      ${ora ? `<div style="font-size:12px;color:var(--text-m);font-family:monospace;margin-top:2px">${ora}</div>` : ''}
       ${s.dataFonte === 'ddt' ? '<div style="font-size:9px;color:var(--text-l);margin-top:1px">via DDT</div>' : ''}
       ${!s.dataFonte ? '<div style="font-size:9px;color:var(--text-l);margin-top:1px">manuale</div>' : ''}
     </div>
