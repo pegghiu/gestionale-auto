@@ -9,6 +9,7 @@
 <meta http-equiv="Expires" content="0">
 <title>Scheda di Lavoro</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
 
 <!-- ═══ PRINT STYLES ════════════════════════════════════════ -->
 <style id="printCSS">
@@ -312,32 +313,126 @@ button.btn-blocked:hover{background:var(--ok)}
 .btn-iva:active{transform:scale(0.95)}
 .rap-note{padding:8px 14px;font-size:14px;color:var(--text-m);background:#FAFAF8;border-bottom:1px solid #F0EDE8}
 
+/* ── HEADER XL (officina) ─────────────────────────────── */
+.hdr-xl{background:#FFF;padding:16px 22px;display:flex;align-items:center;gap:18px;border-bottom:3px solid var(--dark);position:sticky;top:0;z-index:200}
+.hdr-xl .logo-tile{background:var(--accent);color:#FFF;width:54px;height:54px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:22px;letter-spacing:.04em;flex-shrink:0}
+.hdr-xl .logo-tile img{max-width:44px;max-height:44px;display:block}
+.hdr-xl-main{flex:1;display:flex;flex-direction:column;gap:4px;min-width:0}
+.hdr-xl-brand{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--text-l)}
+.hdr-xl-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.hdr-xl-num{font-size:30px;font-weight:800;color:var(--dark);font-family:'Courier New',monospace;letter-spacing:.05em;line-height:1}
+.hdr-xl-tag{font-size:13px;font-weight:600;color:var(--accent);background:var(--accent-l);padding:3px 10px;border-radius:5px;white-space:nowrap}
+.hdr-xl-dates{display:flex;gap:14px;padding-left:14px;border-left:1px solid var(--border)}
+.hdr-xl-date-lbl{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-l)}
+.hdr-xl-date-val{font-size:13px;font-weight:700;color:var(--dark);font-variant-numeric:tabular-nums}
+.hdr-xl-right{text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0}
+.hdr-xl-targa{background:var(--dark);color:#FFF;font-family:'Courier New',monospace;font-size:26px;font-weight:800;letter-spacing:.2em;padding:7px 18px;border-radius:6px;display:inline-block}
+.hdr-xl-targa.empty{background:var(--bg);color:var(--text-l);letter-spacing:.1em;font-size:14px;font-weight:600;padding:9px 18px}
+.hdr-xl-veh{font-size:12px;color:var(--text-m);font-weight:600;max-width:280px;text-align:right}
+.hdr-xl-actions{display:flex;align-items:center;gap:10px;flex-shrink:0}
+.hdr-xl-actions .badge{padding:5px 13px;font-size:11px}
+.btn-back-xl{background:transparent;border:1px solid var(--border-dk);color:var(--text-m);padding:7px 13px;border-radius:var(--rs);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s}
+.btn-back-xl:hover{background:var(--bg);color:var(--dark)}
+
+/* ── STEPPER VISIVO ─────────────────────────────────────── */
+.stepper{background:#FFF;padding:18px 22px;border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--sh);position:relative}
+.stepper-row{display:flex;align-items:flex-start;position:relative;gap:0}
+.stepper-step{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;position:relative;z-index:2;cursor:pointer}
+.stepper-circle{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;background:#FFF;border:2px solid var(--border);color:var(--text-l);transition:all .2s}
+.stepper-circle svg,.stepper-circle .ico{font-size:22px;width:22px;height:22px}
+.stepper-step.done .stepper-circle{background:var(--ok);border-color:var(--ok);color:#FFF}
+.stepper-step.active .stepper-circle{background:var(--accent);border-color:var(--accent);color:#FFF;width:52px;height:52px;box-shadow:0 0 0 4px var(--accent-l)}
+.stepper-lbl{font-size:13px;font-weight:600;color:var(--text-l);text-align:center}
+.stepper-step.done .stepper-lbl{color:var(--ok);font-weight:700}
+.stepper-step.active .stepper-lbl{color:var(--accent);font-weight:800;font-size:14px}
+.stepper-sub{font-size:11px;color:var(--text-l);text-align:center;min-height:14px}
+.stepper-step.done .stepper-sub{color:var(--text-m)}
+.stepper-line{position:absolute;top:21px;left:50%;right:-50%;height:3px;background:var(--border);z-index:1}
+.stepper-step.done .stepper-line{background:var(--ok)}
+.stepper-step.active .stepper-line{background:linear-gradient(to right,var(--accent),var(--border))}
+.stepper-step:last-child .stepper-line{display:none}
+.stepper-step.active .stepper-line{top:25px}
+
+/* ── KPI CARDS RIEPILOGO INLINE ─────────────────────────── */
+.kpi-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;padding:14px 20px;background:#F7F6F3;border-top:1px solid var(--border)}
+.kpi-card{background:#FFF;border:1px solid var(--border);border-radius:var(--rs);padding:10px 14px}
+.kpi-card.dark{background:var(--dark)}
+.kpi-lbl{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-m);margin-bottom:4px}
+.kpi-card.dark .kpi-lbl{color:rgba(255,255,255,.5)}
+.kpi-val{font-size:18px;font-weight:800;font-variant-numeric:tabular-nums}
+.kpi-val.ore{color:var(--info)}
+.kpi-val.ric{color:var(--ok)}
+.kpi-card.dark .kpi-val{color:var(--accent)}
+
+/* ── DATI SCHEDA SLIM (senza tecnico) ───────────────────── */
+.dati-slim{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media(max-width:640px){.dati-slim{grid-template-columns:1fr}.hdr-xl{flex-direction:column;align-items:stretch}.hdr-xl-right{align-items:flex-start;text-align:left}.hdr-xl-dates{padding-left:0;border-left:none;border-top:1px solid var(--border);padding-top:8px}.stepper-row{flex-wrap:wrap;gap:14px}.stepper-step{flex:1 1 40%}.stepper-line{display:none}.kpi-grid{grid-template-columns:1fr}}
+
 @media(max-width:640px){.g2,.g3,.g4{grid-template-columns:1fr}.sp2,.sp3{grid-column:auto}}
 </style>
 </head>
 <body>
 
-<!-- ═══ HEADER ══════════════════════════════════════════════ -->
-<header class="hdr no-print">
-  <div class="hdr-left">
-    <span class="brand">Gestione Veicoli</span>
-    <span class="doc-num" id="hNum">Nuova scheda</span>
+<!-- ═══ HEADER XL ═══════════════════════════════════════════ -->
+<header class="hdr-xl no-print">
+  <div class="logo-tile" id="hLogo">PA</div>
+  <div class="hdr-xl-main">
+    <div class="hdr-xl-brand">Paghera Auto · Scheda di lavoro</div>
+    <div class="hdr-xl-row">
+      <div class="hdr-xl-num" id="hNum">Nuova</div>
+      <div class="hdr-xl-tag" id="hTag" style="display:none">—</div>
+      <div class="hdr-xl-dates">
+        <div>
+          <div class="hdr-xl-date-lbl">Aperta il</div>
+          <div class="hdr-xl-date-val" id="hDataAp">—</div>
+        </div>
+        <div>
+          <div class="hdr-xl-date-lbl">Aggiornata</div>
+          <div class="hdr-xl-date-val" id="hDataAgg">—</div>
+        </div>
+      </div>
+    </div>
   </div>
-  <div style="display:flex;align-items:center;gap:10px">
+  <div class="hdr-xl-right">
+    <div class="hdr-xl-targa empty" id="hTargaBig">— nuova —</div>
+    <div class="hdr-xl-veh" id="hModelloBig"></div>
+  </div>
+  <div class="hdr-xl-actions">
     <span class="badge b-bozza" id="hBadge">Bozza</span>
-    <button class="btn-back" onclick="location.href='schede.html'">← Schede</button>
+    <button class="btn-back-xl" onclick="location.href='schede.html'">← Schede</button>
   </div>
 </header>
 
 <!-- ═══ PAGE ════════════════════════════════════════════════ -->
 <div class="page no-print">
 
-  <!-- STATO AVANZAMENTO -->
-  <div class="stato-bar">
-    <div class="stato-step active" id="step1" onclick="setStato('bozza',this)">1 · Accettazione</div>
-    <div class="stato-step"       id="step2" onclick="setStato('aperta',this)">2 · In lavorazione</div>
-    <div class="stato-step"       id="step3" onclick="setStato('pronta',this)">3 · Pronta</div>
-    <div class="stato-step"       id="step4" onclick="setStato('consegnata',this)">4 · Consegnata</div>
+  <!-- STATO AVANZAMENTO (nascosto: lo stato si imposta col suffisso del tipo scheda) -->
+  <div class="stepper" style="display:none">
+    <div class="stepper-row">
+      <div class="stepper-step active" id="step1" onclick="setStato('bozza',this)">
+        <div class="stepper-circle"><i class="ti ti-clipboard-check"></i></div>
+        <div class="stepper-lbl">Accettazione</div>
+        <div class="stepper-sub">&nbsp;</div>
+        <div class="stepper-line"></div>
+      </div>
+      <div class="stepper-step" id="step2" onclick="setStato('aperta',this)">
+        <div class="stepper-circle"><i class="ti ti-tools"></i></div>
+        <div class="stepper-lbl">In lavorazione</div>
+        <div class="stepper-sub">&nbsp;</div>
+        <div class="stepper-line"></div>
+      </div>
+      <div class="stepper-step" id="step3" onclick="setStato('pronta',this)">
+        <div class="stepper-circle"><i class="ti ti-circle-check"></i></div>
+        <div class="stepper-lbl">Pronta</div>
+        <div class="stepper-sub">&nbsp;</div>
+        <div class="stepper-line"></div>
+      </div>
+      <div class="stepper-step" id="step4" onclick="setStato('consegnata',this)">
+        <div class="stepper-circle"><i class="ti ti-key"></i></div>
+        <div class="stepper-lbl">Consegnata</div>
+        <div class="stepper-sub">&nbsp;</div>
+      </div>
+    </div>
   </div>
 
   <!-- TIPO SCHEDA / SUFFISSO NUMERAZIONE -->
@@ -381,6 +476,82 @@ button.btn-blocked:hover{background:var(--ok)}
 
   <!-- VEICOLO + CLIENTE AFFIANCATI -->
   <div class="g2">
+
+  <!-- CLIENTE -->
+  <div class="card">
+    <div class="ch">
+      <span class="ct">Cliente</span>
+      <button class="btn btn-s btn-sm" onclick="apriMo('moCliente')">Cerca cliente</button>
+    </div>
+
+    <!-- VISTA EDIT: input editabili (mostrata se NESSUN cliente_id) -->
+    <div class="cb" id="clienteEdit">
+      <div class="g3">
+        <div class="field sp2">
+          <label>Ragione sociale / Nome *</label>
+          <input type="text" id="cNome" placeholder="Cerca o inserisci..."
+            oninput="SL.cliente.nome=this.value;dirty()">
+        </div>
+        <div class="field">
+          <label>Telefono</label>
+          <input type="text" id="cTel" placeholder="+39 030..."
+            oninput="SL.cliente.tel=this.value;dirty()">
+        </div>
+      </div>
+      <!-- Bottone "Annulla modifica": visibile solo se c'è anagrafica a cui tornare -->
+      <div id="clienteEditActions" style="display:none;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)">
+        <button class="btn btn-g btn-sm" onclick="annullaModificaCliente()" title="Scarta le modifiche e torna ai dati anagrafica">↩️ Annulla modifica</button>
+      </div>
+    </div>
+
+    <!-- VISTA PROMEK: dati anagrafica read-only (nascosta di default) -->
+    <div class="info-card-body" id="clienteView" style="display:none">
+      <div class="info-row" id="rowNomeAzienda">
+        <div class="info-row-label" id="clNomeLabel">Ragione sociale</div>
+        <div class="info-row-val" id="clNomeVal">—</div>
+      </div>
+      <div class="info-row" id="rowNomePrivato" style="display:none">
+        <div class="info-row-label">Nome</div>
+        <div class="info-row-val" id="clNome">—</div>
+      </div>
+      <div class="info-row" id="rowCognomePrivato" style="display:none">
+        <div class="info-row-label">Cognome</div>
+        <div class="info-row-val" id="clCognome">—</div>
+      </div>
+      <div class="info-row" id="rowTipo">
+        <div class="info-row-label">Tipo</div>
+        <div class="info-row-val" id="clTipo">—</div>
+      </div>
+      <div class="info-row" id="rowCF">
+        <div class="info-row-label">Codice fiscale</div>
+        <div class="info-row-val" id="clCF">—</div>
+      </div>
+      <div class="info-row" id="rowPIVA">
+        <div class="info-row-label">Partita IVA</div>
+        <div class="info-row-val" id="clPIVA">—</div>
+      </div>
+      <div class="info-row" id="rowIndirizzo">
+        <div class="info-row-label">Indirizzo</div>
+        <div class="info-row-val" id="clIndirizzo">—</div>
+      </div>
+      <div class="info-row" id="rowTel">
+        <div class="info-row-label">Telefono</div>
+        <div class="info-row-val" id="clTel2">—</div>
+      </div>
+      <div class="info-row" id="rowCell">
+        <div class="info-row-label">Cellulare</div>
+        <div class="info-row-val" id="clCell">—</div>
+      </div>
+      <div class="info-row" id="rowEmail">
+        <div class="info-row-label">Email</div>
+        <div class="info-row-val" id="clEmail">—</div>
+      </div>
+    </div>
+    <div class="info-card-actions" id="clienteActions" style="display:none">
+      <button class="btn btn-s btn-sm" onclick="modificaCliente()">✏️ Modifica cliente</button>
+      <button class="btn btn-g btn-sm" onclick="scollegaCliente()" title="Scollega dall'anagrafica (resta solo come testo libero)">🔓 Scollega anagrafica</button>
+    </div>
+  </div>
 
   <!-- VEICOLO -->
   <div class="card">
@@ -471,99 +642,13 @@ button.btn-blocked:hover{background:var(--ok)}
     </div>
   </div>
 
-  <!-- CLIENTE -->
-  <div class="card">
-    <div class="ch">
-      <span class="ct">Cliente</span>
-      <button class="btn btn-s btn-sm" onclick="apriMo('moCliente')">Cerca cliente</button>
-    </div>
-
-    <!-- VISTA EDIT: input editabili (mostrata se NESSUN cliente_id) -->
-    <div class="cb" id="clienteEdit">
-      <div class="g3">
-        <div class="field sp2">
-          <label>Ragione sociale / Nome *</label>
-          <input type="text" id="cNome" placeholder="Cerca o inserisci..."
-            oninput="SL.cliente.nome=this.value;dirty()">
-        </div>
-        <div class="field">
-          <label>Telefono</label>
-          <input type="text" id="cTel" placeholder="+39 030..."
-            oninput="SL.cliente.tel=this.value;dirty()">
-        </div>
-      </div>
-      <!-- Bottone "Annulla modifica": visibile solo se c'è anagrafica a cui tornare -->
-      <div id="clienteEditActions" style="display:none;margin-top:10px;padding-top:10px;border-top:1px dashed var(--border)">
-        <button class="btn btn-g btn-sm" onclick="annullaModificaCliente()" title="Scarta le modifiche e torna ai dati anagrafica">↩️ Annulla modifica</button>
-      </div>
-    </div>
-
-    <!-- VISTA PROMEK: dati anagrafica read-only (nascosta di default) -->
-    <div class="info-card-body" id="clienteView" style="display:none">
-      <div class="info-row" id="rowNomeAzienda">
-        <div class="info-row-label" id="clNomeLabel">Ragione sociale</div>
-        <div class="info-row-val" id="clNomeVal">—</div>
-      </div>
-      <div class="info-row" id="rowNomePrivato" style="display:none">
-        <div class="info-row-label">Nome</div>
-        <div class="info-row-val" id="clNome">—</div>
-      </div>
-      <div class="info-row" id="rowCognomePrivato" style="display:none">
-        <div class="info-row-label">Cognome</div>
-        <div class="info-row-val" id="clCognome">—</div>
-      </div>
-      <div class="info-row" id="rowTipo">
-        <div class="info-row-label">Tipo</div>
-        <div class="info-row-val" id="clTipo">—</div>
-      </div>
-      <div class="info-row" id="rowCF">
-        <div class="info-row-label">Codice fiscale</div>
-        <div class="info-row-val" id="clCF">—</div>
-      </div>
-      <div class="info-row" id="rowPIVA">
-        <div class="info-row-label">Partita IVA</div>
-        <div class="info-row-val" id="clPIVA">—</div>
-      </div>
-      <div class="info-row" id="rowIndirizzo">
-        <div class="info-row-label">Indirizzo</div>
-        <div class="info-row-val" id="clIndirizzo">—</div>
-      </div>
-      <div class="info-row" id="rowTel">
-        <div class="info-row-label">Telefono</div>
-        <div class="info-row-val" id="clTel2">—</div>
-      </div>
-      <div class="info-row" id="rowCell">
-        <div class="info-row-label">Cellulare</div>
-        <div class="info-row-val" id="clCell">—</div>
-      </div>
-      <div class="info-row" id="rowEmail">
-        <div class="info-row-label">Email</div>
-        <div class="info-row-val" id="clEmail">—</div>
-      </div>
-    </div>
-    <div class="info-card-actions" id="clienteActions" style="display:none">
-      <button class="btn btn-s btn-sm" onclick="modificaCliente()">✏️ Modifica cliente</button>
-      <button class="btn btn-g btn-sm" onclick="scollegaCliente()" title="Scollega dall'anagrafica (resta solo come testo libero)">🔓 Scollega anagrafica</button>
-    </div>
-  </div>
-
-  </div><!-- /g2 VEICOLO + CLIENTE -->
+  </div><!-- /g2 CLIENTE + VEICOLO -->
 
   <!-- DATI SCHEDA -->
   <div class="card">
     <div class="ch"><span class="ct">Dati scheda</span></div>
     <div class="cb">
-      <div class="g4">
-        <div class="field">
-          <label>Tecnico *</label>
-          <select id="tecnico" onchange="SL.tecnico=this.value;dirty()">
-            <option value="">— Seleziona —</option>
-            <option value="Enrico">Enrico</option>
-            <option value="Andrea">Andrea</option>
-            <option value="Matteo">Matteo</option>
-            <option value="Gianluca">Gianluca</option>
-          </select>
-        </div>
+      <div class="dati-slim">
         <div class="field">
           <label>Data apertura</label>
           <input type="date" id="dataAp" oninput="SL.data=this.value;dirty()">
@@ -577,6 +662,14 @@ button.btn-blocked:hover{background:var(--ok)}
           <input type="text" id="numero" readonly>
         </div>
       </div>
+      <!-- TECNICO: nascosto, mantenuto per compatibilità JS legacy -->
+      <select id="tecnico" onchange="SL.tecnico=this.value;dirty()" style="display:none">
+        <option value="">— Seleziona —</option>
+        <option value="Enrico">Enrico</option>
+        <option value="Andrea">Andrea</option>
+        <option value="Matteo">Matteo</option>
+        <option value="Gianluca">Gianluca</option>
+      </select>
     </div>
   </div>
 
@@ -606,11 +699,77 @@ button.btn-blocked:hover{background:var(--ok)}
     </div>
   </div>
 
-  <!-- RAPPORTINI DI LAVORO -->
+  <!-- RIEPILOGO MATERIALI (consuntivo definitivo fatturabile) -->
   <div class="card">
     <div class="ch">
       <div style="display:flex;align-items:center;gap:12px">
-        <span class="ct">Rapportini di lavoro</span>
+        <span class="ct">Riepilogo materiali e manodopera</span>
+        <span style="font-size:11px;color:var(--text-m)">consuntivo fatturabile · modificabile</span>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-s btn-sm" id="btnToggleNetti" onclick="toggleNetti()"
+          title="Mostra netti — prezzi netti dai DDT e percentuale ricarico">
+          👁
+        </button>
+        <button class="btn btn-s btn-sm" onclick="resetRiepilogo()" title="Cancella le modifiche manuali e ripopola dai rapportini attuali">
+          🔄 Reset dai rapportini
+        </button>
+      </div>
+    </div>
+    <div class="cb" style="padding:0">
+      <div style="overflow-x:auto">
+        <table class="tbl" id="tblRiepilogo" style="min-width:850px">
+          <thead><tr>
+            <th style="width:100px">Categoria</th>
+            <th style="width:110px">Codice</th>
+            <th>Descrizione</th>
+            <th class="r" style="width:60px">Qtà</th>
+            <th class="r" style="width:110px">Prezzo</th>
+            <th class="r" style="width:90px">Subtot.</th>
+            <th class="r" style="width:95px">Sconto</th>
+            <th class="r" style="width:90px">Finale</th>
+            <th style="width:36px"></th>
+          </tr></thead>
+          <tbody id="bodyRiepilogo"></tbody>
+        </table>
+      </div>
+      <div style="padding:10px 16px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+        <button class="btn btn-s btn-sm" onclick="aggiungiRigaRiepilogo()">+ Aggiungi materiale</button>
+        <div style="font-size:11px;color:var(--text-m)" id="riepInfoOverride"></div>
+      </div>
+    </div>
+
+    <!-- TOTALI (KPI + IVA) integrati nel Riepilogo -->
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-lbl">Ore lavorate</div>
+        <div class="kpi-val ore" id="riepoOre">0h · € 0,00</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-lbl">Ricambi</div>
+        <div class="kpi-val ric" id="riepoRic">€ 0,00</div>
+      </div>
+      <div class="kpi-card dark">
+        <div class="kpi-lbl">Totale scheda</div>
+        <div class="kpi-val" id="riepoTot">€ 0,00</div>
+      </div>
+    </div>
+    <div style="background:#F7F6F3;padding:12px 20px;border-top:1px solid var(--border)">
+      <div class="totali" style="padding:0">
+        <div class="tot-row"><span class="l">Imponibile</span><span class="v" id="tImp">€ 0,00</span></div>
+        <div class="tot-row" id="r22"><span class="l">IVA 22%</span><span class="v" id="t22">€ 0,00</span></div>
+        <div class="tot-row" id="r10" style="display:none"><span class="l">IVA 10%</span><span class="v" id="t10">€ 0,00</span></div>
+        <div class="tot-row big"><span>Totale</span><span class="v" id="tTot">€ 0,00</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RAPPORTINI DI LAVORO (dettaglio operativo) -->
+  <div class="card">
+    <div class="ch">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="ct">Rapportini giornalieri</span>
+        <span style="font-size:11px;color:var(--text-m)">dettaglio operativo · alimenta il riepilogo</span>
         <span class="badge" style="background:var(--info-bg);color:var(--info)" id="rapCount">Nessuno</span>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
@@ -679,76 +838,6 @@ button.btn-blocked:hover{background:var(--ok)}
     <div id="rapList" style="padding:14px 16px">
       <div id="rapEmpty" style="text-align:center;padding:24px;color:var(--text-l);font-size:13px">
         Nessun rapportino ancora — clicca "Nuovo rapportino giornaliero" per registrare le lavorazioni di oggi.
-      </div>
-    </div>
-
-    <!-- Totali aggregati da tutti i rapportini -->
-    <div style="border-top:2px solid var(--border);background:#F7F6F3;padding:14px 20px">
-      <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-m);margin-bottom:12px">Totale aggregato tutti i rapportini</div>
-
-      <!-- Riepilogo ore + ricambi -->
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px">
-        <div style="background:#FFF;border:1px solid var(--border);border-radius:var(--rs);padding:10px 14px">
-          <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-m);margin-bottom:4px">Ore lavorate</div>
-          <div style="font-size:16px;font-weight:800;color:var(--info)" id="riepoOre">0h · € 0,00</div>
-        </div>
-        <div style="background:#FFF;border:1px solid var(--border);border-radius:var(--rs);padding:10px 14px">
-          <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-m);margin-bottom:4px">Ricambi</div>
-          <div style="font-size:16px;font-weight:800;color:var(--ok)" id="riepoRic">€ 0,00</div>
-        </div>
-        <div style="background:var(--dark);border-radius:var(--rs);padding:10px 14px">
-          <div style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.5);margin-bottom:4px">Totale scheda</div>
-          <div style="font-size:16px;font-weight:800;color:#FFF" id="riepoTot">€ 0,00</div>
-        </div>
-      </div>
-
-      <!-- Totali IVA -->
-      <div class="totali" style="padding:0">
-        <div class="tot-row"><span class="l">Imponibile</span><span class="v" id="tImp">€ 0,00</span></div>
-        <div class="tot-row" id="r22"><span class="l">IVA 22%</span><span class="v" id="t22">€ 0,00</span></div>
-        <div class="tot-row" id="r10" style="display:none"><span class="l">IVA 10%</span><span class="v" id="t10">€ 0,00</span></div>
-        <div class="tot-row big"><span>Totale</span><span class="v" id="tTot">€ 0,00</span></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- RIEPILOGO MATERIALI (aggregato per categoria, editabile, indipendente dai rapportini) -->
-  <div class="card">
-    <div class="ch">
-      <div style="display:flex;align-items:center;gap:12px">
-        <span class="ct">Riepilogo materiali e manodopera</span>
-        <span style="font-size:11px;color:var(--text-m)">modificabile · indipendente dai rapportini</span>
-      </div>
-      <div style="display:flex;gap:8px">
-        <button class="btn btn-s btn-sm" id="btnToggleNetti" onclick="toggleNetti()"
-          title="Mostra netti — prezzi netti dai DDT e percentuale ricarico">
-          👁
-        </button>
-        <button class="btn btn-s btn-sm" onclick="resetRiepilogo()" title="Cancella le modifiche manuali e ripopola dai rapportini attuali">
-          🔄 Reset dai rapportini
-        </button>
-      </div>
-    </div>
-    <div class="cb" style="padding:0">
-      <div style="overflow-x:auto">
-        <table class="tbl" id="tblRiepilogo" style="min-width:850px">
-          <thead><tr>
-            <th style="width:100px">Categoria</th>
-            <th style="width:110px">Codice</th>
-            <th>Descrizione</th>
-            <th class="r" style="width:60px">Qtà</th>
-            <th class="r" style="width:110px">Prezzo</th>
-            <th class="r" style="width:90px">Subtot.</th>
-            <th class="r" style="width:95px">Sconto</th>
-            <th class="r" style="width:90px">Finale</th>
-            <th style="width:36px"></th>
-          </tr></thead>
-          <tbody id="bodyRiepilogo"></tbody>
-        </table>
-      </div>
-      <div style="padding:10px 16px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
-        <button class="btn btn-s btn-sm" onclick="aggiungiRigaRiepilogo()">+ Aggiungi materiale</button>
-        <div style="font-size:11px;color:var(--text-m)" id="riepInfoOverride"></div>
       </div>
     </div>
   </div>
@@ -1180,6 +1269,17 @@ function setTipoScheda(tipo){
     badge.style.background = t.bg;
     badge.style.color      = t.colore;
     badge.textContent      = tipo ? t.label : 'Aperta';
+  }
+
+  // Pillino tipo nell'header XL
+  const hTag = document.getElementById('hTag');
+  if(hTag){
+    if(tipo && t){
+      hTag.textContent = tipo + ' · ' + t.label;
+      hTag.style.display = 'inline-block';
+    } else {
+      hTag.style.display = 'none';
+    }
   }
 
   dirty();
@@ -3336,6 +3436,7 @@ async function caricaScheda(id){
     SL.tecnico     = s.tecnico || '';
     SL.data        = s.data || '';
     SL.data_consegna = s.data_consegna || '';
+    SL.updated_at  = s.updated_at || s.created_at || '';
     SL.problema    = s.problema || '';
     SL.note_interne= s.note_interne || '';
     SL.note_cliente= s.note_cliente || '';
@@ -3474,6 +3575,9 @@ async function caricaScheda(id){
     renderVeicoloAnagrafica();
     renderClienteAnagrafica();
 
+    // Aggiorna header XL (targa, modello, date)
+    aggiornaHeaderXL();
+
   } catch(e){
     console.error('caricaScheda:', e);
     toast('Errore caricamento scheda: '+e.message,'err');
@@ -3510,7 +3614,8 @@ function setStato(stato, el){
   const idx = STATI.indexOf(stato);
   STEP_IDS.forEach((id,i)=>{
     const s = document.getElementById(id);
-    s.className = 'stato-step' + (i<idx?' done':i===idx?' active':'');
+    if(!s) return;
+    s.className = 'stepper-step' + (i<idx?' done':i===idx?' active':'');
   });
   const badge = document.getElementById('hBadge');
   badge.className = 'badge ' + (stato==='bozza'?'b-bozza':stato==='consegnata'?'b-chiusa':'b-aperta');
@@ -3524,7 +3629,6 @@ function setStato(stato, el){
 function valida(){
   if(!SL.targa)  { toast('Inserisci la targa','err'); return false; }
   if(!SL.modello){ toast('Inserisci il modello','err'); return false; }
-  if(!SL.tecnico){ toast('Seleziona il tecnico','err'); return false; }
   if(!SL.cliente.nome){ toast('Inserisci i dati del cliente','err'); return false; }
   return true;
 }
@@ -4307,10 +4411,63 @@ function formattaDataITA(iso){
 // ══════════════════════════════════════════════════════════
 // UTILS
 // ══════════════════════════════════════════════════════════
+function aggiornaHeaderXL(){
+  // Targa grande in alto a destra
+  const ht = document.getElementById('hTargaBig');
+  if(ht){
+    const t = (SL.targa || '').trim();
+    if(t.length >= 4){
+      ht.textContent = t;
+      ht.classList.remove('empty');
+    } else {
+      ht.textContent = '— nuova —';
+      ht.classList.add('empty');
+    }
+  }
+  // Modello sotto la targa
+  const hm = document.getElementById('hModelloBig');
+  if(hm){
+    const parti = [];
+    if(SL.modello) parti.push(SL.modello);
+    if(SL.anno)    parti.push(SL.anno);
+    if(SL.km)      parti.push(Number(SL.km).toLocaleString('it-IT') + ' km');
+    hm.textContent = parti.join(' · ');
+  }
+  // Date
+  const hAp = document.getElementById('hDataAp');
+  if(hAp) hAp.textContent = SL.data ? fmtData(SL.data) : '—';
+  const hAg = document.getElementById('hDataAgg');
+  if(hAg){
+    if(SL.updated_at){
+      hAg.textContent = fmtDataOra(SL.updated_at);
+    } else if(SL._dirty){
+      hAg.textContent = 'in modifica…';
+    } else {
+      hAg.textContent = '—';
+    }
+  }
+}
+
+function fmtData(iso){
+  if(!iso) return '—';
+  const d = new Date(iso);
+  if(isNaN(d)) return iso;
+  return d.toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric'});
+}
+function fmtDataOra(iso){
+  if(!iso) return '—';
+  const d = new Date(iso);
+  if(isNaN(d)) return iso;
+  const data = d.toLocaleDateString('it-IT',{day:'2-digit',month:'short'});
+  const ora  = d.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
+  return data + ' · ' + ora;
+}
+
 function dirty(){
   SL._dirty = true;
   document.getElementById('fStato').textContent = 'Modifiche non salvate';
   document.getElementById('fStato').className = 'fbar-stato';
+  aggiornaHeaderXL();
 }
 
 function fmt(n){
