@@ -1851,43 +1851,46 @@ function toggleRap(head){
   body.classList.toggle('open');
 }
 
-// ── Reso da scheda: apre ddt.html con i dati in sessionStorage ──
-// Chiave univoca riga: include codice + descrizione + qty + rapNumero
-// così righe duplicate dello stesso codice nello stesso rapportino
-// (caso raro ma possibile) sono tracciate separatamente.
+// ═══════════════════════════════════════════════════════════════════════
+// RESO A FORNITORE — workflow completo con tabella resi_fornitore
+// ═══════════════════════════════════════════════════════════════════════
+// Architettura:
+//   1. Click su ↩ apre modalReso con dati pre-compilati
+//   2. Modal: motivo + note + operatore (default da localStorage)
+//   3. Conferma → crea record in resi_fornitore (numero 26/RES/NNNN)
+//                + collega DDT origine (match per codice ricambio)
+//                + rimuove la riga dal rapportino
+//                + ricalcola totali rapportino + scheda
+//                + salva su Supabase
+//   4. Gestione successiva (spedito → NC → chiuso) → pagina /resi.html
+
+// Stato modal corrente (riempito da toggleResoScheda)
+let _mrCtx = null;
+
+// Legacy helper — mantenuto per non rompere chiamate sparse
 function _chiaveReso(rapNumero, codice, descrizione, qty){
   return [rapNumero||'', codice||'', descrizione||'', qty||0].join('§');
 }
 
-// True se la riga è già segnalata per reso (presente in sessionStorage)
+// True se l'elemento del rapportino ha già reso=true (segnalato in attesa)
+// oppure reso_confermato=true (NC già arrivata).
+// In entrambi i casi, il bottone va mostrato "verde" e cliccando avvisa
+// di gestirlo dalla pagina /resi.html.
 function _isInResi(rapNumero, codice, descrizione, qty){
-  // Fonte primaria: flag reso=true sull'elemento del rapportino (persistente DB)
   try {
     const rap = SL.rapportini.find(r => (r.numero||'') === rapNumero);
-    if (rap) {
-      const elTarget = (rap.elementi||[]).find(el =>
-        el.tipo === 'ricambio' &&
-        String(el.codice||'') === codice &&
-        String(el.descrizione||'') === descrizione &&
-        (parseFloat(el.qty)||0) === (parseFloat(qty)||0)
-      );
-      if (elTarget?.reso) return true;
-    }
-  } catch(e){}
-  // Fonte secondaria (legacy): sessionStorage
-  try {
-    const existing = JSON.parse(sessionStorage.getItem('resi_da_scheda')||'[]');
-    const k = _chiaveReso(rapNumero, codice, descrizione, qty);
-    return existing.some(r => _chiaveReso(r.ddt_num, r.codice, r.descrizione, r.qty) === k);
+    if (!rap) return false;
+    const elTarget = (rap.elementi||[]).find(el =>
+      el.tipo === 'ricambio' &&
+      String(el.codice||'') === codice &&
+      String(el.descrizione||'') === descrizione &&
+      (parseFloat(el.qty)||0) === (parseFloat(qty)||0)
+    );
+    return !!(elTarget && (elTarget.reso || elTarget.reso_confermato));
   } catch(e){ return false; }
 }
 
-// Toggle reso: se non segnalato → segnala (↩ → ↺ verde)
-//              se già segnalato → annulla (↺ verde → ↩ rosso)
-//
-// PERSISTENZA: oltre a sessionStorage (legacy), scrive il flag sull'elemento
-// del rapportino e salva su Supabase. Così il reso sopravvive a chiusura
-// browser, cambio computer, e può essere matchato col DDT BL-RCL del fornitore.
+// Apre il modal di segnalazione reso a fornitore
 function toggleResoScheda(btn){
   const rapNumero   = btn.dataset.rap   || '';
   const rapData     = btn.dataset.data  || '';
@@ -1896,74 +1899,194 @@ function toggleResoScheda(btn){
   const qty         = parseFloat(btn.dataset.qty)    || 1;
   const prezzo      = parseFloat(btn.dataset.prezzo) || 0;
 
-  // ─── Persistenza su SL.rapportini[].elementi[] ───
-  // Trovo l'elemento corrispondente nel rapportino e setto el.reso
-  const rap = SL.rapportini.find(r => (r.numero||'') === rapNumero);
-  let elTarget = null;
-  if (rap) {
-    elTarget = (rap.elementi||[]).find(el =>
-      el.tipo === 'ricambio' &&
-      String(el.codice||'') === codice &&
-      String(el.descrizione||'') === descrizione &&
-      (parseFloat(el.qty)||0) === qty
-    );
+  // Se è già segnalato → reindirizza su /resi.html per gestirlo
+  if (_isInResi(rapNumero, codice, descrizione, qty)) {
+    toast('Reso già segnalato — gestiscilo dalla pagina Resi', 'info');
+    return;
   }
 
-  // ─── Toggle anche su sessionStorage (per ddt.html legacy) ───
-  const KEY = 'resi_da_scheda';
-  let existing = [];
-  try { existing = JSON.parse(sessionStorage.getItem(KEY)||'[]'); } catch(e){ existing = []; }
-  const chiave = _chiaveReso(rapNumero, codice, descrizione, qty);
-  const idx = existing.findIndex(r => _chiaveReso(r.ddt_num, r.codice, r.descrizione, r.qty) === chiave);
+  // Salva il contesto per la conferma
+  _mrCtx = { rapNumero, rapData, codice, descrizione, qty, prezzo };
 
-  if (idx >= 0 || (elTarget && elTarget.reso)) {
-    // ── ANNULLA RESO ──
-    if (idx >= 0 && existing[idx].convalidato){
-      if (!confirm(`Questo reso è già stato convalidato dal DDT del fornitore.\n\nVuoi comunque rimuoverlo dalla lista resi?`)) return;
+  // Popola il modal
+  document.getElementById('mr-desc').textContent    = descrizione || '—';
+  document.getElementById('mr-codice').textContent  = codice || '—';
+  document.getElementById('mr-qta').textContent     = qty;
+  document.getElementById('mr-prezzo').textContent  = (prezzo).toFixed(2);
+  document.getElementById('mr-rap').textContent     = rapNumero;
+  document.getElementById('mr-motivo').value        = 'difettoso';
+  document.getElementById('mr-note').value          = '';
+
+  // Popola operatori con default da localStorage
+  const sel = document.getElementById('mr-operatore');
+  const def = localStorage.getItem('gestionale_operatore_default') || '';
+  sel.innerHTML = OPERATORI.map(op =>
+    `<option value="${op.nome}" ${op.nome===def?'selected':''}>${op.nome}</option>`
+  ).join('');
+
+  // Cerca DDT origine (best-effort, async) e mostra info se trovato
+  document.getElementById('mr-ddt-info').style.display = 'none';
+  document.getElementById('mr-ddt-num').textContent = '';
+  _cercaDdtOrigine(codice).then(ddt => {
+    if (ddt && _mrCtx) {
+      _mrCtx.ddt_id = ddt.id;
+      _mrCtx.ddt_numero = ddt.numero_ddt || ddt.email_oggetto || '';
+      _mrCtx.fornitore_nome = ddt.fornitore_nome || ddt.ddt_estratto?.fornitore || '';
+      document.getElementById('mr-ddt-info').style.display = '';
+      document.getElementById('mr-ddt-num').textContent = _mrCtx.ddt_numero;
     }
-    if (idx >= 0) { existing.splice(idx,1); sessionStorage.setItem(KEY, JSON.stringify(existing)); }
-    if (elTarget) {
-      delete elTarget.reso;
-      delete elTarget.reso_at;
-      delete elTarget.reso_confermato;
-      delete elTarget.reso_ddt_id;
-      SL._dirty = true;
-      salvaDebounced(`↺ ${descrizione||codice} — reso annullato`);
+  });
+
+  // Mostra modal
+  document.getElementById('modalReso').style.display = 'flex';
+}
+
+// Alias compat
+function segnalaResoScheda(btn){ toggleResoScheda(btn); }
+
+function chiudiModalReso(){
+  document.getElementById('modalReso').style.display = 'none';
+  _mrCtx = null;
+}
+
+// Cerca il DDT più recente che contiene un ricambio col codice indicato.
+// Best-effort: se non trova, ritorna null.
+async function _cercaDdtOrigine(codice){
+  if (!codice) return null;
+  try {
+    const { data, error } = await _sb
+      .from('ddt_in_arrivo')
+      .select('id, email_oggetto, email_data, ddt_estratto, targa_estratta, stato')
+      .eq('stato', 'confermato')
+      .order('email_data', { ascending: false })
+      .limit(50);
+    if (error || !data) return null;
+
+    // Scorri i DDT più recenti e trova quello con righe.codice === codice
+    const cTarget = codice.trim().toUpperCase();
+    for (const d of data) {
+      const righe = d.ddt_estratto?.righe || [];
+      const match = righe.find(r =>
+        String(r.codice||'').trim().toUpperCase() === cTarget
+      );
+      if (match) {
+        return {
+          ...d,
+          numero_ddt: d.ddt_estratto?.numero_ddt || '',
+          fornitore_nome: d.ddt_estratto?.fornitore || ''
+        };
+      }
     }
-    btn.textContent = '↩';
-    btn.style.color = 'var(--err)';
-    btn.title = 'Segna per reso';
-    if (!elTarget) toast(`↺ ${descrizione||codice} — reso annullato`, 'info');
-  } else {
-    // ── SEGNALA RESO ──
-    const oraISO = new Date().toISOString();
-    existing.push({
-      id: Date.now()+'_'+Math.random(),
-      codice, descrizione, qty, prezzo_netto: prezzo,
-      ddt_num:  rapNumero,
-      ddt_data: rapData,
-      fornitore: '',
-      note: '',
-      convalidato: false,
-      segnalato_at: oraISO
-    });
-    sessionStorage.setItem(KEY, JSON.stringify(existing));
-    if (elTarget) {
-      elTarget.reso = true;
-      elTarget.reso_at = oraISO;
-      SL._dirty = true;
-      salvaDebounced(`↩ ${descrizione||codice} — segnalato per reso`);
-    }
-    btn.textContent = '↺';
-    btn.style.color = 'var(--ok)';
-    btn.title = 'Annulla segnalazione reso';
-    if (!elTarget) toast(`↩ ${descrizione||codice} — segnalato per reso`, 'info');
+    return null;
+  } catch(e){
+    console.warn('_cercaDdtOrigine:', e);
+    return null;
   }
 }
 
-// Manteniamo segnalaResoScheda come alias per retrocompatibilità
-// (nel caso ci siano altre chiamate sparse nel codice)
-function segnalaResoScheda(btn){ toggleResoScheda(btn); }
+// Conferma reso: scrive su resi_fornitore, rimuove la riga, ricalcola
+async function confermaModalReso(){
+  if (!_mrCtx) { chiudiModalReso(); return; }
+
+  const motivo    = document.getElementById('mr-motivo').value;
+  const note      = document.getElementById('mr-note').value.trim();
+  const operatore = document.getElementById('mr-operatore').value;
+
+  // Salva preferenza operatore per la prossima volta
+  if (operatore) localStorage.setItem('gestionale_operatore_default', operatore);
+
+  const ctx = _mrCtx;
+  const importo_atteso = (ctx.qty || 0) * (ctx.prezzo || 0);
+
+  // 1) Genera numero reso
+  let numeroReso = '';
+  try {
+    const annoBreve = String(new Date().getFullYear()).slice(-2);
+    const { data: numData, error: numErr } = await _sb.rpc('prossimo_numero_reso', { p_anno: annoBreve });
+    if (numErr) throw numErr;
+    numeroReso = numData;
+  } catch(e){
+    console.error('prossimo_numero_reso fallita:', e);
+    toast('Errore numerazione reso — controlla la console', 'err');
+    return;
+  }
+
+  // 2) Trova rapportino_giornaliero_id (best-effort, leggendo da Supabase)
+  let rapGiornId = null;
+  try {
+    const { data: rgData } = await _sb
+      .from('rapportini_giornalieri')
+      .select('id')
+      .eq('scheda_id', SL.id)
+      .eq('numero', ctx.rapNumero)
+      .limit(1)
+      .maybeSingle();
+    rapGiornId = rgData?.id || null;
+  } catch(e){ /* opzionale, non blocca */ }
+
+  // 3) Insert in resi_fornitore
+  const insertPayload = {
+    numero: numeroReso,
+    data: new Date().toISOString().slice(0,10),
+    ddt_id: ctx.ddt_id || null,
+    scheda_id: SL.id || null,
+    rapportino_giornaliero_id: rapGiornId,
+    fornitore_nome: ctx.fornitore_nome || null,
+    codice: ctx.codice || null,
+    descrizione: ctx.descrizione || null,
+    qta: ctx.qty || 1,
+    costo_acquisto: ctx.prezzo || 0,    // prezzo della riga rapportino come da requisito
+    importo_atteso: importo_atteso,
+    motivo: motivo,
+    note: note || null,
+    stato: 'da_rendere',
+    segnalato_da: operatore || null
+  };
+
+  try {
+    const { error: insErr } = await _sb
+      .from('resi_fornitore')
+      .insert(insertPayload);
+    if (insErr) throw insErr;
+  } catch(e){
+    console.error('Insert resi_fornitore:', e);
+    toast('Errore creazione reso — vedi console', 'err');
+    return;
+  }
+
+  // 4) Rimuovi la riga dal rapportino (Opzione A — rapportino pulito)
+  const rap = SL.rapportini.find(r => (r.numero||'') === ctx.rapNumero);
+  if (rap) {
+    const idx = (rap.elementi||[]).findIndex(el =>
+      el.tipo === 'ricambio' &&
+      String(el.codice||'') === ctx.codice &&
+      String(el.descrizione||'') === ctx.descrizione &&
+      (parseFloat(el.qty)||0) === ctx.qty
+    );
+    if (idx >= 0) {
+      rap.elementi.splice(idx, 1);
+      SL._dirty = true;
+    }
+  }
+
+  // 5) Ricalcola totali e re-renderizza
+  renderRapportini();
+  aggiornaTotali();
+
+  // 6) Salva persistente (la salvaDebounced fa UPSERT scheda + salvaRapportiniSeparati)
+  salvaDebounced(`✓ Reso ${numeroReso} creato — riga rimossa`);
+
+  // 7) Chiudi modal + toast finale
+  chiudiModalReso();
+  toast(`🔄 Reso ${numeroReso} creato (€ ${importo_atteso.toFixed(2)})`, 'ok');
+}
+
+// Chiudi modal con tasto ESC
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('modalReso')?.style.display === 'flex') {
+    chiudiModalReso();
+  }
+});
 
 // ─── CONFERMA PREZZO RICAMBIO ────────────────────────────────────
 // Il ricambio è stato importato dal DDT senza listino (prezzo da netto fornitore)
@@ -4483,5 +4606,62 @@ window.addEventListener('beforeunload', e=>{
 
 init();
 </script>
+
+<!-- ═══════════════════════ MODAL RESO A FORNITORE ═══════════════════════ -->
+<div id="modalReso" style="display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.45);align-items:center;justify-content:center;padding:16px">
+  <div style="background:#fff;border-radius:10px;max-width:480px;width:100%;max-height:90vh;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,0.25)">
+    <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <div style="font-weight:700;font-size:15px">🔄 Segna reso a fornitore</div>
+      <button onclick="chiudiModalReso()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--text-m);line-height:1">×</button>
+    </div>
+    <div style="padding:16px 18px">
+
+      <div style="background:#F7F6F3;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;line-height:1.5">
+        <div><span style="color:var(--text-m)">Pezzo:</span> <strong id="mr-desc">—</strong></div>
+        <div><span style="color:var(--text-m)">Codice:</span> <span id="mr-codice" style="font-family:monospace">—</span></div>
+        <div><span style="color:var(--text-m)">Qta:</span> <span id="mr-qta">—</span> · <span style="color:var(--text-m)">Prezzo riga:</span> € <span id="mr-prezzo">—</span></div>
+        <div><span style="color:var(--text-m)">Rapportino:</span> <span id="mr-rap" style="font-family:monospace">—</span></div>
+        <div id="mr-ddt-info" style="margin-top:4px;color:var(--ok);font-size:11px;display:none">↻ DDT origine collegato: <span id="mr-ddt-num" style="font-family:monospace"></span></div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:10px">
+
+        <label style="display:flex;flex-direction:column;gap:4px;font-size:12px">
+          <span style="color:var(--text-m);font-weight:600">Motivo del reso</span>
+          <select id="mr-motivo" style="padding:8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px">
+            <option value="difettoso">Difettoso</option>
+            <option value="sbagliato">Sbagliato (codice errato)</option>
+            <option value="non_necessario">Non necessario</option>
+            <option value="danneggiato_trasporto">Danneggiato in trasporto</option>
+            <option value="altro">Altro</option>
+          </select>
+        </label>
+
+        <label style="display:flex;flex-direction:column;gap:4px;font-size:12px">
+          <span style="color:var(--text-m);font-weight:600">Note (facoltative)</span>
+          <textarea id="mr-note" rows="2" placeholder="Es: difetto evidente all'imballo, sostituire con codice X..." style="padding:8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px;resize:vertical"></textarea>
+        </label>
+
+        <label style="display:flex;flex-direction:column;gap:4px;font-size:12px">
+          <span style="color:var(--text-m);font-weight:600">Operatore che segnala</span>
+          <select id="mr-operatore" style="padding:8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px">
+            <!-- popolato da JS -->
+          </select>
+        </label>
+
+      </div>
+
+      <div style="background:#FFF8E1;border:1px solid #FFD54F;border-radius:6px;padding:8px 10px;margin-top:14px;font-size:11px;color:#5D4037;line-height:1.5">
+        ⚠️ Confermando, il ricambio verrà <strong>rimosso</strong> dal rapportino e i totali ricalcolati. Il reso resterà tracciato nella pagina <strong>Resi</strong> finché il fornitore non emette la nota di credito.
+      </div>
+
+    </div>
+    <div style="padding:12px 18px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px">
+      <button onclick="chiudiModalReso()" class="btn btn-g" style="font-size:13px">Annulla</button>
+      <button onclick="confermaModalReso()" class="btn btn-p" style="font-size:13px;background:#E65100;color:#fff;border-color:#E65100">Conferma reso</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
