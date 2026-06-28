@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>Documento</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --accent:#E85A00;--accent-d:#C04800;--accent-l:#FFF3EC;
+  --dark:#1A1A1A;--surface:#FFF;--bg:#EDEBE6;
+  --border:#DEDAD4;--border-dk:#C4C0B8;
+  --text:#1A1A1A;--text-m:#706C65;--text-l:#9A9690;
+  --ok:#1F7A35;--ok-bg:#E6F5EB;
+  --warn:#7A5000;--warn-bg:#FFF8E6;
+  --err:#B82020;--err-bg:#FDECEC;
+  --info:#1A4FAA;--info-bg:#EBF0FD;
+  --purple:#534AB7;--purple-l:#EEEDFE;
+  --paghera:#c8102e;
+  --r:8px;--rs:5px;--sh:0 1px 3px rgba(0,0,0,.07)
+}
+body{font-family:'Helvetica Neue',Arial,-apple-system,sans-serif;background:var(--bg);color:var(--text);font-size:16px;line-height:1.5;min-height:100vh}
+
+.hdr{background:var(--dark);color:#FFF;height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;position:sticky;top:0;z-index:100}
+.hdr-l{display:flex;align-items:center;gap:20px}
+.brand{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:rgba(255,255,255,.4)}
+.hdr-title{font-size:15px;font-weight:600}
+.btn-back{background:transparent;border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.7);padding:5px 12px;border-radius:var(--rs);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s}
+.btn-back:hover{background:rgba(255,255,255,.08);color:#FFF}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--rs);font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;border:1px solid transparent;transition:all .15s;white-space:nowrap;text-decoration:none}
+.btn-p{background:var(--accent);color:#FFF;border-color:var(--accent)}
+.btn-p:hover{background:var(--accent-d)}
+.btn-s{background:#FFF;color:var(--text);border-color:var(--border)}
+.btn-s:hover{background:var(--bg)}
+.btn-danger{background:#FFF;color:var(--err);border-color:#FFBBBB}
+.btn-danger:hover{background:var(--err-bg)}
+.btn-sm{padding:5px 10px;font-size:12px}
+
+.page{max-width:980px;margin:0 auto;padding:20px 16px 80px}
+
+/* STATO BAR */
+.stato-bar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+.stato-pill{display:inline-flex;align-items:center;gap:7px;padding:6px 14px;border-radius:999px;font-size:13px;font-weight:700;background:var(--surface);border:1px solid var(--border)}
+.stato-pill::before{content:'';width:9px;height:9px;border-radius:50%}
+.s-bozza::before{background:#9A9690}
+.s-coda::before{background:var(--info)}
+.s-stampa::before{background:var(--accent)}
+.s-emesso::before{background:var(--ok)}
+.s-errore::before{background:var(--err)}
+.s-annullato::before{background:var(--text-l)}
+.stato-meta{font-size:12px;color:var(--text-m)}
+
+/* CARDS */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--sh);padding:18px;margin-bottom:14px}
+.card-title{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-m);margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.field{display:flex;flex-direction:column;gap:4px}
+.field label{font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-l)}
+.field input,.field select,.field textarea{
+  padding:7px 10px;border:1px solid var(--border);border-radius:var(--rs);font-size:14px;
+  font-family:inherit;background:#FFF;color:var(--text);outline:none;width:100%
+}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent)}
+.field input[readonly]{background:#F7F6F3;color:var(--text-m)}
+.field textarea{resize:vertical;min-height:54px}
+.field .static{font-size:14px;font-weight:600;padding:7px 0}
+.field .static.mono{font-family:monospace}
+.link-scheda{color:var(--accent);font-weight:700;text-decoration:none}
+.link-scheda:hover{text-decoration:underline}
+
+/* RIGHE */
+.righe-table{width:100%;border-collapse:collapse;font-size:13px}
+.righe-table th{font-size:9px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--text-m);text-align:left;padding:6px 6px;border-bottom:2px solid var(--border-dk)}
+.righe-table td{padding:4px 6px;border-bottom:1px solid #F0EDE8;vertical-align:middle}
+.righe-table td.num{text-align:right;font-variant-numeric:tabular-nums}
+.righe-table input{width:100%;border:1px solid transparent;border-radius:4px;padding:5px 6px;font-size:13px;font-family:inherit;background:transparent;outline:none}
+.righe-table input:focus{border-color:var(--accent);background:#FFF}
+.righe-table input.num{text-align:right;font-variant-numeric:tabular-nums}
+.righe-table .tipo-riga-badge{font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;font-family:monospace;cursor:pointer;border:none}
+.tr-ricambio{background:var(--info-bg);color:var(--info)}
+.tr-manodopera{background:var(--accent-l);color:var(--accent-d)}
+.tr-altro{background:#F0EDE8;color:var(--text-m)}
+.btn-row-del{background:none;border:1px solid #FFBBBB;border-radius:4px;color:var(--err);cursor:pointer;padding:3px 7px;font-size:12px}
+
+.totali{display:flex;justify-content:flex-end;margin-top:14px}
+.totali-box{min-width:280px}
+.totali-box .tr{display:flex;justify-content:space-between;padding:5px 0;font-size:14px}
+.totali-box .tr.grand{border-top:2px solid var(--border-dk);margin-top:4px;padding-top:10px;font-size:18px;font-weight:800}
+.totali-box .num{font-variant-numeric:tabular-nums}
+
+.toasts{position:fixed;bottom:20px;right:20px;display:flex;flex-direction:column;gap:8px;z-index:300}
+.toast{background:var(--dark);color:#FFF;padding:10px 16px;border-radius:var(--r);font-size:15px;animation:fadeUp .22s ease;transition:opacity .3s}
+.toast.ok{background:var(--ok)}
+.toast.err{background:var(--err)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+.loading{text-align:center;padding:60px;color:var(--text-l)}
+
+/* ═══ PRINT ═══ */
+#printArea{display:none}
+@media print{
+  body{background:#FFF}
+  .hdr,.stato-bar,.toasts,.no-print{display:none !important}
+  .page{max-width:none;padding:0}
+  #editArea{display:none !important}
+  #printArea{display:block !important}
+  .p-wrap{padding:0}
+  .p-head{display:flex;justify-content:space-between;border-bottom:3px solid var(--paghera);padding-bottom:12px;margin-bottom:18px}
+  .p-azienda{font-size:12px;color:#333;line-height:1.4}
+  .p-azienda .nome{font-size:18px;font-weight:800;color:var(--paghera)}
+  .p-doc-title{text-align:right}
+  .p-doc-title .t{font-size:20px;font-weight:800}
+  .p-doc-title .n{font-size:14px;font-family:monospace;margin-top:4px}
+  .p-blocks{display:flex;gap:24px;margin-bottom:18px;font-size:12px}
+  .p-block{flex:1;border:1px solid #ccc;border-radius:6px;padding:10px}
+  .p-block h4{font-size:9px;text-transform:uppercase;letter-spacing:.06em;color:#888;margin-bottom:6px}
+  .p-table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:14px}
+  .p-table th{background:#f3f3f3;text-align:left;padding:6px;border:1px solid #ddd;font-size:9px;text-transform:uppercase}
+  .p-table td{padding:5px 6px;border:1px solid #eee}
+  .p-table td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .p-tot{display:flex;justify-content:flex-end}
+  .p-tot table{font-size:12px}
+  .p-tot td{padding:3px 10px}
+  .p-tot .grand{font-size:15px;font-weight:800;border-top:2px solid #333}
+  .p-foot{margin-top:24px;font-size:10px;color:#666;border-top:1px solid #ddd;padding-top:8px}
+}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="hdr-l">
+    <span class="brand">Gestione Veicoli</span>
+    <span class="hdr-title" id="hdrTitle">Documento</span>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center">
+    <button class="btn btn-s btn-sm" id="btnStampa" onclick="stampa()" style="display:none">🖨 Stampa</button>
+    <button class="btn btn-danger btn-sm" id="btnAnnulla" onclick="annulla()" style="display:none">Annulla doc.</button>
+    <button class="btn btn-p btn-sm" id="btnSalva" onclick="salva()">💾 Salva</button>
+    <button class="btn-back" onclick="location.href='documenti.html'">← Documenti</button>
+  </div>
+</header>
+
+<div class="page">
+  <div id="editArea">
+    <div class="loading" id="loading">Caricamento…</div>
+    <div id="form" style="display:none">
+
+      <!-- STATO -->
+      <div class="stato-bar">
+        <span class="stato-pill" id="statoPill">Bozza</span>
+        <span class="stato-meta" id="statoMeta"></span>
+      </div>
+
+      <!-- TESTATA -->
+      <div class="card">
+        <div class="card-title">Documento</div>
+        <div class="grid3">
+          <div class="field"><label>N° Documento</label><input id="f_numero" placeholder="es. 26/0001"></div>
+          <div class="field"><label>Tipo</label>
+            <select id="f_tipo">
+              <option value="">—</option>
+              <option value="fattura">Fattura</option>
+              <option value="dc">Documento commerciale</option>
+              <option value="scontrino">Scontrino</option>
+              <option value="ricevuta">Ricevuta</option>
+              <option value="nota_credito">Nota di credito</option>
+              <option value="preventivo">Preventivo</option>
+            </select>
+          </div>
+          <div class="field"><label>Scheda collegata</label><div class="static" id="f_scheda">—</div></div>
+          <div class="field"><label>Data</label><input type="date" id="f_data"></div>
+          <div class="field"><label>Ora</label><input type="time" id="f_ora"></div>
+          <div class="field"><label>Metodo pagamento</label>
+            <select id="f_metodo">
+              <option value="">—</option>
+              <option>Contanti</option><option>Bancomat</option><option>Carta di credito</option>
+              <option>Bonifico</option><option>Assegno</option><option>Non riscosso</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid2" style="margin-top:14px">
+          <div class="field"><label>Note documento (stampate)</label><textarea id="f_note_doc"></textarea></div>
+          <div class="field"><label>Note interne</label><textarea id="f_note_int"></textarea></div>
+        </div>
+      </div>
+
+      <!-- CLIENTE -->
+      <div class="card">
+        <div class="card-title">Cliente</div>
+        <div class="grid2">
+          <div class="field"><label>Ragione sociale / Nome</label><input id="c_nome"></div>
+          <div class="field"><label>Indirizzo</label><input id="c_indirizzo"></div>
+        </div>
+        <div class="grid3" style="margin-top:14px">
+          <div class="field"><label>CAP</label><input id="c_cap"></div>
+          <div class="field"><label>Città</label><input id="c_citta"></div>
+          <div class="field"><label>Provincia</label><input id="c_provincia" maxlength="2"></div>
+        </div>
+        <div class="grid3" style="margin-top:14px">
+          <div class="field"><label>P.IVA</label><input id="c_piva"></div>
+          <div class="field"><label>Codice fiscale</label><input id="c_cf"></div>
+          <div class="field"><label>Nazione</label><input id="c_nazione" placeholder="IT"></div>
+        </div>
+        <div class="grid3" style="margin-top:14px">
+          <div class="field"><label>Email</label><input id="c_email"></div>
+          <div class="field"><label>PEC</label><input id="c_pec"></div>
+          <div class="field"><label>Codice SDI</label><input id="c_sdi" maxlength="7"></div>
+        </div>
+      </div>
+
+      <!-- VEICOLO -->
+      <div class="card">
+        <div class="card-title">Veicolo</div>
+        <div class="grid3">
+          <div class="field"><label>Targa</label><input id="v_targa"></div>
+          <div class="field"><label>Modello</label><input id="v_modello"></div>
+          <div class="field"><label>Km</label><input type="number" id="v_km"></div>
+        </div>
+      </div>
+
+      <!-- RIGHE -->
+      <div class="card">
+        <div class="card-title">Righe
+          <button class="btn btn-s btn-sm no-print" style="margin-left:auto" onclick="aggiungiRiga()">+ Riga</button>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="righe-table">
+            <thead><tr>
+              <th style="width:34px">#</th>
+              <th style="width:90px">Tipo</th>
+              <th style="width:110px">Codice</th>
+              <th>Descrizione</th>
+              <th style="width:60px">Q.tà</th>
+              <th style="width:48px">UM</th>
+              <th style="width:90px">Prezzo</th>
+              <th style="width:60px">Sc.%</th>
+              <th style="width:60px">IVA%</th>
+              <th style="width:90px">Imponibile</th>
+              <th style="width:90px">Totale</th>
+              <th style="width:34px"></th>
+            </tr></thead>
+            <tbody id="righeBody"></tbody>
+          </table>
+        </div>
+
+        <div class="totali">
+          <div class="totali-box">
+            <div class="tr"><span>Imponibile</span><span class="num" id="t_imp">€ 0,00</span></div>
+            <div class="tr"><span>IVA</span><span class="num" id="t_iva">€ 0,00</span></div>
+            <div class="tr grand"><span>Totale</span><span class="num" id="t_tot">€ 0,00</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- DATI FISCALI -->
+      <div class="card">
+        <div class="card-title">Dati fiscali (Strada E — emissione da ProMEK)</div>
+        <div class="grid3">
+          <div class="field"><label>N° scontrino / doc. fiscale</label><input id="x_scontrino" placeholder="da ProMEK"></div>
+          <div class="field"><label>Data scontrino fiscale</label><input type="datetime-local" id="x_data_scontrino"></div>
+          <div class="field"><label>Stato SDI</label><div class="static mono" id="x_sdi_stato">—</div></div>
+        </div>
+        <div class="grid3" style="margin-top:14px">
+          <div class="field"><label>ID trasmissione SDI</label><div class="static mono" id="x_sdi_id">—</div></div>
+          <div class="field"><label>SDI inviato</label><div class="static" id="x_sdi_invio">—</div></div>
+          <div class="field"><label>SDI esito</label><div class="static" id="x_sdi_esito">—</div></div>
+        </div>
+        <div id="printErrBox" style="display:none;margin-top:14px;background:var(--err-bg);border:1px solid #F3C0C0;border-radius:var(--rs);padding:10px 12px;font-size:13px;color:var(--err)"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- PRINT AREA -->
+  <div id="printArea"></div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+const SUPABASE_URL = 'https://iztrrgqkzsovorcmixum.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml6dHJyZ3FrenNvdm9yY21peHVtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMDI3NzMsImV4cCI6MjA4OTc3ODc3M30.3IyUCDpFs9x_iSi5C4asodt5_O3F_cwgdb3eBkoQh3U';
+const _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Dati azienda emittente (per la stampa). Completare indirizzo se necessario.
+const AZIENDA = {
+  nome:'PAGHERA AUTO SRL',
+  piva:'P.IVA 02630620207',
+  citta:'Castiglione delle Stiviere (MN)',
+  extra:''
+};
+
+const qp = new URLSearchParams(location.search);
+const DOC_ID = qp.get('id');
+const SCHEDA_ID = qp.get('scheda_id');
+const NUOVO  = qp.get('nuovo')==='1' || (!DOC_ID);
+const AUTO_PRINT = qp.get('print')==='1';
+
+let DOC = null;     // record documenti
+let RIGHE = [];     // record documenti_righe (con _key locale)
+let _rk = 0;
+
+function prettyStato(s){ return s ? String(s).replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()) : ''; }
+function statoInfo(d){
+  const s = String(d.stato||'').toLowerCase();
+  if(d.annullato_at || s.includes('annull')) return { label:prettyStato(d.stato)||'Annullato', cls:'s-annullato' };
+  if(d.print_error || s.includes('error'))   return { label:prettyStato(d.stato)||'Errore', cls:'s-errore' };
+  if(d.emesso_at || d.numero_scontrino_fiscale || s.includes('emess')||s.includes('stamp')) return { label:prettyStato(d.stato)||'Emesso', cls:'s-emesso' };
+  if(d.print_started_at || s.includes('coda')||s.includes('attesa')) return { label:prettyStato(d.stato)||'In coda', cls:'s-coda' };
+  return { label:prettyStato(d.stato)||'Bozza', cls:'s-bozza' };
+}
+
+async function init(){
+  if(NUOVO){
+    if(SCHEDA_ID){
+      await prefillDaScheda(SCHEDA_ID);
+    } else {
+      DOC = nuovoDoc();
+      RIGHE = [nuovaRiga()];
+      await suggerisciNumero();
+    }
+    popola();
+  } else {
+    await carica();
+  }
+  document.getElementById('loading').style.display='none';
+  document.getElementById('form').style.display='';
+  if(AUTO_PRINT && !NUOVO) setTimeout(stampa, 400);
+}
+
+function nuovoDoc(){
+  const oggi = new Date().toISOString().slice(0,10);
+  const ora  = new Date().toTimeString().slice(0,5);
+  return { id:null, numero:'', numero_base:null, tipo:'', data:oggi, ora:ora,
+    scheda_id:null, cliente_nome:'', cliente_indirizzo:'', cliente_cap:'', cliente_citta:'',
+    cliente_provincia:'', cliente_nazione:'IT', cliente_piva:'', cliente_cf:'', cliente_email:'',
+    cliente_pec:'', cliente_sdi:'', veicolo_targa:'', veicolo_modello:'', veicolo_km:null,
+    imponibile:0, iva:0, totale:0, metodo_pagamento:'', numero_scontrino_fiscale:'',
+    data_scontrino_fiscale:null, sdi_stato:null, sdi_id_trasmissione:null, sdi_data_invio:null,
+    sdi_data_esito:null, stato:'bozza', note_interne:'', note_documento:'' };
+}
+function nuovaRiga(){
+  return { _key:++_rk, id:null, posizione:RIGHE?RIGHE.length+1:1, tipo_riga:'ricambio',
+    articolo_id:null, codice:'', descrizione:'', qta:1, um:'NR', prezzo_unitario:0,
+    sconto_perc:0, aliquota_iva:22, natura_iva:null, reparto_cassa:null,
+    imponibile_riga:0, iva_riga:0, totale_riga:0 };
+}
+
+async function suggerisciNumero(){
+  try{
+    const yy = String(new Date().getFullYear()).slice(2);
+    const { data } = await _sb.from('documenti').select('numero_base').order('numero_base',{ascending:false}).limit(1);
+    const next = (data && data[0] && Number(data[0].numero_base)||0) + 1;
+    DOC.numero_base = next;
+    DOC.numero = `${yy}/${String(next).padStart(4,'0')}`;
+  }catch(e){ /* lascia vuoto, modificabile a mano */ }
+}
+
+// ─── PREFILL DA SCHEDA (documento.html?scheda_id=UUID) ───
+// Legge la scheda (rapportini) + anagrafica cliente (clienti) + veicolo
+// (veicoli_anagrafica) e mappa riepilogo_override → righe documento.
+async function prefillDaScheda(schedaId){
+  DOC = nuovoDoc();
+  RIGHE = [];
+  DOC.scheda_id = schedaId;
+  try{
+    const { data:s, error } = await _sb.from('rapportini').select('*').eq('id',schedaId).single();
+    if(error || !s) throw (error || new Error('scheda non trovata'));
+
+    // Anagrafica cliente (per dati fiscali completi)
+    let cli=null;
+    if(s.cliente_id){
+      try{ const { data:c } = await _sb.from('clienti').select('*').eq('id',s.cliente_id).single(); cli=c||null; }catch(_){}
+    }
+    // Anagrafica veicolo (per marca/modello/versione)
+    let veh=null;
+    const targaLookup = s.veicolo_id || s.targa;
+    if(targaLookup){
+      try{
+        const { data:v } = await _sb.from('veicoli_anagrafica')
+          .select('targa,marca,modello,versione').eq('targa',String(targaLookup).toUpperCase()).single();
+        veh=v||null;
+      }catch(_){}
+    }
+
+    // Cliente
+    DOC.cliente_nome = (cli && (cli.ragione_sociale || [cli.cognome,cli.nome].filter(Boolean).join(' '))) || s.cliente_nome || '';
+    if(cli){
+      DOC.cliente_indirizzo = cli.indirizzo || '';
+      DOC.cliente_cap       = cli.cap || '';
+      DOC.cliente_citta     = cli.comune || '';      // 'comune' in clienti → cliente_citta
+      DOC.cliente_provincia = cli.provincia || '';
+      DOC.cliente_piva      = cli.piva || '';
+      DOC.cliente_cf        = cli.cf || '';
+      DOC.cliente_email     = cli.email || '';
+    }
+    // Veicolo
+    DOC.veicolo_targa   = String(s.targa || (veh&&veh.targa) || '').toUpperCase();
+    DOC.veicolo_modello = s.modello || (veh ? [veh.marca,veh.modello,veh.versione].filter(Boolean).join(' ') : '');
+    DOC.veicolo_km      = s.km ? Number(s.km) : null;
+
+    // Tipo documento suggerito dal suffisso della scheda
+    DOC.tipo = mappaTipoScheda(s.tipo);
+    // Problema → note documento
+    if(s.problema) DOC.note_documento = s.problema;
+
+    // Righe da riepilogo_override
+    RIGHE = righeDaRiepilogo(s.riepilogo_override);
+    if(!RIGHE.length) RIGHE=[nuovaRiga()];
+
+    await suggerisciNumero();
+    toast('Documento precompilato dalla scheda '+(s.numero||''),'ok');
+  }catch(e){
+    toast('Prefill scheda fallito: '+e.message,'err');
+    if(!RIGHE.length) RIGHE=[nuovaRiga()];
+    await suggerisciNumero();
+  }
+}
+
+function mappaTipoScheda(t){
+  const k=String(t||'').toUpperCase();
+  if(k==='R') return 'scontrino';
+  if(k==='F'||k==='FF'||k==='CAF') return 'fattura';
+  if(k==='S') return 'preventivo';
+  return '';
+}
+
+// Mappa il riepilogo_override (ricambi[] + manodopera_*) in righe documento.
+// Per lo sconto in € lo converto in % equivalente così il ricalcolo del
+// documento (che gestisce solo sconto %) riproduce il totale della scheda.
+function righeDaRiepilogo(rip){
+  const out=[];
+  if(rip && Array.isArray(rip.ricambi)){
+    rip.ricambi.forEach(el=>{
+      const qty = Number(el.qty)||0, prezzo = Number(el.prezzo)||0;
+      if(qty<=0 && !el.descrizione && !el.codice) return;
+      const lordo = qty*prezzo;
+      let scontoPerc = 0;
+      if(el.sconto){
+        scontoPerc = (el.sconto_tipo==='eur')
+          ? (lordo>0 ? round2(Number(el.sconto)/lordo*100) : 0)
+          : (Number(el.sconto)||0);
+      }
+      const r = nuovaRiga();
+      r.tipo_riga='ricambio'; r.codice=el.codice||''; r.descrizione=el.descrizione||'';
+      r.qta=qty; r.um='NR'; r.prezzo_unitario=prezzo; r.sconto_perc=scontoPerc;
+      r.aliquota_iva = Number(el.iva_pct)||22;
+      out.push(r);
+    });
+  }
+  // Manodopera come riga unica (la scheda applica IVA 22% sulla manodopera)
+  const md = Number(rip && rip.manodopera_totale)||0;
+  if(md>0){
+    let scontoPerc = 0;
+    if(rip && rip.manodopera_sconto){
+      scontoPerc = (rip.manodopera_sconto_tipo==='eur')
+        ? (md>0 ? round2(Number(rip.manodopera_sconto)/md*100) : 0)
+        : (Number(rip.manodopera_sconto)||0);
+    }
+    const ore = Number(rip && rip.manodopera_ore)||0;
+    const r = nuovaRiga();
+    r.tipo_riga='manodopera'; r.codice=''; r.descrizione='Manodopera'+(ore?` (${ore} h)`:'');
+    r.qta=1; r.um=''; r.prezzo_unitario=md; r.sconto_perc=scontoPerc; r.aliquota_iva=22;
+    out.push(r);
+  }
+  out.forEach((r,i)=>r.posizione=i+1);
+  return out;
+}
+
+async function carica(){
+  try{
+    const { data:d, error } = await _sb.from('documenti').select('*').eq('id',DOC_ID).single();
+    if(error) throw error;
+    DOC = d;
+    const { data:r } = await _sb.from('documenti_righe').select('*').eq('documento_id',DOC_ID).order('posizione',{ascending:true});
+    RIGHE = (r||[]).map(x=>({ ...x, _key:++_rk }));
+    if(!RIGHE.length) RIGHE = [nuovaRiga()];
+  }catch(e){
+    toast('Documento non trovato: '+e.message,'err');
+    DOC = nuovoDoc(); RIGHE=[nuovaRiga()];
+  }
+  popola();
+}
+
+function popola(){
+  const v = (id,val)=>{ const el=document.getElementById(id); if(el) el.value = (val==null?'':val); };
+  document.getElementById('hdrTitle').textContent = NUOVO ? 'Nuovo documento' : `Documento ${DOC.numero||''}`;
+
+  v('f_numero',DOC.numero); v('f_tipo',DOC.tipo); v('f_data',DOC.data); v('f_ora',(DOC.ora||'').slice(0,5));
+  v('f_metodo',DOC.metodo_pagamento); v('f_note_doc',DOC.note_documento); v('f_note_int',DOC.note_interne);
+
+  v('c_nome',DOC.cliente_nome); v('c_indirizzo',DOC.cliente_indirizzo); v('c_cap',DOC.cliente_cap);
+  v('c_citta',DOC.cliente_citta); v('c_provincia',DOC.cliente_provincia); v('c_piva',DOC.cliente_piva);
+  v('c_cf',DOC.cliente_cf); v('c_nazione',DOC.cliente_nazione); v('c_email',DOC.cliente_email);
+  v('c_pec',DOC.cliente_pec); v('c_sdi',DOC.cliente_sdi);
+
+  v('v_targa',DOC.veicolo_targa); v('v_modello',DOC.veicolo_modello); v('v_km',DOC.veicolo_km);
+
+  v('x_scontrino',DOC.numero_scontrino_fiscale);
+  v('x_data_scontrino', DOC.data_scontrino_fiscale ? String(DOC.data_scontrino_fiscale).slice(0,16) : '');
+  document.getElementById('x_sdi_stato').textContent = DOC.sdi_stato || '—';
+  document.getElementById('x_sdi_id').textContent    = DOC.sdi_id_trasmissione || '—';
+  document.getElementById('x_sdi_invio').textContent = fmtTs(DOC.sdi_data_invio);
+  document.getElementById('x_sdi_esito').textContent = fmtTs(DOC.sdi_data_esito);
+
+  // scheda collegata
+  const fs = document.getElementById('f_scheda');
+  if(DOC.scheda_id){
+    fs.innerHTML = `<a class="link-scheda" href="scheda.html?id=${DOC.scheda_id}&_v=${Date.now()}">Apri scheda ↗</a>`;
+  } else { fs.textContent = '—'; }
+
+  // errore stampa
+  if(DOC.print_error){
+    const box = document.getElementById('printErrBox');
+    box.style.display=''; box.textContent = `Errore stampa: ${DOC.print_error}` + (DOC.print_attempts?` (tentativi: ${DOC.print_attempts})`:'');
+  }
+
+  // stato
+  const st = statoInfo(DOC);
+  const pill = document.getElementById('statoPill');
+  pill.className = 'stato-pill '+st.cls; pill.textContent = st.label;
+  const meta=[];
+  if(DOC.emesso_at) meta.push('Emesso '+fmtTs(DOC.emesso_at));
+  if(DOC.annullato_at) meta.push('Annullato '+fmtTs(DOC.annullato_at)+(DOC.annullato_motivo?` — ${DOC.annullato_motivo}`:''));
+  document.getElementById('statoMeta').textContent = meta.join(' · ');
+
+  // bottoni
+  document.getElementById('btnStampa').style.display = NUOVO ? 'none' : '';
+  document.getElementById('btnAnnulla').style.display = (!NUOVO && !DOC.annullato_at) ? '' : 'none';
+
+  renderRighe();
+}
+
+function renderRighe(){
+  const tb = document.getElementById('righeBody');
+  tb.innerHTML = RIGHE.map((r,i)=>{
+    const tipoCls = r.tipo_riga==='manodopera' ? 'tr-manodopera' : (r.tipo_riga==='ricambio'?'tr-ricambio':'tr-altro');
+    const tipoLbl = r.tipo_riga==='manodopera' ? 'M.O.' : (r.tipo_riga==='ricambio'?'RIC':'ALT');
+    return `<tr data-k="${r._key}">
+      <td class="num" style="color:var(--text-l)">${i+1}</td>
+      <td><button class="tipo-riga-badge ${tipoCls}" onclick="ciclaTipo(${r._key})" title="Click per cambiare">${tipoLbl}</button></td>
+      <td><input value="${attr(r.codice)}" oninput="setR(${r._key},'codice',this.value)"></td>
+      <td><input value="${attr(r.descrizione)}" oninput="setR(${r._key},'descrizione',this.value)"></td>
+      <td><input class="num" type="number" step="0.01" value="${numv(r.qta)}" oninput="setR(${r._key},'qta',this.value)"></td>
+      <td><input value="${attr(r.um)}" oninput="setR(${r._key},'um',this.value)" style="width:42px"></td>
+      <td><input class="num" type="number" step="0.01" value="${numv(r.prezzo_unitario)}" oninput="setR(${r._key},'prezzo_unitario',this.value)"></td>
+      <td><input class="num" type="number" step="0.01" value="${numv(r.sconto_perc)}" oninput="setR(${r._key},'sconto_perc',this.value)"></td>
+      <td><input class="num" type="number" step="0.01" value="${numv(r.aliquota_iva)}" oninput="setR(${r._key},'aliquota_iva',this.value)"></td>
+      <td class="num" id="ri_${r._key}">${fmt(r.imponibile_riga)}</td>
+      <td class="num" id="rt_${r._key}" style="font-weight:700">${fmt(r.totale_riga)}</td>
+      <td><button class="btn-row-del" onclick="rimuoviRiga(${r._key})" title="Rimuovi">✕</button></td>
+    </tr>`;
+  }).join('');
+  recalc();
+}
+
+function setR(k,campo,val){
+  const r = RIGHE.find(x=>x._key===k); if(!r) return;
+  r[campo] = (['codice','descrizione','um'].includes(campo)) ? val : (val===''?0:Number(val));
+  calcRiga(r);
+  const ri=document.getElementById('ri_'+k), rt=document.getElementById('rt_'+k);
+  if(ri) ri.textContent = fmt(r.imponibile_riga);
+  if(rt) rt.textContent = fmt(r.totale_riga);
+  recalcTot();
+}
+function ciclaTipo(k){
+  const r = RIGHE.find(x=>x._key===k); if(!r) return;
+  const cyc = ['ricambio','manodopera','altro'];
+  r.tipo_riga = cyc[(cyc.indexOf(r.tipo_riga)+1)%cyc.length];
+  renderRighe();
+}
+function calcRiga(r){
+  const q=Number(r.qta)||0, p=Number(r.prezzo_unitario)||0, sc=Number(r.sconto_perc)||0, al=Number(r.aliquota_iva)||0;
+  const imp = q*p*(1-sc/100);
+  r.imponibile_riga = round2(imp);
+  r.iva_riga = round2(imp*al/100);
+  r.totale_riga = round2(r.imponibile_riga + r.iva_riga);
+}
+function recalc(){ RIGHE.forEach(calcRiga); recalcTot(); }
+function recalcTot(){
+  const imp = round2(RIGHE.reduce((a,r)=>a+(Number(r.imponibile_riga)||0),0));
+  const iva = round2(RIGHE.reduce((a,r)=>a+(Number(r.iva_riga)||0),0));
+  const tot = round2(imp+iva);
+  DOC.imponibile=imp; DOC.iva=iva; DOC.totale=tot;
+  document.getElementById('t_imp').textContent=fmt(imp);
+  document.getElementById('t_iva').textContent=fmt(iva);
+  document.getElementById('t_tot').textContent=fmt(tot);
+}
+function aggiungiRiga(){ RIGHE.push(nuovaRiga()); renderRighe(); }
+function rimuoviRiga(k){ RIGHE = RIGHE.filter(x=>x._key!==k); if(!RIGHE.length) RIGHE=[nuovaRiga()]; renderRighe(); }
+
+function raccogli(){
+  const g = id => { const el=document.getElementById(id); return el?el.value.trim():''; };
+  DOC.numero = g('f_numero'); DOC.tipo = g('f_tipo')||null; DOC.data = g('f_data')||null;
+  DOC.ora = g('f_ora')||null; DOC.metodo_pagamento = g('f_metodo')||null;
+  DOC.note_documento = g('f_note_doc')||null; DOC.note_interne = g('f_note_int')||null;
+  DOC.cliente_nome=g('c_nome')||null; DOC.cliente_indirizzo=g('c_indirizzo')||null; DOC.cliente_cap=g('c_cap')||null;
+  DOC.cliente_citta=g('c_citta')||null; DOC.cliente_provincia=g('c_provincia')||null; DOC.cliente_piva=g('c_piva')||null;
+  DOC.cliente_cf=g('c_cf')||null; DOC.cliente_nazione=g('c_nazione')||null; DOC.cliente_email=g('c_email')||null;
+  DOC.cliente_pec=g('c_pec')||null; DOC.cliente_sdi=g('c_sdi')||null;
+  DOC.veicolo_targa=g('v_targa')||null; DOC.veicolo_modello=g('v_modello')||null;
+  DOC.veicolo_km = g('v_km')? Number(g('v_km')) : null;
+  DOC.numero_scontrino_fiscale = g('x_scontrino')||null;
+  DOC.data_scontrino_fiscale = g('x_data_scontrino')? new Date(g('x_data_scontrino')).toISOString() : null;
+  recalcTot();
+}
+
+async function salva(){
+  raccogli();
+  if(!DOC.numero){ toast('Inserisci il numero documento','err'); return; }
+  const payload = {
+    numero:DOC.numero, numero_base:DOC.numero_base, tipo:DOC.tipo, data:DOC.data, ora:DOC.ora,
+    scheda_id:DOC.scheda_id,
+    cliente_nome:DOC.cliente_nome, cliente_indirizzo:DOC.cliente_indirizzo, cliente_cap:DOC.cliente_cap,
+    cliente_citta:DOC.cliente_citta, cliente_provincia:DOC.cliente_provincia, cliente_nazione:DOC.cliente_nazione,
+    cliente_piva:DOC.cliente_piva, cliente_cf:DOC.cliente_cf, cliente_email:DOC.cliente_email,
+    cliente_pec:DOC.cliente_pec, cliente_sdi:DOC.cliente_sdi,
+    veicolo_targa:DOC.veicolo_targa, veicolo_modello:DOC.veicolo_modello, veicolo_km:DOC.veicolo_km,
+    imponibile:DOC.imponibile, iva:DOC.iva, totale:DOC.totale,
+    metodo_pagamento:DOC.metodo_pagamento, numero_scontrino_fiscale:DOC.numero_scontrino_fiscale,
+    data_scontrino_fiscale:DOC.data_scontrino_fiscale,
+    stato:DOC.stato||'bozza', note_interne:DOC.note_interne, note_documento:DOC.note_documento,
+    updated_at:new Date().toISOString()
+  };
+  try{
+    let docId = DOC.id;
+    if(docId){
+      const { error } = await _sb.from('documenti').update(payload).eq('id',docId);
+      if(error) throw error;
+    } else {
+      const { data, error } = await _sb.from('documenti').insert(payload).select('id').single();
+      if(error) throw error;
+      docId = data.id; DOC.id = docId;
+    }
+    // sostituisci righe
+    await _sb.from('documenti_righe').delete().eq('documento_id',docId);
+    const righePayload = RIGHE
+      .filter(r=> (r.codice||r.descrizione) )
+      .map((r,i)=>({
+        documento_id:docId, posizione:i+1, tipo_riga:r.tipo_riga||'altro', articolo_id:r.articolo_id||null,
+        codice:r.codice||null, descrizione:r.descrizione||null, qta:Number(r.qta)||0, um:r.um||null,
+        prezzo_unitario:Number(r.prezzo_unitario)||0, sconto_perc:Number(r.sconto_perc)||0,
+        aliquota_iva:Number(r.aliquota_iva)||0, natura_iva:r.natura_iva||null, reparto_cassa:r.reparto_cassa||null,
+        imponibile_riga:r.imponibile_riga, iva_riga:r.iva_riga, totale_riga:r.totale_riga
+      }));
+    if(righePayload.length){
+      const { error:eR } = await _sb.from('documenti_righe').insert(righePayload);
+      if(eR) throw eR;
+    }
+    toast('Documento salvato','ok');
+    if(NUOVO){ setTimeout(()=>location.href=`documento.html?id=${docId}&_v=${Date.now()}`, 600); }
+  }catch(e){
+    toast('Errore salvataggio: '+e.message,'err');
+    console.error(e);
+  }
+}
+
+async function annulla(){
+  const motivo = prompt('Motivo annullamento documento '+(DOC.numero||'')+':');
+  if(motivo===null) return;
+  try{
+    const { error } = await _sb.from('documenti').update({
+      stato:'annullato', annullato_at:new Date().toISOString(), annullato_motivo:motivo||null,
+      updated_at:new Date().toISOString()
+    }).eq('id',DOC.id);
+    if(error) throw error;
+    DOC.stato='annullato'; DOC.annullato_at=new Date().toISOString(); DOC.annullato_motivo=motivo;
+    popola();
+    toast('Documento annullato','ok');
+  }catch(e){ toast('Errore: '+e.message,'err'); }
+}
+
+/* ─── STAMPA ─── */
+function stampa(){
+  raccogli();
+  const tipoLbl = ({fattura:'FATTURA',dc:'DOCUMENTO COMMERCIALE',scontrino:'SCONTRINO',ricevuta:'RICEVUTA',nota_credito:'NOTA DI CREDITO',preventivo:'PREVENTIVO'})[DOC.tipo] || 'DOCUMENTO';
+  const cliRiga2 = [DOC.cliente_cap,DOC.cliente_citta,DOC.cliente_provincia?'('+DOC.cliente_provincia+')':''].filter(Boolean).join(' ');
+  const pIva = DOC.cliente_piva?`P.IVA ${esc(DOC.cliente_piva)}`:'';
+  const pCf  = DOC.cliente_cf?`C.F. ${esc(DOC.cliente_cf)}`:'';
+  const righeHtml = RIGHE.filter(r=>r.codice||r.descrizione).map((r,i)=>`<tr>
+      <td class="num">${i+1}</td>
+      <td>${esc(r.codice)||''}</td>
+      <td>${esc(r.descrizione)||''}</td>
+      <td class="num">${numIt(r.qta)}</td>
+      <td>${esc(r.um)||''}</td>
+      <td class="num">${fmt(r.prezzo_unitario)}</td>
+      <td class="num">${r.sconto_perc?numIt(r.sconto_perc)+'%':''}</td>
+      <td class="num">${numIt(r.aliquota_iva)}%</td>
+      <td class="num">${fmt(r.imponibile_riga)}</td>
+    </tr>`).join('');
+  document.getElementById('printArea').innerHTML = `
+    <div class="p-wrap">
+      <div class="p-head">
+        <div class="p-azienda">
+          <div class="nome">${AZIENDA.nome}</div>
+          <div>${AZIENDA.citta}</div>
+          <div>${AZIENDA.piva}</div>
+          ${AZIENDA.extra?`<div>${AZIENDA.extra}</div>`:''}
+        </div>
+        <div class="p-doc-title">
+          <div class="t">${tipoLbl}</div>
+          <div class="n">N° ${esc(DOC.numero)||'—'} · ${fmtDataIt(DOC.data)}${DOC.ora?' '+String(DOC.ora).slice(0,5):''}</div>
+        </div>
+      </div>
+      <div class="p-blocks">
+        <div class="p-block">
+          <h4>Cliente</h4>
+          <div style="font-weight:700">${esc(DOC.cliente_nome)||'—'}</div>
+          <div>${esc(DOC.cliente_indirizzo)||''}</div>
+          <div>${esc(cliRiga2)}</div>
+          <div>${pIva} ${pCf}</div>
+          ${DOC.cliente_sdi?`<div>SDI: ${esc(DOC.cliente_sdi)}</div>`:''}
+        </div>
+        <div class="p-block">
+          <h4>Veicolo</h4>
+          <div><b>${esc(DOC.veicolo_targa)||'—'}</b> ${esc(DOC.veicolo_modello)||''}</div>
+          ${DOC.veicolo_km?`<div>Km: ${numIt(DOC.veicolo_km)}</div>`:''}
+          ${DOC.metodo_pagamento?`<div style="margin-top:6px">Pagamento: <b>${esc(DOC.metodo_pagamento)}</b></div>`:''}
+          ${DOC.numero_scontrino_fiscale?`<div>Doc. fiscale: ${esc(DOC.numero_scontrino_fiscale)}</div>`:''}
+        </div>
+      </div>
+      <table class="p-table">
+        <thead><tr><th>#</th><th>Codice</th><th>Descrizione</th><th class="num">Q.tà</th><th>UM</th><th class="num">Prezzo</th><th class="num">Sc.</th><th class="num">IVA</th><th class="num">Imponibile</th></tr></thead>
+        <tbody>${righeHtml||'<tr><td colspan="9" style="text-align:center;color:#999">Nessuna riga</td></tr>'}</tbody>
+      </table>
+      <div class="p-tot">
+        <table>
+          <tr><td>Imponibile</td><td class="num">${fmt(DOC.imponibile)}</td></tr>
+          <tr><td>IVA</td><td class="num">${fmt(DOC.iva)}</td></tr>
+          <tr class="grand"><td>TOTALE</td><td class="num">${fmt(DOC.totale)}</td></tr>
+        </table>
+      </div>
+      ${DOC.note_documento?`<div class="p-foot">${esc(DOC.note_documento)}</div>`:''}
+      <div class="p-foot">Documento generato dal gestionale Paghera Auto. ${DOC.numero_scontrino_fiscale?'Documento fiscale emesso da ProMEK n. '+esc(DOC.numero_scontrino_fiscale)+'.':'Documento non fiscale — l\'emissione fiscale avviene tramite ProMEK.'}</div>
+    </div>`;
+  window.print();
+}
+
+/* ─── Helpers ─── */
+function round2(n){ return Math.round((Number(n)||0)*100)/100; }
+function fmt(n){ return '€ '+(Number(n)||0).toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function numIt(n){ return (Number(n)||0).toLocaleString('it-IT',{maximumFractionDigits:2}); }
+function numv(n){ return (n==null||n==='')?'':n; }
+function fmtDataIt(d){ if(!d) return '—'; const m=String(d).match(/^(\d{4})-(\d{2})-(\d{2})/); return m?`${m[3]}/${m[2]}/${m[1]}`:String(d); }
+function fmtTs(t){ if(!t) return '—'; try{ const d=new Date(t); if(isNaN(d)) return String(t); return d.toLocaleString('it-IT',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}); }catch(e){ return String(t); } }
+function attr(s){ return String(s==null?'':s).replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function toast(msg,tipo=''){
+  const w=document.getElementById('toasts');
+  const t=document.createElement('div');
+  t.className='toast'+(tipo?' '+tipo:'');t.textContent=msg;w.appendChild(t);
+  setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),350)},3200);
+}
+
+init();
+</script>
+</body>
+</html>
