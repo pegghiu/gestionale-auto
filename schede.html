@@ -265,11 +265,60 @@ async function caricaDaSupabase(){
       targa:   s.targa||'',
       modello: s.modello||'',
       cliente: s.cliente_nome||'',
+      cliente_id: s.cliente_id||null,
       tecnico: s.tecnico||'',
       tot:     s.totale||0,
       rap:     s.n_rapportini||0,
       note:    s.problema||''
     }));
+
+    // ─── Backfill cliente mancante dall'anagrafica ───
+    // Molte schede auto-create (da DDT / ore commesse) non hanno cliente_nome.
+    // Recupero il nome dal cliente collegato: prima per cliente_id (se la
+    // scheda ne ha uno), poi per targa via veicoli_anagrafica → clienti.
+    try {
+      const senzaCli = TUTTE.filter(s => !String(s.cliente||'').trim());
+      if (senzaCli.length) {
+        // 1) per cliente_id
+        const ids = [...new Set(senzaCli.filter(s=>s.cliente_id).map(s=>s.cliente_id))];
+        if (ids.length) {
+          const { data: cli } = await _sb.from('clienti')
+            .select('id, ragione_sociale, nome, cognome').in('id', ids);
+          const mId = {};
+          (cli||[]).forEach(c=>{
+            const n = c.ragione_sociale || [c.cognome,c.nome].filter(Boolean).join(' ');
+            if (n) mId[c.id] = n;
+          });
+          TUTTE.forEach(s=>{
+            if (!String(s.cliente||'').trim() && s.cliente_id && mId[s.cliente_id]) {
+              s.cliente = mId[s.cliente_id]; s.clienteFonte = 'anagrafica';
+            }
+          });
+        }
+        // 2) per targa via veicoli_anagrafica → clienti
+        const targhe = [...new Set(
+          TUTTE.filter(s=>!String(s.cliente||'').trim() && s.targa)
+               .map(s=>String(s.targa).toUpperCase())
+        )];
+        if (targhe.length) {
+          const { data: veic } = await _sb.from('veicoli_anagrafica')
+            .select('targa, clienti:cliente_id(ragione_sociale, nome, cognome)')
+            .in('targa', targhe);
+          const mT = {};
+          (veic||[]).forEach(v=>{
+            const c = v.clienti; if(!c) return;
+            const n = c.ragione_sociale || [c.cognome,c.nome].filter(Boolean).join(' ');
+            if (n) mT[String(v.targa).toUpperCase()] = n;
+          });
+          TUTTE.forEach(s=>{
+            if (!String(s.cliente||'').trim() && s.targa) {
+              const n = mT[String(s.targa).toUpperCase()];
+              if (n) { s.cliente = n; s.clienteFonte = 'anagrafica'; }
+            }
+          });
+        }
+      }
+    } catch(e){ console.warn('Backfill cliente da anagrafica fallito (non critico):', e); }
 
     // ─── Calcolo data ultima attività per ogni scheda ───
     // Considero SOLO rapportini "veri" inseriti dal dipendente, escludendo
