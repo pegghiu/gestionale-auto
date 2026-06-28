@@ -287,6 +287,18 @@ body{font-family:'Helvetica Neue',Arial,-apple-system,sans-serif;background:var(
 const SUPABASE_URL = 'https://iztrrgqkzsovorcmixum.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml6dHJyZ3FrenNvdm9yY21peHVtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMDI3NzMsImV4cCI6MjA4OTc3ODc3M30.3IyUCDpFs9x_iSi5C4asodt5_O3F_cwgdb3eBkoQh3U';
 const _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+/* === AUTH GUARD — login condiviso (sicurezza, NON rimuovere) === */
+(function(){
+  _sb.auth.getSession().then(function(r){
+    if(!r.data || !r.data.session){
+      var next = encodeURIComponent(location.pathname.split('/').pop() + location.search);
+      location.replace('login.html?next=' + next);
+    }
+  });
+  _sb.auth.onAuthStateChange(function(ev){
+    if(ev === 'SIGNED_OUT') location.replace('login.html');
+  });
+})();
 
 // Dati azienda emittente (per la stampa). Completare indirizzo se necessario.
 const AZIENDA = {

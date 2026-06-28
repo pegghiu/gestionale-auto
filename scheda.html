@@ -1090,6 +1090,18 @@ button.btn-blocked:hover{background:var(--ok)}
 const SUPABASE_URL = 'https://iztrrgqkzsovorcmixum.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml6dHJyZ3FrenNvdm9yY21peHVtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMDI3NzMsImV4cCI6MjA4OTc3ODc3M30.3IyUCDpFs9x_iSi5C4asodt5_O3F_cwgdb3eBkoQh3U';
 const _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+/* === AUTH GUARD — login condiviso (sicurezza, NON rimuovere) === */
+(function(){
+  _sb.auth.getSession().then(function(r){
+    if(!r.data || !r.data.session){
+      var next = encodeURIComponent(location.pathname.split('/').pop() + location.search);
+      location.replace('login.html?next=' + next);
+    }
+  });
+  _sb.auth.onAuthStateChange(function(ev){
+    if(ev === 'SIGNED_OUT') location.replace('login.html');
+  });
+})();
 
 // ══════════════════════════════════════════════════════════
 // NUMERAZIONE SEQUENZIALE (schede 26/0001, rapportini 26/R/0001)
@@ -1443,10 +1455,10 @@ let _rapId = 1;
 // PANNELLO RAPPORTINO INLINE
 // ══════════════════════════════════════════════════════════
 const OPERATORI = [
-  {nome:'Davide', tariffa:45},{nome:'Cristian', tariffa:45},
-  {nome:'Ivan',   tariffa:45},{nome:'Marco',    tariffa:45},
-  {nome:'Luca',   tariffa:42},{nome:'Andrea',   tariffa:45},
-  {nome:'Bepi',   tariffa:45},{nome:'Stagista', tariffa:20}
+  {nome:'Davide', tariffa:43},{nome:'Cristian', tariffa:43},
+  {nome:'Ivan',   tariffa:43},{nome:'Marco',    tariffa:43},
+  {nome:'Luca',   tariffa:43},{nome:'Andrea',   tariffa:43},
+  {nome:'Bepi',   tariffa:43},{nome:'Stagista', tariffa:43}
 ];
 let _rpOre = [], _rpRic = [], _rpOreId = 1, _rpRicId = 1;
 
@@ -1471,7 +1483,7 @@ function chiudiPannelloRapportino(){
 }
 
 function rpAggiungiOra(){
-  _rpOre.push({id:_rpOreId++, operatore:'', ore:0, tariffa:45});
+  _rpOre.push({id:_rpOreId++, operatore:'', ore:0, tariffa:43});
   rpRenderOre();
 }
 
@@ -1490,10 +1502,10 @@ function rpRenderOre(){
       <input type="number" value="${o.ore||''}" min="0" step="0.5" placeholder="Ore"
         oninput="rpUpdOra(${o.id},'ore',this.value)"
         style="padding:7px;border:1px solid var(--border);border-radius:var(--rs);font-size:14px;font-weight:700;text-align:right">
-      <input type="number" value="${o.tariffa||45}" min="0" step="1" placeholder="€/h"
+      <input type="number" value="${o.tariffa||43}" min="0" step="1" placeholder="€/h"
         oninput="rpUpdOra(${o.id},'tariffa',this.value)"
         style="padding:7px;border:1px solid var(--border);border-radius:var(--rs);font-size:13px;text-align:right">
-      <span style="font-size:13px;font-weight:600;text-align:right">${fmt((o.ore||0)*(o.tariffa||45))}</span>
+      <span style="font-size:13px;font-weight:600;text-align:right">${fmt((o.ore||0)*(o.tariffa||43))}</span>
       <button onclick="rpRimuoviOra(${o.id})" style="background:none;border:1px solid var(--border);border-radius:var(--rs);cursor:pointer;color:var(--err)">✕</button>
     </div>
   `).join('');
@@ -1571,6 +1583,11 @@ function confermaPannelloRapportino(){
   if(!oreValide.length && !ricValidi.length){
     toast('Inserisci almeno un\'ora o un ricambio','err'); return;
   }
+
+  // Stagista: le ore segnate contano al 30% (riduzione a monte)
+  oreValide.forEach(o=>{
+    if(o.operatore === 'Stagista'){ o.ore = Math.round(o.ore * 0.3 * 100) / 100; }
+  });
 
   const rap = {
     _id:     Date.now(),
@@ -2233,7 +2250,7 @@ async function confermaPrezzoOra(rapKey, oIdx){
 
   const nuova = prompt(
     `Inserisci la tariffa oraria (€/h) per:\n${o.operatore}\n\nOre lavorate: ${fmtH(o.ore)}\nTariffa attuale: € ${o.tariffa||0}/h`,
-    String(o.tariffa || 45)
+    String(o.tariffa || 43)
   );
   if (nuova === null) return;
   const t = parseFloat(String(nuova).replace(',','.'));
@@ -4758,11 +4775,4 @@ function _dcRiga(d){
     `<span style="font-size:12px;color:var(--text-m)">${_dcData(d.data)}</span>`+
     `<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;min-width:0">`+
       `<span style="width:8px;height:8px;border-radius:50%;background:${st.c};flex-shrink:0"></span>${st.t}`+
-      `${sc?` · <span style="font-family:monospace;color:var(--text-m)">${sc}</span>`:''}</span>`+
-    `<span style="font-weight:700;font-variant-numeric:tabular-nums">${Number(d.totale)>0?_dcEuro(d.totale):'—'}</span>`+
-  `</a>`;
-}
-</script>
-
-</body>
-</html>
+      `${sc?` · <span style="font-family:monospace;color:var(--text-m)">${sc}</spa

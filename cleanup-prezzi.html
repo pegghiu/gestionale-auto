@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <title>Cleanup Prezzi Da Confermare — Paghera Auto</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&display=swap" rel="stylesheet">
@@ -156,13 +157,33 @@ input[type="checkbox"]{width:16px;height:16px;accent-color:var(--accent);cursor:
 const SUPABASE_URL = 'https://iztrrgqkzsovorcmixum.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml6dHJyZ3FrenNvdm9yY21peHVtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyMDI3NzMsImV4cCI6MjA4OTc3ODc3M30.3IyUCDpFs9x_iSi5C4asodt5_O3F_cwgdb3eBkoQh3U';
 
+const _sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+/* === AUTH GUARD — login condiviso (sicurezza, NON rimuovere) === */
+(function(){
+  _sb.auth.getSession().then(function(r){
+    if(!r.data || !r.data.session){
+      var next = encodeURIComponent(location.pathname.split('/').pop() + location.search);
+      location.replace('login.html?next=' + next);
+    }
+  });
+  _sb.auth.onAuthStateChange(function(ev){
+    if(ev === 'SIGNED_OUT') location.replace('login.html');
+  });
+})();
+
 let dbRap = [];          // rapportini con elementi
 let dbDdt = {};          // num_canonico → ddt_estratto
 let candidates = [];     // { rap, elIdx, el, righeDdt[], reason, susp:bool, selected }
 
+// Header con token di sessione (dopo lockdown RLS serve l'utente autenticato)
+async function _authHeaders(extra) {
+  const { data } = await _sb.auth.getSession();
+  const tok = data.session ? data.session.access_token : SUPABASE_KEY;
+  return Object.assign({ 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + tok }, extra || {});
+}
 async function sbGet(path) {
   const r = await fetch(SUPABASE_URL + '/rest/v1' + path, {
-    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+    headers: await _authHeaders()
   });
   if (!r.ok) throw new Error(`GET ${path}: ${r.status}`);
   return r.json();
@@ -170,8 +191,7 @@ async function sbGet(path) {
 async function sbPatch(path, body) {
   const r = await fetch(SUPABASE_URL + '/rest/v1' + path, {
     method:'PATCH',
-    headers:{ 'apikey':SUPABASE_KEY, 'Authorization':'Bearer '+SUPABASE_KEY,
-              'Content-Type':'application/json', 'Prefer':'return=minimal' },
+    headers: await _authHeaders({ 'Content-Type':'application/json', 'Prefer':'return=minimal' }),
     body: JSON.stringify(body)
   });
   if (!r.ok) throw new Error(`PATCH ${path}: ${r.status} ${await r.text()}`);
