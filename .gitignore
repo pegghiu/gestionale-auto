@@ -1,0 +1,9 @@
+# Stato/archivi locali automazioni (NON vanno su GitHub: dati clienti/contabili)
+.promek-export-log.json
+.report-noleggio-state.json
+report-noleggio/
+
+# Dati personali / anagrafiche — NON devono MAI finire su GitHub (GDPR)
+*.csv
+clienti.csv
+veicoli_anagrafica.csv
