@@ -2881,7 +2881,7 @@ function renderRiepilogo(){
       // Messaggi differenziati per i due casi
       const msgSospetto = margineZero
         ? `Prezzo cliente = prezzo fornitore (margine zero) — da aggiornare`
-        : `Ricarico oltre 100% (cliente €${prezzoCli.toFixed(2)} vs netto €${nettoFor.toFixed(2)}) — verifica`;
+        : `Ricarico oltre il 100% sul netto fornitore (cliente €${prezzoCli.toFixed(2)} · netto €${nettoFor.toFixed(2)}) — il listino può essere giusto, controlla solo che il prezzo sia voluto`;
 
       let trStyle;
       if (margineZero) {
@@ -2897,8 +2897,9 @@ function renderRiepilogo(){
       // Bottone "imposta prezzo cliente" se sospetto → apre prompt (nella colonna azioni)
       // Giallo per margine zero, verde per ricarico alto
       const btnBg = margineZero ? '#E0A800' : '#1F7A35';
+      const azioneSospetto = margineZero ? 'clicca per aggiornarlo' : 'clicca per rivederlo';
       const btnPrezzo = prezzoSospetto
-        ? `<button type="button" title="${msgSospetto} — clicca per aggiornarlo"
+        ? `<button type="button" title="${msgSospetto} — ${azioneSospetto}"
              onclick="impostaPrezzoRiepilogo(${el._idx})"
              style="background:${btnBg};color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:800;padding:2px 6px;cursor:pointer;vertical-align:middle">€?</button>`
         : '';
@@ -4723,7 +4724,7 @@ function _dcStato(d){
   return {t:_dcPretty(d.stato)||'Bozza',c:'#9A9690'};
 }
 function _dcData(d){ if(!d) return '—'; const m=String(d).match(/^(\d{4})-(\d{2})-(\d{2})/); return m?`${m[3]}/${m[2]}/${m[1].slice(2)}`:String(d); }
-function _dcEuro(n){ return '€ '+(Number(n)||0).toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function _dcEuro(n){ return '€ '+(Number(n)||0).toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function _dcTipo(t){ return ({fattura:'Fattura',dc:'Doc. comm.',scontrino:'Scontrino',ricevuta:'Ricevuta',nota_credito:'Nota credito',preventivo:'Preventivo'})[String(t||'').toLowerCase()] || (t||'—'); }
 async function caricaDocumentiCollegati(){
   const card=document.getElementById('cardDocCollegati');
